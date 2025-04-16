@@ -1,0 +1,145 @@
+# WebSockexNova: Using Gun as Transport Layer
+
+This document outlines a comprehensive implementation plan for WebSockexNova to use [:gun](https://github.com/ninenines/gun) as the underlying WebSocket transport layer while building our behavior-based architecture on top.
+
+## Why Use Gun?
+
+[Gun](https://github.com/ninenines/gun) is a mature HTTP/WebSocket client for Erlang/OTP with several advantages:
+
+1. **Maintained by the Cowboy Team**: Gun is developed by NineFX (formerly Nine Nines), the same team that maintains Cowboy, one of Erlang's most robust web servers
+2. **Protocol Support**: HTTP/1.1, HTTP/2, WebSocket
+3. **Connection Management**: Sophisticated connection management
+4. **Automatic Reconnection**: Built-in reconnection capabilities
+5. **TLS Support**: Modern TLS options
+
+Using Gun allows us to focus on the application-specific aspects of WebSockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
+
+## Project Overview
+
+### Key Components
+
+```
+lib/
+├── websockex_nova.ex                # Client API (uses Gun underneath)
+├── websockex_nova/
+    ├── behaviors/                   # Behavior definitions
+    │   ├── connection_handler.ex    # How to handle connection lifecycle
+    │   ├── message_handler.ex       # How to process messages
+    │   ├── error_handler.ex         # How to handle errors
+    │   └── ...                      # Other behaviors
+    │
+    ├── transport/                   # Transport layer (Gun adapter)
+    │   ├── gun_client.ex            # Wrapper around Gun for WebSockets
+    │   └── reconnection.ex          # Reconnection strategies
+    │
+    ├── message/                     # Message handling
+    │   ├── processor.ex             # Message processing pipeline
+    │   └── subscription.ex          # Subscription management
+    │
+    ├── platform/                    # Platform-specific adapters
+    │   ├── deribit/                 # Example exchange integration
+    │   │   ├── adapter.ex           # Implements behaviors for Deribit
+    │   │   ├── client.ex            # Platform-specific client
+    │   │   └── ...
+    │   └── ...                      # Other platform integrations
+    │
+    ├── macros.ex                    # Strategy macros
+    ├── telemetry.ex                 # Enhanced telemetry
+    └── types.ex                     # Type definitions
+```
+
+### Migration Strategy
+
+1. **Add Gun Dependency**: Replace our own WebSocket protocol handling with Gun
+2. **Create Gun Client Adapter**: Build a thin adapter between Gun and our behavior interfaces
+3. **Implement Behavior-Based Architecture**: Focus on behavior interfaces for extensibility
+4. **Port Valuable Code**: Salvage error handling and other utility code
+5. **Build Platform Integrations**: Implement exchange-specific integrations
+
+## Implementation Plan
+
+### Phase 0: Gun Integration (1 week)
+
+#### 0.1 Add Gun Dependency
+
+```elixir
+# mix.exs
+defmodule WebSockexNova.MixProject do
+  use Mix.Project
+
+  # ...
+
+  defp deps do
+    [
+      {:gun, "~> 2.0"},
+      # ... other deps
+    ]
+  end
+end
+```
+
+#### 0.2 Create Gun Client Adapter
+
+### Phase 1: Core Behaviors (2 weeks)
+
+#### 1.1 Define Behavior Interfaces
+
+Start by defining behavior interfaces with TDD:
+
+
+# test/websockex_nova/behaviors/connection_handler_test.exs
+# lib/websockex_nova/behaviors/connection_handler.ex
+
+
+#### 1.2 Add Strategy Macros
+
+- handle_disconnect
+- should_reconnect
+- backoff
+
+
+### Phase 2: Core Infrastructure (2 weeks)
+
+#### 2.1 Implement WebSockexNova Main Module
+
+
+# lib/websockex_nova.ex
+
+
+#### 2.2 Message Processing
+
+
+# lib/websockex_nova/message/processor.ex
+
+### Phase 3: Platform Integrations (3 weeks)
+
+#### 3.1 Create Integration Generator
+
+- deribit, binance, ethereum, etc
+
+#### 3.2 Implement Example Platform Integration
+
+# lib/websockex_nova/platform/deribit/adapter.ex
+
+
+### Phase 4: Observability and Testing (2 weeks)
+
+#### 4.1 Enhanced Telemetry
+
+
+# lib/websockex_nova/telemetry.ex
+
+
+#### 4.2 Integration Tests
+
+
+# test/integration/deribit_test.exs
+
+
+## Benefits of Using Gun
+
+1. **Reduced Development Time**: No need to reimplement WebSocket protocol details
+2. **Focus on Behavior Design**: More time to perfect the behavior-based architecture
+3. **Maintained Dependencies**: Gun is actively maintained by NineFX
+4. **Modern Features**: Benefit from Gun's HTTP/2 and modern TLS support
+5. **Simplified Testing**: Easier to mock and test when using a standard interface
