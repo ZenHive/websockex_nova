@@ -807,109 +807,527 @@ defmodule WebSockexNova.Types.ClientConfig do
 end
 ```
 
-## Development Approach
+## Clustering Support
 
-### 1. Phased Implementation Strategy
+WebSockexNova provides robust support for clustered environments, enhancing resilience, performance, and geo-distribution capabilities.
 
-WebSockexNova follows a structured development approach:
+### Clustering Rationale
 
-1. **Foundation Phase**: Gun integration and core behaviors
-2. **Infrastructure Phase**: Message processing and connection management
-3. **Platform Phase**: Integration with specific platforms and protocols
-4. **Observability Phase**: Telemetry, logging, and monitoring
+Operating WebSocket connections in a clustered environment offers several critical advantages:
 
-This phased approach allows for:
-- Early validation of core concepts
-- Iterative refinement of behavior interfaces
-- Incremental addition of platform integrations
-- Focus on stability at each layer before adding complexity
+1. **Geographical Proximity**
+   - Deploy nodes closer to exchange/platform data centers to reduce network latency
+   - Optimize connection routes for specific geographical markets
+   - Improve data freshness for time-sensitive financial applications
 
-### 2. Test-Driven Development
+2. **High Availability and Fault Tolerance**
+   - Maintain connection state across multiple nodes
+   - Provide seamless failover if a node experiences issues
+   - Distribute connection load across the cluster
 
-Each component is designed with testability in mind:
+3. **Distributed State Management**
+   - Share subscription states across the cluster
+   - Coordinate rate limiting across multiple connection points
+   - Synchronize authentication and authorization state
 
-- Behavior contracts are defined with clear expectations
-- Mock implementations for testing complex interactions
-- Integration tests that verify real-world scenarios
-- Property-based tests for edge cases and state transitions
+4. **Load Balancing**
+   - Distribute WebSocket connections across multiple nodes
+   - Prevent any single node from becoming a connection bottleneck
+   - Scale horizontally to handle high-volume data streams
 
-### 3. Documentation-First Design
+### Clustering Architecture
 
-Documentation is treated as a first-class concern:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Node 1 (us-east)                         │
+│                                                                 │
+│  ┌─────────────┐     ┌──────────────┐    ┌──────────────────┐   │
+│  │ WebSocket   │     │ Subscription │    │ Local Connection │   │
+│  │ Connections │────►│ Handler      │───►│ State            │   │
+│  └─────────────┘     └──────────────┘    └──────────────────┘   │
+│         │                                         │             │
+│         │                ┌──────────┐             │             │
+│         └───────────────►│ Telemetry│◄────────────┘             │
+│                          └──────────┘                           │
+│                               │                                 │
+└───────────────────────────────┼─────────────────────────────────┘
+                                │
+                                ▼
+                        ┌───────────────┐
+                        │  Distributed  │
+                        │  PubSub       │
+                        └───────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       Node 2 (eu-west)                          │
+│                                                                 │
+│  ┌─────────────┐     ┌──────────────┐    ┌──────────────────┐   │
+│  │ WebSocket   │     │ Subscription │    │ Local Connection │   │
+│  │ Connections │────►│ Handler      │───►│ State            │   │
+│  └─────────────┘     └──────────────┘    └──────────────────┘   │
+│         │                                         │             │
+│         │                ┌──────────┐             │             │
+│         └───────────────►│ Telemetry│◄────────────┘             │
+│                          └──────────┘                           │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-- Each behavior is documented with examples
-- Platform integrations include usage examples
-- Telemetry events are documented with sample metrics
-- Configuration options include recommended values
+### WebSockexNova.Cluster Module
 
-## Extension and Customization
+The `WebSockexNova.Cluster` module provides the core functionality for operating in a clustered environment:
 
-### 1. Extending with New Platforms
+```elixir
+defmodule WebSockexNova.Cluster do
+  @moduledoc """
+  Provides clustering capabilities for WebSockexNova.
 
-To support a new platform or protocol:
+  This module manages node discovery, distributed subscription state,
+  and geo-aware connection routing.
+  """
 
-1. Create platform-specific modules (can use `mix websockex_nova.gen.integration`)
-2. Implement required behaviors (ConnectionHandler, MessageHandler, etc.)
-3. Add platform-specific message parsing and encoding
-4. Add any platform-specific error handling or rate limiting
+  use GenServer
+  alias Phoenix.PubSub
 
-### 2. Customizing Behavior
+  @pubsub_topic "websockex_nova:cluster"
 
-WebSockexNova's behaviors can be customized at several levels:
+  @doc """
+  Starts the cluster manager with the given options.
 
-- **Strategy Macros**: Use built-in reconnection strategies like `:always_reconnect` or `:fail_fast`
-- **Behavior Implementation**: Implement behavior callbacks for full control
-- **Configuration**: Adjust parameters via application configuration
-- **State Transformation**: Intercept and transform state at key points
+  ## Options
 
-### 3. Advanced Use Cases
+    * `:pubsub` - The PubSub module to use for communication (default: WebSockexNova.PubSub)
+    * `:node_region` - Geographic region identifier for this node (e.g., "us-east", "eu-west")
+    * `:strategy` - The clustering strategy to use (:active or :passive)
+    * `:sync_interval` - Interval in ms to sync state across nodes (default: 30_000)
+  """
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
 
-The architecture supports several advanced patterns:
+  @doc """
+  Distributes a subscription across the cluster.
+  """
+  def distribute_subscription(subscription_id, channel, opts \\ []) do
+    message = {:subscription, node(), subscription_id, channel, opts}
+    PubSub.broadcast(pubsub_name(), @pubsub_topic, message)
+    :ok
+  end
 
-- **Multiplexing**: Handle multiple channels over a single connection
-- **Middleware**: Insert processing steps in the message pipeline
-- **Dynamic Reconfiguration**: Change parameters at runtime
-- **Custom Authentication**: Implement complex auth flows with AuthHandler
-- **Session Recovery**: Restore subscriptions after reconnection
+  @doc """
+  Distributes connection state information across the cluster.
+  """
+  def distribute_connection_state(client_id, state) do
+    message = {:connection_state, node(), client_id, state}
+    PubSub.broadcast(pubsub_name(), @pubsub_topic, message)
+    :ok
+  end
 
-## Best Practices
+  @doc """
+  Gets the closest node to a specific geographic region.
+  """
+  def get_closest_node(region) do
+    # Implementation to find the closest node based on region
+  end
 
-### 1. Error Handling
+  @doc """
+  Returns the current cluster state.
+  """
+  def get_cluster_state do
+    GenServer.call(__MODULE__, :get_cluster_state)
+  end
 
-- Use structured error responses with clear context
-- Log errors with sufficient detail for debugging
-- Implement appropriate backoff strategies for retries
-- Choose the right reconnection policy for your use case
+  # GenServer callbacks
+  # ...
 
-### 2. Message Processing
+  defp pubsub_name do
+    Application.get_env(:websockex_nova, :pubsub, WebSockexNova.PubSub)
+  end
+end
+```
 
-- Keep message handlers focused and pure
-- Use pattern matching for message routing
-- Consider message validation early in the pipeline
-- Leverage telemetry for message monitoring
+### Cluster Supervisor
 
-### 3. State Management
+The clustering functionality is supervised through a dedicated supervisor:
 
-- Treat state as immutable when possible
-- Keep connection state separate from application state
-- Use clear naming conventions for state keys
-- Document state structure and transitions
+```elixir
+defmodule WebSockexNova.ClusterSupervisor do
+  @moduledoc """
+  Supervisor for cluster-related processes.
+  """
 
-### 4. Testing
+  use Supervisor
 
-- Test behavior implementations in isolation
-- Use property-based testing for complex state transitions
-- Test reconnection strategies with simulated failures
-- Implement integration tests for each platform
+  def start_link(opts) do
+    Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
+  end
 
-## Community and Ecosystem Integration
+  @impl true
+  def init(opts) do
+    pubsub_name = Keyword.get(opts, :pubsub, WebSockexNova.PubSub)
 
-WebSockexNova is designed to work well with the broader Elixir ecosystem:
+    children = [
+      # PubSub for cluster communication
+      {Phoenix.PubSub, name: pubsub_name},
 
-- **Phoenix Integration**: Works with Phoenix channels and PubSub
-- **LiveView**: Can push real-time updates to LiveView contexts
-- **Plug**: Compatible with Plug-based applications
-- **Broadway**: Can feed messages into Broadway pipelines
-- **OTP**: Leverages OTP principles throughout
+      # Cluster node manager
+      {WebSockexNova.Cluster, Keyword.put(opts, :pubsub, pubsub_name)},
 
-This architecture emphasizes robustness, extensibility, and a clear separation of concerns, allowing developers to focus on their specific integration needs without worrying about the complexities of WebSocket protocol handling.
+      # Distributed subscription registry
+      {WebSockexNova.Cluster.SubscriptionRegistry, opts},
+
+      # Optional: integration with libcluster for node discovery
+      libcluster_child_spec(opts)
+    ] |> Enum.filter(&(&1 != nil))
+
+    Supervisor.init(children, strategy: :one_for_one)
+  end
+
+  defp libcluster_child_spec(opts) do
+    if Code.ensure_loaded?(:libcluster) and Keyword.get(opts, :use_libcluster, false) do
+      topologies = Application.get_env(:websockex_nova, :topologies, [])
+      {Cluster.Supervisor, [topologies, [name: WebSockexNova.ClusterSupervisor.ClusterNodes]]}
+    else
+      nil
+    end
+  end
+end
+```
+
+### Distributed Subscription Management
+
+WebSockexNova provides a distributed subscription registry to maintain subscription state across the cluster:
+
+```elixir
+defmodule WebSockexNova.Cluster.SubscriptionRegistry do
+  @moduledoc """
+  Registry for tracking subscriptions across the cluster.
+  """
+
+  use GenServer
+  alias Phoenix.PubSub
+
+  @registry_name :websockex_nova_subscriptions
+  @pubsub_topic "websockex_nova:subscriptions"
+
+  # Client API
+
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  @doc """
+  Registers a subscription in the distributed registry.
+  """
+  def register(subscription_id, channel, client_id, opts \\ []) do
+    Registry.register(@registry_name, channel, {subscription_id, client_id, opts})
+    PubSub.broadcast(pubsub_name(), @pubsub_topic, {:subscription_added, node(), subscription_id, channel, client_id})
+    :ok
+  end
+
+  @doc """
+  Unregisters a subscription from the distributed registry.
+  """
+  def unregister(subscription_id) do
+    Registry.unregister(@registry_name, subscription_id)
+    PubSub.broadcast(pubsub_name(), @pubsub_topic, {:subscription_removed, node(), subscription_id})
+    :ok
+  end
+
+  @doc """
+  Lists all active subscriptions across the cluster.
+  """
+  def list_subscriptions do
+    Registry.select(@registry_name, [{{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2", :"$3"}}]}])
+  end
+
+  # GenServer callbacks
+
+  @impl true
+  def init(opts) do
+    pubsub = Keyword.get(opts, :pubsub, WebSockexNova.PubSub)
+    Registry.start_link(keys: :duplicate, name: @registry_name)
+    PubSub.subscribe(pubsub, @pubsub_topic)
+    {:ok, %{pubsub: pubsub}}
+  end
+
+  # Handle subscription messages from other nodes
+  @impl true
+  def handle_info({:subscription_added, remote_node, id, channel, client_id}, state) do
+    # Synchronize subscription state from other nodes
+    {:noreply, state}
+  end
+
+  defp pubsub_name do
+    Application.get_env(:websockex_nova, :pubsub, WebSockexNova.PubSub)
+  end
+end
+```
+
+### Distributed Rate Limiting
+
+For applications requiring distributed rate limiting across the cluster:
+
+```elixir
+defmodule WebSockexNova.Cluster.RateLimiter do
+  @moduledoc """
+  Distributed rate limiting across the cluster.
+  """
+
+  alias Phoenix.PubSub
+
+  @pubsub_topic "websockex_nova:rate_limits"
+
+  @doc """
+  Checks if an operation would exceed the distributed rate limit.
+  """
+  def check_rate_limit(operation, client_id) do
+    case :global.whereis_name({:rate_limit, client_id, operation}) do
+      :undefined ->
+        # No rate limiter process exists yet, create one
+        {:ok, pid} = WebSockexNova.Cluster.RateLimiter.Worker.start_link(client_id, operation)
+        :global.register_name({:rate_limit, client_id, operation}, pid)
+        GenServer.call(pid, :check)
+
+      pid ->
+        # Rate limiter exists, check with it
+        GenServer.call(pid, :check)
+    end
+  end
+
+  @doc """
+  Updates the rate limit state after an operation is performed.
+  """
+  def update_rate_limit(operation, client_id) do
+    case :global.whereis_name({:rate_limit, client_id, operation}) do
+      :undefined -> :ok
+      pid -> GenServer.cast(pid, :increment)
+    end
+  end
+end
+
+defmodule WebSockexNova.Cluster.RateLimiter.Worker do
+  @moduledoc false
+  use GenServer
+
+  # Implementation of the rate limiter worker process
+  # ...
+end
+```
+
+### Geo-Aware Connection Management
+
+WebSockexNova can intelligently route connections based on geographic proximity:
+
+```elixir
+defmodule WebSockexNova.Cluster.GeoRouter do
+  @moduledoc """
+  Routes WebSocket connections based on geographic proximity.
+  """
+
+  @doc """
+  Determines the optimal node for a connection based on region.
+  """
+  def optimal_node(exchange, region) do
+    # Get exchange location from config
+    exchange_region = get_exchange_region(exchange)
+
+    # Find nodes in the target region
+    nodes_in_region = get_nodes_in_region(exchange_region)
+
+    case nodes_in_region do
+      [] ->
+        # No nodes in ideal region, find closest alternative
+        get_closest_node_to_region(exchange_region)
+
+      [node] ->
+        # Single node in region, use it
+        node
+
+      nodes ->
+        # Multiple nodes in region, select based on load
+        select_least_loaded_node(nodes)
+    end
+  end
+
+  # Helper functions for node selection
+  # ...
+end
+```
+
+### Configuration for Clustering
+
+WebSockexNova provides flexible configuration options for clustering:
+
+```elixir
+config :websockex_nova,
+  clustering: [
+    enabled: true,
+    node_region: "us-east",
+    discovery_method: :libcluster, # or :manual
+    sync_interval: 30_000,         # ms between state syncs
+    active_sync: true              # proactively sync state
+  ],
+
+  # libcluster topology configuration (if using)
+  topologies: [
+    websockex_nova: [
+      strategy: Cluster.Strategy.Kubernetes,
+      config: [
+        kubernetes_selector: "app=websockex-nova",
+        kubernetes_node_basename: "websockex-nova"
+      ]
+    ]
+  ]
+```
+
+### Integration with Telemetry
+
+Clustered operations emit specialized telemetry events:
+
+```elixir
+defmodule WebSockexNova.Cluster.Telemetry do
+  @doc """
+  Emits telemetry events for cluster operations.
+  """
+  def execute_cluster_event(event_name, measurements, metadata) do
+    :telemetry.execute([:websockex_nova, :cluster | event_name], measurements,
+      Map.merge(%{node: node()}, metadata))
+  end
+
+  # Specific cluster events
+
+  def node_joined(node_name, metadata \\ %{}) do
+    execute_cluster_event([:node, :joined], %{system_time: System.system_time()},
+      Map.merge(%{node_name: node_name}, metadata))
+  end
+
+  def node_left(node_name, metadata \\ %{}) do
+    execute_cluster_event([:node, :left], %{system_time: System.system_time()},
+      Map.merge(%{node_name: node_name}, metadata))
+  end
+
+  def subscription_synchronized(subscription_id, metadata \\ %{}) do
+    execute_cluster_event([:subscription, :synchronized], %{system_time: System.system_time()},
+      Map.merge(%{subscription_id: subscription_id}, metadata))
+  end
+
+  # More cluster-specific telemetry events
+  # ...
+end
+```
+
+### Best Practices for Clustered Deployments
+
+#### 1. Network Configuration
+
+- Ensure reliable, low-latency connectivity between cluster nodes
+- Use a dedicated private network for inter-node communication
+- Configure firewalls to permit Erlang distribution protocol traffic
+- Consider using encrypted distribution for security
+
+#### 2. Geo-Distribution Strategy
+
+- Deploy nodes near exchanges/data sources to minimize latency
+- For global markets, place nodes in multiple geographic regions
+- Consider using a regional node selection strategy:
+  - Primary market hours: Prioritize nodes in the active market's region
+  - Off-hours: Distribute load evenly or use nodes in quieter regions
+
+#### 3. State Management
+
+- Limit shared state to essential connection information
+- Use appropriate replication strategies:
+  - Full replication for critical subscription data
+  - Partial replication for non-critical state
+  - Local-only for ephemeral state
+- Regularly prune stale subscription data
+
+#### 4. Failure Handling
+
+- Implement node heartbeats to detect cluster partitions
+- Define clear failover policies for each subscription type
+- Handle temporary network partitions gracefully
+- Use local buffers to prevent message loss during failovers
+
+#### 5. Monitoring and Debugging
+
+- Deploy distributed tracing across the cluster
+- Monitor inter-node message volume and latency
+- Track subscription synchronization status
+- Alert on cluster partition events
+
+### Example: Deploying a Geo-Distributed Cluster
+
+```elixir
+# Node 1 (us-east) configuration
+config :websockex_nova,
+  clustering: [
+    enabled: true,
+    node_region: "us-east",
+    discovery_method: :libcluster,
+    node_selector_tag: "region=us-east"
+  ],
+
+  # Exchanges with prioritized regions
+  exchanges: [
+    nyse: [primary_region: "us-east", failover_regions: ["us-west", "eu-west"]],
+    nasdaq: [primary_region: "us-east", failover_regions: ["us-west", "eu-west"]]
+  ]
+
+# Node 2 (eu-west) configuration
+config :websockex_nova,
+  clustering: [
+    enabled: true,
+    node_region: "eu-west",
+    discovery_method: :libcluster,
+    node_selector_tag: "region=eu-west"
+  ],
+
+  # Exchanges with prioritized regions
+  exchanges: [
+    lse: [primary_region: "eu-west", failover_regions: ["eu-central", "us-east"]],
+    euronext: [primary_region: "eu-west", failover_regions: ["eu-central", "us-east"]]
+  ]
+```
+
+### Using Clustering in Your Application
+
+To leverage WebSockexNova's clustering capabilities:
+
+```elixir
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      # Start the clustering supervisor
+      {WebSockexNova.ClusterSupervisor, clustering_opts()},
+
+      # Start your platform client with clustering awareness
+      {WebSockexNova.Platform.Deribit.Client,
+        url: "wss://www.deribit.com/ws/api/v2",
+        name: :deribit_client,
+        cluster_enabled: true,
+        region_aware: true
+      }
+
+      # Other children...
+    ]
+
+    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+
+  defp clustering_opts do
+    [
+      enabled: Application.get_env(:my_app, :clustering_enabled, true),
+      node_region: Application.get_env(:my_app, :node_region, "default"),
+      use_libcluster: true,
+      sync_interval: 15_000
+    ]
+  end
+end
+```
+
+With clustering enabled, your application will benefit from distributed subscription management, geo-aware connection routing, and improved resilience—essential features for high-performance financial applications operating across multiple regions.
