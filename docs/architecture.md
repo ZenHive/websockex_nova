@@ -1,5 +1,7 @@
 # WebSockexNova Architecture Overview
 
+> **Note:** This document provides a high-level architectural overview of WebSockexNova. For implementation details and comprehensive examples, please refer to the API documentation and guides in the `docs/guides/` directory.
+
 ## Transport Layer: Gun Integration
 
 WebSockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying WebSocket transport layer. Gun is a mature HTTP/WebSocket client for Erlang/OTP maintained by the Cowboy team, offering:
@@ -11,22 +13,7 @@ WebSockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying Web
 
 ### Gun Adapter
 
-WebSockexNova wraps Gun with a thin adapter layer:
-
-```elixir
-defmodule WebSockexNova.Transport.GunClient do
-  @moduledoc """
-  WebSocket client adapter for Gun.
-  """
-
-  use GenServer
-
-  # Client API and internal implementation
-  # ...
-end
-```
-
-This adapter translates between the Gun API and WebSockexNova's behavior interfaces, allowing us to focus on platform-specific implementations rather than WebSocket protocol handling.
+WebSockexNova wraps Gun with a thin adapter layer that translates between the Gun API and WebSockexNova's behavior interfaces.
 
 ## Core Design Principles
 
@@ -54,7 +41,7 @@ This adapter translates between the Gun API and WebSockexNova's behavior interfa
 
 #### Platform Integrations
 
-```elixir
+```
 websockex_nova/platform/deribit/
   lib/
     adapter.ex         # Implements platform behaviors
@@ -66,7 +53,7 @@ websockex_nova/platform/deribit/
 
 #### Protocol Integrations
 
-```elixir
+```
 websockex_nova/platform/ethereum/
   lib/
     adapter.ex         # Implements platform behaviors
@@ -115,1219 +102,437 @@ websockex_nova/platform/ethereum/
                        └─────────────────────┘
 ```
 
-### 2. Core Behaviors and Modules
+### 2. Core Behaviors and Modules Overview
+
+WebSockexNova defines a set of behaviors that establish contracts for different aspects of WebSocket communication. Each behavior serves a specific purpose and can be customized based on application requirements.
 
 #### 2.1 ConnectionHandler Behavior
 
-The foundational behavior for managing WebSocket connection lifecycles:
-
-```elixir
-defmodule WebSockexNova.ConnectionHandler do
-  @moduledoc """
-  Behavior for managing WebSocket connection lifecycles.
-  """
-
-  @doc """
-  Initializes a new WebSocket connection.
-  """
-  @callback init(opts :: Keyword.t()) ::
-    {:ok, state :: map()} | {:error, reason :: term()}
-
-  @doc """
-  Handles a successful connection.
-  """
-  @callback handle_connect(conn_info :: map(), state :: map()) ::
-    {:ok, new_state :: map()} | {:error, reason :: term()}
-
-  @doc """
-  Handles disconnection events.
-  """
-  @callback handle_disconnect(reason :: term(), state :: map()) ::
-    {:reconnect, delay :: non_neg_integer(), new_state :: map()} |
-    {:stop, reason :: term(), new_state :: map()}
-
-  @doc """
-  Handles WebSocket frames.
-  """
-  @callback handle_frame(frame_type :: atom(), frame_data :: binary(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:reply, frame_type :: atom(), frame_data :: binary(), new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
-end
-```
+Manages WebSocket connection lifecycles. Key callbacks include:
+- `init/1`: Initialize connection state
+- `handle_connect/2`: Handle successful connections
+- `handle_disconnect/2`: Handle disconnection events
+- `handle_frame/3`: Process WebSocket frames
 
 #### 2.2 MessageHandler Behavior
 
-Handles parsing, validating, and routing messages:
-
-```elixir
-defmodule WebSockexNova.MessageHandler do
-  @moduledoc """
-  Behavior for processing WebSocket messages.
-  """
-
-  @doc """
-  Processes an incoming message and routes it appropriately.
-  """
-  @callback handle_message(message :: term(), state :: map()) ::
-    {:ok, new_state :: map(), processed_message :: map()} |
-    {:error, reason :: term(), new_state :: map()}
-
-  @doc """
-  Validates a message format.
-  """
-  @callback validate_message(message :: term()) ::
-    :ok | {:error, reason :: term()}
-
-  @doc """
-  Determines the type of a message (e.g., subscription data, heartbeat, response).
-  """
-  @callback message_type(message :: term()) ::
-    {:subscription, channel :: String.t()} |
-    {:response, id :: term()} |
-    {:heartbeat, term()} |
-    {:unknown, term()}
-
-  @doc """
-  Encodes a message for sending over the WebSocket.
-  """
-  @callback encode_message(message :: term(), state :: map()) ::
-    {:ok, encoded_message :: binary()} |
-    {:error, reason :: term()}
-end
-```
+Handles message parsing, validation, and routing with callbacks:
+- `handle_message/2`: Process incoming messages
+- `validate_message/1`: Validate message formats
+- `message_type/1`: Determine message type/category
+- `encode_message/2`: Encode messages for sending
 
 #### 2.3 SubscriptionHandler Behavior
 
-Manages channel/topic subscriptions:
-
-```elixir
-defmodule WebSockexNova.SubscriptionHandler do
-  @moduledoc """
-  Behavior for managing WebSocket subscriptions.
-  """
-
-  @doc """
-  Subscribes to a channel or topic.
-  """
-  @callback subscribe(channel :: term(), opts :: Keyword.t(), state :: map()) ::
-    {:ok, new_state :: map(), subscription_id :: String.t()} |
-    {:error, reason :: term(), new_state :: map()}
-
-  @doc """
-  Unsubscribes from a channel or topic.
-  """
-  @callback unsubscribe(subscription_id :: String.t(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
-
-  @doc """
-  Handles subscription responses.
-  """
-  @callback handle_subscription_response(response :: term(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
-end
-```
+Manages channel/topic subscriptions with callbacks:
+- `subscribe/3`: Subscribe to channels/topics
+- `unsubscribe/2`: Unsubscribe from channels/topics
+- `handle_subscription_response/2`: Process subscription responses
 
 #### 2.4 ErrorHandler Behavior
 
-Manages error handling and recovery:
-
-```elixir
-defmodule WebSockexNova.ErrorHandler do
-  @moduledoc """
-  Behavior for handling WebSocket errors and recovery.
-  """
-
-  @doc """
-  Handles an error during message processing.
-  """
-  @callback handle_error(error :: term(), context :: map(), state :: map()) ::
-    {:retry, delay :: non_neg_integer(), new_state :: map()} |
-    {:stop, reason :: term(), new_state :: map()}
-
-  @doc """
-  Determines whether to reconnect after an error.
-  """
-  @callback should_reconnect?(error :: term(), attempt :: non_neg_integer(), state :: map()) ::
-    {boolean(), delay :: non_neg_integer() | nil}
-
-  @doc """
-  Logs an error with appropriate context.
-  """
-  @callback log_error(error :: term(), context :: map(), state :: map()) :: :ok
-end
-```
+Manages error handling and recovery with callbacks:
+- `handle_error/3`: Process errors during message handling
+- `should_reconnect?/3`: Determine reconnection strategy
+- `log_error/3`: Log errors with appropriate context
 
 #### 2.5 AuthHandler Behavior
 
-Manages authentication and authorization:
+Handles authentication flows with callbacks:
+- `generate_auth_data/1`: Generate authentication data
+- `handle_auth_response/2`: Process authentication responses
+- `needs_reauthentication?/1`: Check if reauthentication is needed
 
-```elixir
-defmodule WebSockexNova.AuthHandler do
-  @moduledoc """
-  Behavior for handling WebSocket authentication.
-  """
+> **Note:** The specific implementations of these behaviors depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
 
-  @doc """
-  Generates authentication data for the connection.
-  """
-  @callback generate_auth_data(opts :: Keyword.t()) ::
-    {:ok, auth_data :: term()} |
-    {:error, reason :: term()}
+> **For Complete API Documentation:** See `docs/api/` for full behavior specifications and callback signatures.
 
-  @doc """
-  Handles authentication responses.
-  """
-  @callback handle_auth_response(response :: term(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
+### 3. Behavior Completeness and Extensibility
 
-  @doc """
-  Determines if reauthentication is needed.
-  """
-  @callback needs_reauthentication?(state :: map()) :: boolean()
-end
-```
+While the core behaviors provide a solid foundation for most WebSocket interactions, they can be extended to address specific use cases or advanced scenarios.
 
-#### 2.6 HeartbeatHandler Behavior
+#### 3.1 Potential Extensions
 
-Manages WebSocket heartbeat protocols:
+The current behavior set may benefit from these additional capabilities:
 
-```elixir
-defmodule WebSockexNova.HeartbeatHandler do
-  @moduledoc """
-  Behavior for managing WebSocket heartbeat protocols.
-  """
+1. **Advanced Error Recovery**
+   - **Transient vs. Persistent Error Distinction**: Add specialized callbacks to handle different error types
+   - **Circuit Breaker Pattern**: Add support for temporarily disabling connections after repeated failures
+   - **Custom Recovery Strategies**: Allow platform-specific recovery procedures
 
-  @doc """
-  Configures heartbeat parameters.
-  """
-  @callback configure(interval :: non_neg_integer(), opts :: Keyword.t(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:error, reason :: term()}
+2. **Clustering-Aware Callbacks**
+   - **Distributed State Synchronization**: Add callbacks to react to state changes from other nodes
+   - `handle_cluster_update/2`: Process state updates from other cluster nodes
+   - `handle_node_transition/3`: React to node joins/leaves in the cluster
 
-  @doc """
-  Processes a heartbeat message.
-  """
-  @callback handle_heartbeat(message :: term(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
+3. **Extended Telemetry Hooks**
+   - **Custom Metric Collection**: Allow platform-specific performance metrics
+   - **Event Filtering**: Provide mechanisms to control telemetry verbosity
 
-  @doc """
-  Generates a heartbeat message.
-  """
-  @callback generate_heartbeat(state :: map()) ::
-    {:ok, heartbeat_message :: term(), new_state :: map()} |
-    {:error, reason :: term()}
-end
-```
+#### 3.2 Behavior Evolution Strategy
 
-#### 2.7 RateLimitHandler Behavior
+As the library evolves, new behaviors and callbacks will be added judiciously:
 
-Manages rate limiting:
+1. **Versioning Approach**:
+   - Optional callbacks will be added with default implementations
+   - Breaking changes will be clearly documented and follow semantic versioning
 
-```elixir
-defmodule WebSockexNova.RateLimitHandler do
-  @moduledoc """
-  Behavior for handling WebSocket rate limiting.
-  """
+2. **Extension Mechanisms**:
+   - Protocol extensions through behavior composition
+   - Platform-specific behaviors implemented as separate modules
+   - Configuration-driven behavior selection
 
-  @doc """
-  Checks if an operation would exceed the rate limit.
-  """
-  @callback check_rate_limit(operation :: atom(), state :: map()) ::
-    {:ok, new_state :: map()} |
-    {:rate_limited, retry_after :: non_neg_integer(), new_state :: map()}
+## Telemetry and Observability
 
-  @doc """
-  Updates rate limit state after an operation.
-  """
-  @callback update_rate_limit(operation :: atom(), state :: map()) ::
-    {:ok, new_state :: map()}
-
-  @doc """
-  Handles rate limit exceeded responses.
-  """
-  @callback handle_rate_limited(response :: term(), state :: map()) ::
-    {:retry, delay :: non_neg_integer(), new_state :: map()} |
-    {:error, reason :: term(), new_state :: map()}
-end
-```
-
-## Telemetry Hooks and Observability
-
-WebSockexNova implements standardized telemetry events throughout the system for metrics, logging, and alerting.
+WebSockexNova implements standardized telemetry events for monitoring performance, reliability, and behavior.
 
 ### Core Telemetry Events
 
+The library emits telemetry events for key operations:
+
+- **Connection Events**: Track connection lifecycle (start, complete, disconnect)
+- **Subscription Events**: Monitor subscription operations (subscribe, unsubscribe)
+- **Message Events**: Measure message throughput, size, and processing time
+- **Error Events**: Capture error frequency and types
+- **Reconnection Events**: Monitor reconnection attempts and success rates
+
+> **Note:** See `docs/guides/telemetry.md` for complete details on available events and integration examples with common monitoring systems.
+
+### Profile-Based Telemetry
+
+Each implementation profile includes appropriate telemetry settings:
+
+- **Financial Profile**: High-resolution metrics with detailed message tracking
+- **Standard Profile**: Balanced metrics focused on connection stability
+- **Lightweight Profile**: Minimal metrics for essential monitoring
+
+## Clustering Support
+
+For applications requiring high availability and geo-distribution, WebSockexNova provides clustering capabilities.
+
+### Key Clustering Features
+
+- **Node Discovery**: Automatic detection of cluster nodes (optional libcluster integration)
+- **Distributed Subscriptions**: Subscription state shared across nodes
+- **Geo-Aware Routing**: Connect via the node with closest proximity to target service
+- **Distributed Rate Limiting**: Coordinate rate limits across nodes
+- **Node Failover**: Seamlessly transfer connections if a node becomes unavailable
+
+> **Note:** See `docs/guides/clustering.md` for detailed clustering configuration and deployment patterns.
+
+## Document Organization
+
+To maintain clarity while providing complete information, WebSockexNova documentation is organized into several components:
+
+1. **Architecture Overview** (this document): High-level design and concepts
+2. **API Documentation** (`docs/api/`): Complete behavior specifications
+3. **Implementation Guides** (`docs/guides/`):
+   - Platform integration tutorials
+   - Error handling patterns
+   - Telemetry configuration
+   - Clustering setup
+4. **Examples** (`docs/examples/`):
+   - Financial platform integration examples
+   - Chat/messaging platform examples
+   - Custom behavior implementations
+
+## Implementation Profiles
+
+WebSockexNova is designed to support different application profiles with varying requirements for performance, reliability, and complexity.
+
+### 1. Financial Platform Profile
+
+Optimized for high-frequency trading, market data, and financial applications requiring extreme reliability.
+
 ```elixir
-defmodule WebSockexNova.Telemetry do
-  @moduledoc """
-  Telemetry events for WebSocket operations.
-  """
-
-  def execute_event(event_name, measurements, metadata) do
-    :telemetry.execute([:websockex_nova | event_name], measurements, metadata)
-  end
-
-  # Connection events
-  def connection_started(client_id, metadata \\ %{}) do
-    execute_event([:connection, :started], %{system_time: System.system_time()},
-      Map.merge(%{client_id: client_id}, metadata))
-  end
-
-  def connection_completed(client_id, duration, metadata \\ %{}) do
-    execute_event([:connection, :completed], %{duration: duration},
-      Map.merge(%{client_id: client_id}, metadata))
-  end
-
-  # Subscription events
-  def subscription_started(client_id, channel, metadata \\ %{}) do
-    execute_event([:subscription, :started], %{system_time: System.system_time()},
-      Map.merge(%{client_id: client_id, channel: channel}, metadata))
-  end
-
-  def subscription_completed(client_id, channel, duration, metadata \\ %{}) do
-    execute_event([:subscription, :completed], %{duration: duration},
-      Map.merge(%{client_id: client_id, channel: channel}, metadata))
-  end
-
-  # Message events
-  def message_received(client_id, type, size, metadata \\ %{}) do
-    execute_event([:message, :received], %{size: size, system_time: System.system_time()},
-      Map.merge(%{client_id: client_id, type: type}, metadata))
-  end
-
-  def message_sent(client_id, type, size, metadata \\ %{}) do
-    execute_event([:message, :sent], %{size: size, system_time: System.system_time()},
-      Map.merge(%{client_id: client_id, type: type}, metadata))
-  end
-
-  # Error events
-  def error_occurred(client_id, error_type, metadata \\ %{}) do
-    execute_event([:error, :occurred], %{system_time: System.system_time()},
-      Map.merge(%{client_id: client_id, error_type: error_type}, metadata))
-  end
-
-  # Reconnection events
-  def reconnection_started(client_id, attempt, metadata \\ %{}) do
-    execute_event([:reconnection, :started], %{system_time: System.system_time(), attempt: attempt},
-      Map.merge(%{client_id: client_id}, metadata))
-  end
-
-  def reconnection_completed(client_id, attempt, duration, metadata \\ %{}) do
-    execute_event([:reconnection, :completed], %{duration: duration, attempt: attempt},
-      Map.merge(%{client_id: client_id}, metadata))
-  end
-end
+# Example configuration for financial platforms
+config :websockex_nova,
+  profile: :financial,
+  reconnection: [
+    strategy: :exponential_backoff_with_jitter,
+    max_attempts: :infinity,
+    initial_delay: 100,  # milliseconds
+    max_delay: 30_000,   # 30 seconds
+    jitter_factor: 0.25
+  ],
+  connection: [
+    timeout: 5_000,      # 5 seconds
+    ping_interval: 15_000,
+    pong_timeout: 5_000
+  ],
+  telemetry: [
+    level: :detailed,    # More granular metrics
+    connection_events: true,
+    message_events: true,
+    error_events: true
+  ],
+  clustering: [
+    enabled: true,
+    strategy: :geo_aware  # Route to closest node
+  ]
 ```
 
-### Telemetry Reporter Configuration
+**Key Characteristics:**
+- Aggressive reconnection strategies
+- Comprehensive error tracking and automatic recovery
+- High-resolution telemetry
+- Distributed rate limiting
+- Subscription persistence across reconnects
+- Support for geo-distribution and failover
 
-Applications consuming WebSockexNova can attach handlers to these telemetry events:
+### 2. Standard Platform Profile
+
+Balanced approach for general-purpose WebSocket applications like chat, notifications, and general real-time data.
 
 ```elixir
-defmodule MyApp.Telemetry do
-  use Supervisor
-  import Telemetry.Metrics
-
-  def start_link(arg) do
-    Supervisor.start_link(__MODULE__, arg, name: __MODULE__)
-  end
-
-  def init(_arg) do
-    children = [
-      # Telemetry poller for VM metrics
-      {:telemetry_poller, measurements: [{:process_info, :memory}], period: 10_000},
-
-      # Reporter(s) using the metrics below
-      {TelemetryMetricsPrometheus, metrics: metrics()}
-    ]
-
-    Supervisor.init(children, strategy: :one_for_one)
-  end
-
-  def metrics do
-    [
-      # Connection metrics
-      counter("websockex_nova.connection.started.count", tags: [:client_id]),
-      distribution("websockex_nova.connection.completed.duration",
-        tags: [:client_id], unit: {:native, :millisecond}),
-
-      # Subscription metrics
-      counter("websockex_nova.subscription.started.count", tags: [:client_id, :channel]),
-      distribution("websockex_nova.subscription.completed.duration",
-        tags: [:client_id, :channel], unit: {:native, :millisecond}),
-
-      # Message metrics
-      counter("websockex_nova.message.received.count", tags: [:client_id, :type]),
-      summary("websockex_nova.message.received.size", tags: [:client_id, :type]),
-      counter("websockex_nova.message.sent.count", tags: [:client_id, :type]),
-      summary("websockex_nova.message.sent.size", tags: [:client_id, :type]),
-
-      # Error metrics
-      counter("websockex_nova.error.occurred.count", tags: [:client_id, :error_type]),
-
-      # Reconnection metrics
-      counter("websockex_nova.reconnection.started.count", tags: [:client_id]),
-      distribution("websockex_nova.reconnection.completed.duration",
-        tags: [:client_id], unit: {:native, :millisecond})
-    ]
-  end
-end
+# Example configuration for standard platforms
+config :websockex_nova,
+  profile: :standard,
+  reconnection: [
+    strategy: :linear_backoff,
+    max_attempts: 10,
+    initial_delay: 1_000,  # 1 second
+    max_delay: 60_000      # 1 minute
+  ],
+  connection: [
+    timeout: 10_000,       # 10 seconds
+    ping_interval: 30_000,
+    pong_timeout: 10_000
+  ],
+  telemetry: [
+    level: :standard,
+    connection_events: true,
+    message_events: false,  # Less metric volume
+    error_events: true
+  ],
+  clustering: [
+    enabled: false         # Simpler single-node deployment
+  ]
 ```
 
-## Platform Integration Generators
+**Key Characteristics:**
+- Reasonable reconnection attempts with escalation
+- Standard error recovery for common failures
+- Balanced telemetry with focus on critical events
+- Local rate limiting
+- Simplified deployment model
 
-WebSockexNova provides a mix generator task for creating platform-specific integrations:
+### 3. Lightweight Platform Profile
+
+Minimalist approach for simple WebSocket integrations like webhooks, simple chat, or non-critical notifications.
 
 ```elixir
-# Generate with: mix websockex_nova.gen.integration NAME --platform PLATFORM_NAME
-defmodule Mix.Tasks.WebsockexNova.Gen.Integration do
-  use Mix.Task
+# Example configuration for lightweight platforms
+config :websockex_nova,
+  profile: :lightweight,
+  reconnection: [
+    strategy: :simple,
+    max_attempts: 3,        # Limited retries
+    initial_delay: 2_000,   # 2 seconds
+    max_delay: 10_000       # 10 seconds
+  ],
+  connection: [
+    timeout: 15_000,        # 15 seconds
+    ping_interval: 60_000,  # Less frequent heartbeats
+    pong_timeout: 15_000
+  ],
+  telemetry: [
+    level: :minimal,        # Basic metrics only
+    connection_events: true,
+    message_events: false,
+    error_events: true
+  ],
+  clustering: [
+    enabled: false
+  ]
+```
 
-  @shortdoc "Generates a new WebSockexNova platform integration"
-  def run(args) do
-    # Parse arguments
-    {opts, [name], _} = OptionParser.parse(args,
-      strict: [platform: :string, test: :boolean],
-      aliases: [p: :platform, t: :test]
-    )
+**Key Characteristics:**
+- Simple reconnection strategy with limited attempts
+- Basic error handling with fail-fast approach
+- Minimal telemetry focused on critical events
+- No clustering requirements
+- Lower resource utilization
 
-    platform = Keyword.get(opts, :platform, "generic")
-    generate_test = Keyword.get(opts, :test, true)
+### 4. Custom Profile
 
-    # Generate files
-    generate_adapter(name, platform)
-    generate_client(name, platform)
-    generate_message_handler(name, platform)
-    generate_subscription_handler(name, platform)
+Applications can define custom profiles by overriding specific behaviors:
 
-    if generate_test do
-      generate_tests(name, platform)
-    end
+```elixir
+defmodule MyApp.CustomConnectionHandler do
+  @behaviour WebSockexNova.ConnectionHandler
 
-    # Output success message
-    Mix.shell().info("""
-
-    Platform integration #{name} generated successfully!
-
-    The following files were created:
-      * lib/websockex_nova/platform/#{name}/adapter.ex
-      * lib/websockex_nova/platform/#{name}/client.ex
-      * lib/websockex_nova/platform/#{name}/message.ex
-      * lib/websockex_nova/platform/#{name}/subscription.ex
-    #{if generate_test, do: "  * test/websockex_nova/platform/#{name}/client_test.exs\n  * test/websockex_nova/platform/#{name}/message_test.exs", else: ""}
-
-    Get started by:
-
-    1. Configure your #{name} credentials in config/config.exs:
-
-       config :websockex_nova, :#{name},
-         api_key: System.get_env("#{String.upcase(name)}_API_KEY"),
-         api_secret: System.get_env("#{String.upcase(name)}_API_SECRET"),
-         endpoint: "wss://#{name}.example.com/ws"
-
-    2. Create a client:
-
-       client = WebSockexNova.Platform.#{String.capitalize(name)}.Client.start_link(
-         name: :#{name}_client
-       )
-
-    3. Subscribe to channels:
-
-       WebSockexNova.Platform.#{String.capitalize(name)}.Subscription.subscribe(
-         client, ["channel_name"], []
-       )
-    """)
-  end
-
-  # File generation functions
-  defp generate_adapter(name, platform) do
-    # Generate adapter.ex content based on platform
-  end
-
-  defp generate_client(name, platform) do
-    # Generate client.ex content based on platform
-  end
-
-  defp generate_message_handler(name, platform) do
-    # Generate message.ex content based on platform
-  end
-
-  defp generate_subscription_handler(name, platform) do
-    # Generate subscription.ex content based on platform
-  end
-
-  defp generate_tests(name, platform) do
-    # Generate test files based on platform
-  end
+  # Custom implementation optimized for specific use case
 end
+
+# Application configuration
+config :my_app, :websocket,
+  handler: MyApp.CustomConnectionHandler,
+  # Other custom options
 ```
 
 ## Common Macros and Using Directives
 
-WebSockexNova provides macros via `__using__` for common WebSocket client patterns:
+WebSockexNova provides macros for common WebSocket client patterns through `__using__` directives:
 
 ```elixir
-defmodule WebSockexNova.Macros do
-  defmacro __using__(opts) do
-    strategy = Keyword.get(opts, :strategy, :default)
+defmodule MyApp.WebSocket.DeribitClient do
+  use WebSockexNova.Client,
+    strategy: :always_reconnect,  # Reconnection strategy
+    platform: :deribit,           # Platform-specific adapters
+    profile: :financial           # Configuration profile
 
-    case strategy do
-      :always_reconnect ->
-        quote do
-          @behaviour WebSockexNova.ConnectionHandler
-          @behaviour WebSockexNova.ErrorHandler
+  # Custom implementation or overrides as needed
+end
+```
 
-          # Default implementation for always reconnecting
-          def handle_disconnect(_reason, state) do
-            {:reconnect, calculate_backoff(state), state}
-          end
+Available strategies include:
+- `:always_reconnect` - Persistent connection with exponential backoff
+- `:fail_fast` - Limited reconnection attempts
+- `:log_and_continue` - Logs errors but continues reconnection attempts
+- `:echo` - Simple echo client for testing
 
-          def should_reconnect?(_error, _attempt, _state), do: {true, nil}
+## Advanced Patterns
 
-          defp calculate_backoff(state) do
-            # Exponential backoff implementation
-            attempt = Map.get(state, :reconnect_attempt, 0)
-            base_delay = 250
-            max_delay = 30_000
-            min(base_delay * :math.pow(2, attempt), max_delay)
-          end
+### 1. Error Handling Strategies
 
-          # Allow overriding
-          defoverridable [handle_disconnect: 2, should_reconnect?: 3]
-        end
+WebSockexNova provides multiple error handling approaches:
 
-      :fail_fast ->
-        quote do
-          @behaviour WebSockexNova.ConnectionHandler
-          @behaviour WebSockexNova.ErrorHandler
+#### Financial-Grade Error Handling
 
-          # Fail fast implementation
-          def handle_disconnect(reason, state) do
-            {:stop, reason, state}
-          end
+```elixir
+# This example is simplified - implementation details are in separate guides
+defmodule MyApp.FinancialErrorHandler do
+  @behaviour WebSockexNova.ErrorHandler
 
-          def should_reconnect?(_error, _attempt, _state), do: {false, nil}
+  def handle_error(error, context, state) do
+    # Advanced error categorization
+    case categorize_error(error) do
+      :transient ->
+        # Recoverable errors get exponential backoff with jitter
+        delay = calculate_delay(state)
+        {:retry, delay, Map.update(state, :retry_count, 1, &(&1 + 1))}
 
-          # Allow overriding
-          defoverridable [handle_disconnect: 2, should_reconnect?: 3]
-        end
+      :platform_error ->
+        # Exchange-specific error handling
+        handle_platform_error(error, context, state)
 
-      :log_and_continue ->
-        quote do
-          @behaviour WebSockexNova.ConnectionHandler
-          @behaviour WebSockexNova.ErrorHandler
-
-          # Log and continue implementation
-          def handle_disconnect(reason, state) do
-            require Logger
-            Logger.warn("Disconnected: #{inspect(reason)}. Reconnecting...")
-            {:reconnect, calculate_backoff(state), state}
-          end
-
-          def should_reconnect?(_error, _attempt, _state), do: {true, nil}
-
-          def log_error(error, context, _state) do
-            require Logger
-            Logger.error("Error: #{inspect(error)}, Context: #{inspect(context)}")
-            :ok
-          end
-
-          defp calculate_backoff(state) do
-            # Simple backoff implementation
-            attempt = Map.get(state, :reconnect_attempt, 0)
-            base_delay = 1000
-            base_delay * (attempt + 1)
-          end
-
-          # Allow overriding
-          defoverridable [handle_disconnect: 2, should_reconnect?: 3, log_error: 3]
-        end
-
-      :echo ->
-        quote do
-          @behaviour WebSockexNova.ConnectionHandler
-          @behaviour WebSockexNova.MessageHandler
-
-          # Echo implementation
-          def handle_frame(:text, frame_data, state) do
-            {:reply, :text, frame_data, state}
-          end
-
-          def handle_frame(:binary, frame_data, state) do
-            {:reply, :binary, frame_data, state}
-          end
-
-          def handle_frame(_frame_type, _frame_data, state) do
-            {:ok, state}
-          end
-
-          def handle_message(message, state) do
-            {:ok, state, message}
-          end
-
-          # Allow overriding
-          defoverridable [handle_frame: 3, handle_message: 2]
-        end
-
-      _ ->
-        quote do
-          # Default basic implementation with required callbacks
-          @behaviour WebSockexNova.ConnectionHandler
-        end
+      :critical ->
+        # Alert and fail for critical errors
+        alert_operations_team(error, context)
+        {:stop, error, state}
     end
   end
+
+  def should_reconnect?(_error, attempt, state) when attempt > 20 do
+    # Switch to longer delay after many attempts
+    {true, :timer.minutes(1)}
+  end
+
+  def should_reconnect?(_error, _attempt, _state), do: {true, nil}
+
+  # Private implementation details...
 end
 ```
 
-## Error Handling Strategy
-
-WebSockexNova implements robust error handling with several strategies:
-
-1. **Connection Failures**
-   - Automatic reconnection with exponential backoff
-   - Configurable max retry attempts
-   - Customizable retry delay
-
-2. **Message Processing Errors**
-   - Structured error reporting
-   - Error classification (fatal vs. non-fatal)
-   - Telemetry events for monitoring
-
-3. **Rate Limiting**
-   - Proactive rate limit tracking
-   - Reactive handling of rate limit errors
-   - Automatic backoff when limits are approached
-
-## Configuration Management
-
-WebSockexNova provides flexible configuration options:
+#### Lightweight Error Handling
 
 ```elixir
-config :websockex_nova,
-  default_reconnect_delay: 1_000,
-  max_reconnect_delay: 30_000,
-  max_reconnect_attempts: 10,
-  connection_timeout: 10_000,
+# This example is simplified - implementation details are in separate guides
+defmodule MyApp.LightweightErrorHandler do
+  @behaviour WebSockexNova.ErrorHandler
 
-  # Platform-specific configurations
-  deribit: [
-    api_key: {:system, "DERIBIT_API_KEY"},
-    api_secret: {:system, "DERIBIT_API_SECRET"},
-    endpoint: "wss://www.deribit.com/ws/api/v2"
-  ]
-```
+  def handle_error(error, context, state) do
+    # Simple logging
+    Logger.error("WebSocket error: #{inspect(error)}")
 
-## Type Safety
-
-WebSockexNova leverages Elixir typespecs and Dialyzer for enhanced type safety:
-
-```elixir
-@type websocket_frame :: {:text, binary()} | {:binary, binary()}
-@type websocket_error :: {:error, atom(), String.t()}
-@type reconnection_strategy :: :exponential | :linear | :constant
-```
-
-## Common Data Structures
-
-```elixir
-defmodule WebSockexNova.Types.ConnectionState do
-  @moduledoc """
-  Represents the state of a WebSocket connection.
-  """
-
-  @type status :: :disconnected | :connecting | :connected | :authenticated | :error
-
-  @type t :: %__MODULE__{
-    status: status(),
-    last_connected_at: DateTime.t() | nil,
-    disconnect_reason: term() | nil,
-    reconnection_attempts: non_neg_integer(),
-    subscription_status: %{optional(String.t()) => :active | :pending | :error}
-  }
-
-  defstruct [
-    status: :disconnected,
-    last_connected_at: nil,
-    disconnect_reason: nil,
-    reconnection_attempts: 0,
-    subscription_status: %{}
-  ]
-end
-
-defmodule WebSockexNova.Types.Subscription do
-  @moduledoc """
-  Represents a channel subscription.
-  """
-
-  @type t :: %__MODULE__{
-    id: String.t(),
-    channel: String.t(),
-    status: :active | :pending | :error,
-    created_at: DateTime.t(),
-    error: term() | nil
-  }
-
-  @enforce_keys [:id, :channel, :created_at]
-  defstruct [:id, :channel, status: :pending, :created_at, error: nil]
-end
-
-defmodule WebSockexNova.Types.ClientConfig do
-  @moduledoc """
-  Configuration for a WebSocket client.
-  """
-
-  @type t :: %__MODULE__{
-    name: atom() | nil,
-    uri: String.t(),
-    headers: [{String.t(), String.t()}],
-    timeout: non_neg_integer(),
-    heartbeat_interval: non_neg_integer() | nil,
-    reconnect_strategy: :exponential | :linear | :constant,
-    backoff_initial: non_neg_integer(),
-    backoff_max: non_neg_integer(),
-    max_reconnect_attempts: non_neg_integer() | :infinity
-  }
-
-  defstruct [
-    name: nil,
-    uri: nil,
-    headers: [],
-    timeout: 30_000,
-    heartbeat_interval: nil,
-    reconnect_strategy: :exponential,
-    backoff_initial: 250,
-    backoff_max: 30_000,
-    max_reconnect_attempts: :infinity
-  ]
-end
-```
-
-## Clustering Support
-
-WebSockexNova provides robust support for clustered environments, enhancing resilience, performance, and geo-distribution capabilities.
-
-### Clustering Rationale
-
-Operating WebSocket connections in a clustered environment offers several critical advantages:
-
-1. **Geographical Proximity**
-   - Deploy nodes closer to exchange/platform data centers to reduce network latency
-   - Optimize connection routes for specific geographical markets
-   - Improve data freshness for time-sensitive financial applications
-
-2. **High Availability and Fault Tolerance**
-   - Maintain connection state across multiple nodes
-   - Provide seamless failover if a node experiences issues
-   - Distribute connection load across the cluster
-
-3. **Distributed State Management**
-   - Share subscription states across the cluster
-   - Coordinate rate limiting across multiple connection points
-   - Synchronize authentication and authorization state
-
-4. **Load Balancing**
-   - Distribute WebSocket connections across multiple nodes
-   - Prevent any single node from becoming a connection bottleneck
-   - Scale horizontally to handle high-volume data streams
-
-### Clustering Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Node 1 (us-east)                         │
-│                                                                 │
-│  ┌─────────────┐     ┌──────────────┐    ┌──────────────────┐   │
-│  │ WebSocket   │     │ Subscription │    │ Local Connection │   │
-│  │ Connections │────►│ Handler      │───►│ State            │   │
-│  └─────────────┘     └──────────────┘    └──────────────────┘   │
-│         │                                         │             │
-│         │                ┌──────────┐             │             │
-│         └───────────────►│ Telemetry│◄────────────┘             │
-│                          └──────────┘                           │
-│                               │                                 │
-└───────────────────────────────┼─────────────────────────────────┘
-                                │
-                                ▼
-                        ┌───────────────┐
-                        │  Distributed  │
-                        │  PubSub       │
-                        └───────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Node 2 (eu-west)                          │
-│                                                                 │
-│  ┌─────────────┐     ┌──────────────┐    ┌──────────────────┐   │
-│  │ WebSocket   │     │ Subscription │    │ Local Connection │   │
-│  │ Connections │────►│ Handler      │───►│ State            │   │
-│  └─────────────┘     └──────────────┘    └──────────────────┘   │
-│         │                                         │             │
-│         │                ┌──────────┐             │             │
-│         └───────────────►│ Telemetry│◄────────────┘             │
-│                          └──────────┘                           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### WebSockexNova.Cluster Module
-
-The `WebSockexNova.Cluster` module provides the core functionality for operating in a clustered environment:
-
-```elixir
-defmodule WebSockexNova.Cluster do
-  @moduledoc """
-  Provides clustering capabilities for WebSockexNova.
-
-  This module manages node discovery, distributed subscription state,
-  and geo-aware connection routing.
-  """
-
-  use GenServer
-  alias Phoenix.PubSub
-
-  @pubsub_topic "websockex_nova:cluster"
-
-  @doc """
-  Starts the cluster manager with the given options.
-
-  ## Options
-
-    * `:pubsub` - The PubSub module to use for communication (default: WebSockexNova.PubSub)
-    * `:node_region` - Geographic region identifier for this node (e.g., "us-east", "eu-west")
-    * `:strategy` - The clustering strategy to use (:active or :passive)
-    * `:sync_interval` - Interval in ms to sync state across nodes (default: 30_000)
-  """
-  def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
-
-  @doc """
-  Distributes a subscription across the cluster.
-  """
-  def distribute_subscription(subscription_id, channel, opts \\ []) do
-    message = {:subscription, node(), subscription_id, channel, opts}
-    PubSub.broadcast(pubsub_name(), @pubsub_topic, message)
-    :ok
-  end
-
-  @doc """
-  Distributes connection state information across the cluster.
-  """
-  def distribute_connection_state(client_id, state) do
-    message = {:connection_state, node(), client_id, state}
-    PubSub.broadcast(pubsub_name(), @pubsub_topic, message)
-    :ok
-  end
-
-  @doc """
-  Gets the closest node to a specific geographic region.
-  """
-  def get_closest_node(region) do
-    # Implementation to find the closest node based on region
-  end
-
-  @doc """
-  Returns the current cluster state.
-  """
-  def get_cluster_state do
-    GenServer.call(__MODULE__, :get_cluster_state)
-  end
-
-  # GenServer callbacks
-  # ...
-
-  defp pubsub_name do
-    Application.get_env(:websockex_nova, :pubsub, WebSockexNova.PubSub)
-  end
-end
-```
-
-### Cluster Supervisor
-
-The clustering functionality is supervised through a dedicated supervisor:
-
-```elixir
-defmodule WebSockexNova.ClusterSupervisor do
-  @moduledoc """
-  Supervisor for cluster-related processes.
-  """
-
-  use Supervisor
-
-  def start_link(opts) do
-    Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
-  end
-
-  @impl true
-  def init(opts) do
-    pubsub_name = Keyword.get(opts, :pubsub, WebSockexNova.PubSub)
-
-    children = [
-      # PubSub for cluster communication
-      {Phoenix.PubSub, name: pubsub_name},
-
-      # Cluster node manager
-      {WebSockexNova.Cluster, Keyword.put(opts, :pubsub, pubsub_name)},
-
-      # Distributed subscription registry
-      {WebSockexNova.Cluster.SubscriptionRegistry, opts},
-
-      # Optional: integration with libcluster for node discovery
-      libcluster_child_spec(opts)
-    ] |> Enum.filter(&(&1 != nil))
-
-    Supervisor.init(children, strategy: :one_for_one)
-  end
-
-  defp libcluster_child_spec(opts) do
-    if Code.ensure_loaded?(:libcluster) and Keyword.get(opts, :use_libcluster, false) do
-      topologies = Application.get_env(:websockex_nova, :topologies, [])
-      {Cluster.Supervisor, [topologies, [name: WebSockexNova.ClusterSupervisor.ClusterNodes]]}
+    # Limited retries
+    if Map.get(state, :retry_count, 0) < 3 do
+      {:retry, 2000, Map.update(state, :retry_count, 1, &(&1 + 1))}
     else
-      nil
-    end
-  end
-end
-```
-
-### Distributed Subscription Management
-
-WebSockexNova provides a distributed subscription registry to maintain subscription state across the cluster:
-
-```elixir
-defmodule WebSockexNova.Cluster.SubscriptionRegistry do
-  @moduledoc """
-  Registry for tracking subscriptions across the cluster.
-  """
-
-  use GenServer
-  alias Phoenix.PubSub
-
-  @registry_name :websockex_nova_subscriptions
-  @pubsub_topic "websockex_nova:subscriptions"
-
-  # Client API
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
-
-  @doc """
-  Registers a subscription in the distributed registry.
-  """
-  def register(subscription_id, channel, client_id, opts \\ []) do
-    Registry.register(@registry_name, channel, {subscription_id, client_id, opts})
-    PubSub.broadcast(pubsub_name(), @pubsub_topic, {:subscription_added, node(), subscription_id, channel, client_id})
-    :ok
-  end
-
-  @doc """
-  Unregisters a subscription from the distributed registry.
-  """
-  def unregister(subscription_id) do
-    Registry.unregister(@registry_name, subscription_id)
-    PubSub.broadcast(pubsub_name(), @pubsub_topic, {:subscription_removed, node(), subscription_id})
-    :ok
-  end
-
-  @doc """
-  Lists all active subscriptions across the cluster.
-  """
-  def list_subscriptions do
-    Registry.select(@registry_name, [{{:"$1", :"$2", :"$3"}, [], [{{:"$1", :"$2", :"$3"}}]}])
-  end
-
-  # GenServer callbacks
-
-  @impl true
-  def init(opts) do
-    pubsub = Keyword.get(opts, :pubsub, WebSockexNova.PubSub)
-    Registry.start_link(keys: :duplicate, name: @registry_name)
-    PubSub.subscribe(pubsub, @pubsub_topic)
-    {:ok, %{pubsub: pubsub}}
-  end
-
-  # Handle subscription messages from other nodes
-  @impl true
-  def handle_info({:subscription_added, remote_node, id, channel, client_id}, state) do
-    # Synchronize subscription state from other nodes
-    {:noreply, state}
-  end
-
-  defp pubsub_name do
-    Application.get_env(:websockex_nova, :pubsub, WebSockexNova.PubSub)
-  end
-end
-```
-
-### Distributed Rate Limiting
-
-For applications requiring distributed rate limiting across the cluster:
-
-```elixir
-defmodule WebSockexNova.Cluster.RateLimiter do
-  @moduledoc """
-  Distributed rate limiting across the cluster.
-  """
-
-  alias Phoenix.PubSub
-
-  @pubsub_topic "websockex_nova:rate_limits"
-
-  @doc """
-  Checks if an operation would exceed the distributed rate limit.
-  """
-  def check_rate_limit(operation, client_id) do
-    case :global.whereis_name({:rate_limit, client_id, operation}) do
-      :undefined ->
-        # No rate limiter process exists yet, create one
-        {:ok, pid} = WebSockexNova.Cluster.RateLimiter.Worker.start_link(client_id, operation)
-        :global.register_name({:rate_limit, client_id, operation}, pid)
-        GenServer.call(pid, :check)
-
-      pid ->
-        # Rate limiter exists, check with it
-        GenServer.call(pid, :check)
+      {:stop, error, state}
     end
   end
 
-  @doc """
-  Updates the rate limit state after an operation is performed.
-  """
-  def update_rate_limit(operation, client_id) do
-    case :global.whereis_name({:rate_limit, client_id, operation}) do
-      :undefined -> :ok
-      pid -> GenServer.cast(pid, :increment)
-    end
-  end
-end
+  def should_reconnect?(_error, attempt, _state) when attempt > 3, do: {false, nil}
+  def should_reconnect?(_error, _attempt, _state), do: {true, 2000}
 
-defmodule WebSockexNova.Cluster.RateLimiter.Worker do
-  @moduledoc false
-  use GenServer
-
-  # Implementation of the rate limiter worker process
-  # ...
+  # Other callback implementations...
 end
 ```
 
-### Geo-Aware Connection Management
+### 2. Custom Use Cases
 
-WebSockexNova can intelligently route connections based on geographic proximity:
+#### High-Frequency Trading Integration
 
-```elixir
-defmodule WebSockexNova.Cluster.GeoRouter do
-  @moduledoc """
-  Routes WebSocket connections based on geographic proximity.
-  """
+For applications requiring extremely low latency and high reliability:
 
-  @doc """
-  Determines the optimal node for a connection based on region.
-  """
-  def optimal_node(exchange, region) do
-    # Get exchange location from config
-    exchange_region = get_exchange_region(exchange)
+1. **Connection Optimization**:
+   - Multiple redundant connections
+   - Geo-optimized routing
+   - Aggressive heartbeat monitoring
 
-    # Find nodes in the target region
-    nodes_in_region = get_nodes_in_region(exchange_region)
+2. **Message Processing Pipeline**:
+   - Specialized message prioritization
+   - Custom binary encoding/decoding
+   - Fast-path message routing
 
-    case nodes_in_region do
-      [] ->
-        # No nodes in ideal region, find closest alternative
-        get_closest_node_to_region(exchange_region)
+#### Simple Chat Platform Integration
 
-      [node] ->
-        # Single node in region, use it
-        node
+For applications with simpler requirements:
 
-      nodes ->
-        # Multiple nodes in region, select based on load
-        select_least_loaded_node(nodes)
-    end
-  end
+1. **Connection Management**:
+   - Basic reconnection
+   - Standard ping/pong handling
+   - Simplified authentication
 
-  # Helper functions for node selection
-  # ...
-end
-```
+2. **Message Processing**:
+   - JSON-based messages
+   - Simple text processing
+   - Minimal subscription management
 
-### Configuration for Clustering
+## Best Practices
 
-WebSockexNova provides flexible configuration options for clustering:
+### Choosing the Right Profile
 
-```elixir
-config :websockex_nova,
-  clustering: [
-    enabled: true,
-    node_region: "us-east",
-    discovery_method: :libcluster, # or :manual
-    sync_interval: 30_000,         # ms between state syncs
-    active_sync: true              # proactively sync state
-  ],
+When implementing WebSockexNova for your application:
 
-  # libcluster topology configuration (if using)
-  topologies: [
-    websockex_nova: [
-      strategy: Cluster.Strategy.Kubernetes,
-      config: [
-        kubernetes_selector: "app=websockex-nova",
-        kubernetes_node_basename: "websockex-nova"
-      ]
-    ]
-  ]
-```
+1. **Assess Your Requirements**:
+   - Is your application financial or time-critical? → Financial Profile
+   - Is it a general messaging or notification system? → Standard Profile
+   - Is it a simple integration with minimal requirements? → Lightweight Profile
 
-### Integration with Telemetry
+2. **Consider Customization Points**:
+   - Connection management (reconnection strategies, authentication)
+   - Message processing (encoding/decoding, validation)
+   - Error handling (recovery strategies, logging)
+   - Telemetry (metrics collection, alerting)
 
-Clustered operations emit specialized telemetry events:
+3. **Follow Platform-Specific Guidelines**:
+   - Financial platforms: Implement robust error recovery and failover
+   - Standard platforms: Balance reliability with resource utilization
+   - Simple platforms: Minimize complexity with appropriate error handling
 
-```elixir
-defmodule WebSockexNova.Cluster.Telemetry do
-  @doc """
-  Emits telemetry events for cluster operations.
-  """
-  def execute_cluster_event(event_name, measurements, metadata) do
-    :telemetry.execute([:websockex_nova, :cluster | event_name], measurements,
-      Map.merge(%{node: node()}, metadata))
-  end
+### Implementation Approach
 
-  # Specific cluster events
+1. **Start with Existing Adapters**:
+   - Use built-in platform adapters when available
+   - Copy and modify similar adapters for new platforms
 
-  def node_joined(node_name, metadata \\ %{}) do
-    execute_cluster_event([:node, :joined], %{system_time: System.system_time()},
-      Map.merge(%{node_name: node_name}, metadata))
-  end
+2. **Test Thoroughly**:
+   - Simulate connection failures and recovery
+   - Test subscription persistence across reconnects
+   - Verify authentication refresh flows
 
-  def node_left(node_name, metadata \\ %{}) do
-    execute_cluster_event([:node, :left], %{system_time: System.system_time()},
-      Map.merge(%{node_name: node_name}, metadata))
-  end
+3. **Monitor in Production**:
+   - Track connection stability metrics
+   - Monitor message throughput and latency
+   - Alert on abnormal reconnection patterns
 
-  def subscription_synchronized(subscription_id, metadata \\ %{}) do
-    execute_cluster_event([:subscription, :synchronized], %{system_time: System.system_time()},
-      Map.merge(%{subscription_id: subscription_id}, metadata))
-  end
+## Conclusion
 
-  # More cluster-specific telemetry events
-  # ...
-end
-```
+WebSockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviors and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
 
-### Best Practices for Clustered Deployments
+The use of Gun as the transport layer ensures a reliable foundation, while the behavior interfaces enable custom implementations tailored to specific requirements.
 
-#### 1. Network Configuration
-
-- Ensure reliable, low-latency connectivity between cluster nodes
-- Use a dedicated private network for inter-node communication
-- Configure firewalls to permit Erlang distribution protocol traffic
-- Consider using encrypted distribution for security
-
-#### 2. Geo-Distribution Strategy
-
-- Deploy nodes near exchanges/data sources to minimize latency
-- For global markets, place nodes in multiple geographic regions
-- Consider using a regional node selection strategy:
-  - Primary market hours: Prioritize nodes in the active market's region
-  - Off-hours: Distribute load evenly or use nodes in quieter regions
-
-#### 3. State Management
-
-- Limit shared state to essential connection information
-- Use appropriate replication strategies:
-  - Full replication for critical subscription data
-  - Partial replication for non-critical state
-  - Local-only for ephemeral state
-- Regularly prune stale subscription data
-
-#### 4. Failure Handling
-
-- Implement node heartbeats to detect cluster partitions
-- Define clear failover policies for each subscription type
-- Handle temporary network partitions gracefully
-- Use local buffers to prevent message loss during failovers
-
-#### 5. Monitoring and Debugging
-
-- Deploy distributed tracing across the cluster
-- Monitor inter-node message volume and latency
-- Track subscription synchronization status
-- Alert on cluster partition events
-
-### Example: Deploying a Geo-Distributed Cluster
-
-```elixir
-# Node 1 (us-east) configuration
-config :websockex_nova,
-  clustering: [
-    enabled: true,
-    node_region: "us-east",
-    discovery_method: :libcluster,
-    node_selector_tag: "region=us-east"
-  ],
-
-  # Exchanges with prioritized regions
-  exchanges: [
-    nyse: [primary_region: "us-east", failover_regions: ["us-west", "eu-west"]],
-    nasdaq: [primary_region: "us-east", failover_regions: ["us-west", "eu-west"]]
-  ]
-
-# Node 2 (eu-west) configuration
-config :websockex_nova,
-  clustering: [
-    enabled: true,
-    node_region: "eu-west",
-    discovery_method: :libcluster,
-    node_selector_tag: "region=eu-west"
-  ],
-
-  # Exchanges with prioritized regions
-  exchanges: [
-    lse: [primary_region: "eu-west", failover_regions: ["eu-central", "us-east"]],
-    euronext: [primary_region: "eu-west", failover_regions: ["eu-central", "us-east"]]
-  ]
-```
-
-### Using Clustering in Your Application
-
-To leverage WebSockexNova's clustering capabilities:
-
-```elixir
-defmodule MyApp.Application do
-  use Application
-
-  def start(_type, _args) do
-    children = [
-      # Start the clustering supervisor
-      {WebSockexNova.ClusterSupervisor, clustering_opts()},
-
-      # Start your platform client with clustering awareness
-      {WebSockexNova.Platform.Deribit.Client,
-        url: "wss://www.deribit.com/ws/api/v2",
-        name: :deribit_client,
-        cluster_enabled: true,
-        region_aware: true
-      }
-
-      # Other children...
-    ]
-
-    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
-    Supervisor.start_link(children, opts)
-  end
-
-  defp clustering_opts do
-    [
-      enabled: Application.get_env(:my_app, :clustering_enabled, true),
-      node_region: Application.get_env(:my_app, :node_region, "default"),
-      use_libcluster: true,
-      sync_interval: 15_000
-    ]
-  end
-end
-```
-
-With clustering enabled, your application will benefit from distributed subscription management, geo-aware connection routing, and improved resilience—essential features for high-performance financial applications operating across multiple regions.
+For implementation details and examples, please refer to the additional documentation in the `docs` directory.
