@@ -28,12 +28,12 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
       {:reply, Enum.reverse(messages), messages}
     end
 
-    def reset(pid) do
-      GenServer.call(pid, :reset)
-    end
-
     def handle_call(:reset, _from, _messages) do
       {:reply, :ok, []}
+    end
+
+    def reset(pid) do
+      GenServer.call(pid, :reset)
     end
   end
 

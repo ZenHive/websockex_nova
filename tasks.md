@@ -212,7 +212,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T2.4
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.8
 - **Name**: Implement connection state management
@@ -225,7 +225,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 2
 - **Dependencies**: T2.7
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.9
 - **Name**: Improve resource cleanup handling

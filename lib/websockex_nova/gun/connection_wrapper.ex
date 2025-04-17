@@ -5,18 +5,26 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   This module abstracts away the complexity of dealing with Gun directly, offering
   functions for connecting, upgrading to WebSocket, sending frames, and processing messages.
 
-  It uses a structured state management approach and modular message handlers to improve
-  maintainability and testability.
+  It uses a structured state machine approach with the ConnectionManager to manage
+  connection lifecycle, reconnection strategies, and state transitions.
   """
 
   use GenServer
   require Logger
 
   alias WebSockexNova.Gun.ConnectionState
+  alias WebSockexNova.Gun.ConnectionManager
   alias WebSockexNova.Gun.ConnectionWrapper.MessageHandlers
 
   @typedoc "Connection status"
-  @type status :: :initialized | :connected | :disconnected | :websocket_connected | :error
+  @type status ::
+          :initialized
+          | :connecting
+          | :connected
+          | :websocket_connected
+          | :disconnected
+          | :reconnecting
+          | :error
 
   @typedoc "WebSocket frame types"
   @type frame ::
@@ -35,7 +43,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
           optional(:retry) => non_neg_integer() | :infinity,
           optional(:callback_pid) => pid(),
           optional(:ws_opts) => map(),
-          optional(:test_mode) => boolean()
+          optional(:test_mode) => boolean(),
+          optional(:backoff_type) => :linear | :exponential | :jittered,
+          optional(:base_backoff) => non_neg_integer()
         }
 
   @default_options %{
@@ -44,7 +54,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
     protocols: [:http],
     retry: 5,
     ws_opts: %{},
-    test_mode: false
+    test_mode: false,
+    backoff_type: :exponential,
+    base_backoff: 1000
   }
 
   # Client API
@@ -68,6 +80,8 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   * `:callback_pid` - Process to send WebSocket messages to
   * `:ws_opts` - WebSocket-specific options
   * `:test_mode` - Whether to operate in test mode (default: false)
+  * `:backoff_type` - Reconnection backoff strategy (`:linear`, `:exponential`, or `:jittered`)
+  * `:base_backoff` - Base backoff time in milliseconds (default: 1000)
 
   ## Returns
 
@@ -195,20 +209,14 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
       # In test mode, don't actually try to establish a connection
       {:ok, state}
     else
-      # Start Gun connection
-      case open_connection(state) do
-        {:ok, gun_pid} ->
-          {:ok, ConnectionState.update_gun_pid(state, gun_pid)}
+      # Start connection using ConnectionManager
+      case initiate_connection(state) do
+        {:ok, updated_state} ->
+          {:ok, updated_state}
 
-        {:error, reason} ->
-          Logger.error("Failed to open Gun connection: #{inspect(reason)}")
-
-          state =
-            state
-            |> ConnectionState.update_status(:error)
-            |> ConnectionState.record_error(reason)
-
-          {:ok, state}
+        {:error, reason, error_state} ->
+          Logger.error("Failed to open connection: #{inspect(reason)}")
+          {:ok, error_state}
       end
     end
   end
@@ -286,21 +294,46 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
-    MessageHandlers.handle_connection_up(gun_pid, protocol, state)
+    case ConnectionManager.transition_to(state, :connected) do
+      {:ok, new_state} ->
+        MessageHandlers.handle_connection_up(gun_pid, protocol, new_state)
+
+      {:error, reason} ->
+        Logger.error("Failed to transition state: #{inspect(reason)}")
+        {:noreply, state}
+    end
   end
 
   def handle_info(
         {:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams},
         %{gun_pid: gun_pid} = state
       ) do
-    MessageHandlers.handle_connection_down(gun_pid, protocol, reason, state)
+    # Transition to disconnected with the reason
+    case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
+      {:ok, disconnected_state} ->
+        # Handle reconnection if appropriate
+        new_state = handle_possible_reconnection(disconnected_state, reason)
+        MessageHandlers.handle_connection_down(gun_pid, protocol, reason, new_state)
+
+      {:error, transition_reason} ->
+        Logger.error("Failed to transition state: #{inspect(transition_reason)}")
+        {:noreply, state}
+    end
   end
 
   def handle_info(
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers},
         %{gun_pid: gun_pid} = state
       ) do
-    MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, state)
+    # Transition to websocket_connected
+    case ConnectionManager.transition_to(state, :websocket_connected) do
+      {:ok, new_state} ->
+        MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
+
+      {:error, reason} ->
+        Logger.error("Failed to transition state: #{inspect(reason)}")
+        {:noreply, state}
+    end
   end
 
   def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid} = state) do
@@ -320,6 +353,16 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   def handle_info({:gun_data, gun_pid, stream_ref, is_fin, data}, %{gun_pid: gun_pid} = state) do
     MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
+  end
+
+  def handle_info({:reconnect, attempt}, state) do
+    Logger.debug("Attempting reconnection, attempt #{attempt}")
+
+    # Try to reconnect
+    case initiate_connection(state) do
+      {:ok, new_state} -> {:noreply, new_state}
+      {:error, _reason, error_state} -> {:noreply, error_state}
+    end
   end
 
   def handle_info(other, state) do
@@ -366,6 +409,55 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   defp handle_gun_message(_message, state) do
     # Unhandled message
     {:noreply, state}
+  end
+
+  # Initiates a connection with state transition
+  defp initiate_connection(state) do
+    # First transition to connecting state
+    case ConnectionManager.transition_to(state, :connecting) do
+      {:ok, connecting_state} ->
+        # Then actually open the connection
+        case open_connection(connecting_state) do
+          {:ok, gun_pid} ->
+            # Update the state with the new gun_pid
+            {:ok, ConnectionState.update_gun_pid(connecting_state, gun_pid)}
+
+          {:error, reason} ->
+            # Transition to error state on failure
+            {:ok, error_state} =
+              ConnectionManager.transition_to(connecting_state, :error, %{reason: reason})
+
+            {:error, reason, error_state}
+        end
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
+  # Handle possible reconnection based on connection state
+  defp handle_possible_reconnection(state, _reason) do
+    # Use ConnectionManager to determine if reconnection is appropriate
+    case ConnectionManager.handle_reconnection(state) do
+      {:ok, reconnect_after, reconnecting_state} ->
+        # Schedule reconnection after the calculated delay
+        Logger.debug(
+          "Scheduling reconnection in #{reconnect_after}ms, attempt #{reconnecting_state.reconnect_attempts}"
+        )
+
+        # Send ourselves a delayed reconnect message
+        Process.send_after(
+          self(),
+          {:reconnect, reconnecting_state.reconnect_attempts},
+          reconnect_after
+        )
+
+        reconnecting_state
+
+      {:error, error_reason, error_state} ->
+        Logger.debug("Not reconnecting: #{inspect(error_reason)}")
+        error_state
+    end
   end
 
   defp open_connection(state) do
