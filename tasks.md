@@ -26,7 +26,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 0.5
 - **Dependencies**: None
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.2
 - **Name**: Define ConnectionHandler behavior test cases
@@ -38,7 +38,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: None
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.3
 - **Name**: Define ConnectionHandler behavior
@@ -50,7 +50,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T1.2
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.4
 - **Name**: Define MessageHandler behavior test cases
@@ -61,7 +61,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: None
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.5
 - **Name**: Define MessageHandler behavior
@@ -73,7 +73,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T1.4
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.6
 - **Name**: Define ErrorHandler behavior test cases
@@ -84,7 +84,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: None
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.7
 - **Name**: Define ErrorHandler behavior
@@ -96,7 +96,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T1.6
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.8
 - **Name**: Create default behavior implementation tests
@@ -108,7 +108,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1.5
 - **Dependencies**: T1.3, T1.5, T1.7
-- **Status**: TODO
+- **Status**: DONE
 
 ### T1.9
 - **Name**: Implement default behavior implementations
@@ -121,7 +121,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 2
 - **Dependencies**: T1.8
-- **Status**: TODO
+- **Status**: DONE
 
 ## Phase 2: Gun Integration
 
@@ -430,6 +430,85 @@ Tasks follow this format:
 - **Priority**: P2
 - **Effort**: 1.5
 - **Dependencies**: T4.11
+- **Status**: TODO
+
+### T4.13
+- **Name**: Define LoggingHandler behavior tests
+- **Description**: Test cases for standardized logging behavior
+- **Acceptance Criteria**:
+  - Tests for log_connection_event/3, log_message_event/3, log_error_event/3
+  - Tests for log level configuration
+  - Tests for log formatting customization
+- **Priority**: P2
+- **Effort**: 0.5
+- **Dependencies**: T3.4
+- **Status**: TODO
+
+### T4.14
+- **Name**: Define LoggingHandler behavior
+- **Description**: Create behavior for standardized, configurable logging
+- **Acceptance Criteria**:
+  - Required callbacks with proper specs
+  - Default implementations with sensible behavior
+  - Support for different log formats and levels
+  - Documentation with logging patterns
+- **Priority**: P2
+- **Effort**: 1
+- **Dependencies**: T4.13
+- **Status**: TODO
+
+### T4.15
+- **Name**: Implement DefaultLoggingHandler
+- **Description**: Create default implementation of LoggingHandler
+- **Acceptance Criteria**:
+  - Standardized logging for connection lifecycle events
+  - Message event logging with configurable verbosity
+  - Structured error logging with context
+  - Integration with Logger
+  - Tests passing
+- **Priority**: P2
+- **Effort**: 1
+- **Dependencies**: T4.14
+- **Status**: TODO
+
+### T4.16
+- **Name**: Define MetricsCollector behavior tests
+- **Description**: Test cases for metrics collection
+- **Acceptance Criteria**:
+  - Tests for collect_connection_metrics/3, collect_message_metrics/3
+  - Tests for performance stats aggregation
+  - Tests for metric dimensions and tags
+- **Priority**: P2
+- **Effort**: 0.5
+- **Dependencies**: T4.6
+- **Status**: TODO
+
+### T4.17
+- **Name**: Define MetricsCollector behavior
+- **Description**: Create behavior for collecting operational metrics
+- **Acceptance Criteria**:
+  - Required callbacks with proper specs
+  - Default implementations with sensible defaults
+  - Support for different metric types (counter, gauge, histogram)
+  - Integration with telemetry events
+  - Documentation for metrics integration
+- **Priority**: P2
+- **Effort**: 1
+- **Dependencies**: T4.16
+- **Status**: TODO
+
+### T4.18
+- **Name**: Implement DefaultMetricsCollector
+- **Description**: Create default implementation of MetricsCollector
+- **Acceptance Criteria**:
+  - Connection statistics tracking (connect/disconnect counts, durations)
+  - Message throughput metrics (count, size, latency)
+  - Error metrics by category
+  - Integration with telemetry
+  - Tests passing
+- **Priority**: P2
+- **Effort**: 1.5
+- **Dependencies**: T4.17
 - **Status**: TODO
 
 ## Phase 5: Platform Integration
