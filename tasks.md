@@ -135,7 +135,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 0.5
 - **Dependencies**: T1.1
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.2
 - **Name**: Create Gun client supervisor
@@ -148,7 +148,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T2.1
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.3
 - **Name**: Create Gun connection wrapper tests
@@ -161,7 +161,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1.5
 - **Dependencies**: T2.2
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.4
 - **Name**: Implement basic Gun connection wrapper
@@ -174,7 +174,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 2
 - **Dependencies**: T2.3
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.5
 - **Name**: Create WebSocket frame encoder/decoder tests
