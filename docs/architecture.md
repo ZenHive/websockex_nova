@@ -1,5 +1,7 @@
 # WebSockexNova Architecture Overview
 
+> **Maintainer Note:** This document provides a high-level architectural overview of WebSockexNova. For implementation details, concrete code examples, and comprehensive guides, please refer to the dedicated documentation in the `docs/guides/` and `docs/examples/` directories.
+
 > **Note:** This document provides a high-level architectural overview of WebSockexNova. For implementation details and comprehensive examples, please refer to the API documentation and guides in the `docs/guides/` directory.
 
 ## Transport Layer: Gun Integration
@@ -41,27 +43,15 @@ WebSockexNova wraps Gun with a thin adapter layer that translates between the Gu
 
 #### Platform Integrations
 
-```
-websockex_nova/platform/deribit/
-  lib/
-    adapter.ex         # Implements platform behaviors
-    client.ex          # WebSocket client implementation
-    message.ex         # Message processing
-    subscription.ex    # Subscription management
-    types.ex           # Platform-specific types
-```
+WebSockexNova provides structured organization for platform-specific adapters. Each platform integration follows a consistent pattern with adapter, client, message handling, and subscription management modules.
+
+For detailed platform integration examples and directory structures, see `docs/examples/platform_integration.md`.
 
 #### Protocol Integrations
 
-```
-websockex_nova/platform/ethereum/
-  lib/
-    adapter.ex         # Implements platform behaviors
-    client.ex          # WebSocket client implementation
-    message.ex         # Message processing
-    subscription.ex    # Subscription handling
-    types.ex           # Protocol-specific types
-```
+Protocol integrations follow similar organization patterns but focus on protocol-specific behaviors and message formats.
+
+For detailed protocol integration examples and directory structures, see `docs/examples/protocol_integration.md`.
 
 ## WebSockexNova Architecture
 
@@ -142,6 +132,15 @@ Handles authentication flows with callbacks:
 - `generate_auth_data/1`: Generate authentication data
 - `handle_auth_response/2`: Process authentication responses
 - `needs_reauthentication?/1`: Check if reauthentication is needed
+
+#### 2.6 Clustering Behaviors
+
+<!-- TODO: Verify that all clustering-related behaviors (especially ClusterAware callbacks like handle_node_transition, handle_cluster_update) are documented here as they are implemented -->
+
+- **ClusterAware Behavior**: For components that need to respond to cluster state changes
+  - `handle_node_transition/3`: React to node joins/leaves in the cluster
+  - `handle_cluster_update/3`: Process state updates from other cluster nodes
+  - `prepare_state_sync/1`: Prepare local state for synchronization to other nodes
 
 > **Note:** The specific implementations of these behaviors depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
 
@@ -354,7 +353,46 @@ config :websockex_nova,
 - No clustering requirements
 - Lower resource utilization
 
-### 4. Custom Profile
+### 4. Chat/Messaging Platform Profile
+
+Optimized for interactive messaging applications like Slack, Discord, or custom chat platforms with moderate reliability requirements.
+
+```elixir
+# Example configuration for chat/messaging platforms
+config :websockex_nova,
+  profile: :messaging,
+  reconnection: [
+    strategy: :exponential_backoff,
+    max_attempts: 20,
+    initial_delay: 1_000,   # 1 second
+    max_delay: 30_000       # 30 seconds
+  ],
+  connection: [
+    timeout: 8_000,         # 8 seconds
+    ping_interval: 45_000,  # Less aggressive heartbeats than financial
+    pong_timeout: 10_000
+  ],
+  telemetry: [
+    level: :standard,       # Balanced metrics
+    connection_events: true,
+    message_events: true,   # Track message events for chat analytics
+    error_events: true
+  ],
+  clustering: [
+    enabled: true,
+    strategy: :consistent_hash  # Route users consistently to nodes
+  ]
+```
+
+**Key Characteristics:**
+- Moderate reconnection strategy with reasonable persistence
+- User presence tracking capabilities
+- Message delivery guarantees with acknowledgments
+- Connection state preservation across reconnects
+- Support for client-side message queueing during disconnects
+- Optional clustering for larger deployments
+
+### 5. Custom Profile
 
 Applications can define custom profiles by overriding specific behaviors:
 
@@ -529,6 +567,8 @@ When implementing WebSockexNova for your application:
    - Monitor message throughput and latency
    - Alert on abnormal reconnection patterns
 
+> **Maintainer Note:** As WebSockexNova profiles and behaviors evolve, revisit these best practice recommendations to ensure they remain aligned with the library's capabilities and recommended usage patterns.
+
 ## Conclusion
 
 WebSockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviors and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
@@ -536,3 +576,183 @@ WebSockexNova's behavior-based architecture provides a flexible, extensible foun
 The use of Gun as the transport layer ensures a reliable foundation, while the behavior interfaces enable custom implementations tailored to specific requirements.
 
 For implementation details and examples, please refer to the additional documentation in the `docs` directory.
+
+## Advanced Capabilities
+
+WebSockexNova provides several advanced capabilities to support enterprise-grade WebSocket applications with sophisticated requirements:
+
+### 1. Test Harness & Mocks
+
+Testing WebSocket applications traditionally requires complex infrastructure or live connections. WebSockexNova provides comprehensive testing utilities:
+
+- **Mock WebSocket Server**: In-memory WebSocket server for testing client behavior
+- **Frame Sequence Simulator**: Pre-defined or programmatic frame sequences for testing
+- **Failure Injection**: Simulate disconnects, errors, and reconnection scenarios
+- **Latency Simulation**: Test behavior under various network conditions
+
+```elixir
+# Example test with WebSockexNova test harness
+test "reconnects after disconnect" do
+  test_scenario = WebSockexNova.TestHarness.Scenario.new()
+    |> WebSockexNova.TestHarness.Scenario.connect_success()
+    |> WebSockexNova.TestHarness.Scenario.send_frame(:text, ~s({"type":"welcome"}))
+    |> WebSockexNova.TestHarness.Scenario.disconnect(code: 1000)
+    |> WebSockexNova.TestHarness.Scenario.expect_reconnect()
+    |> WebSockexNova.TestHarness.Scenario.connect_success()
+
+  {:ok, _client} = WebSockexNova.TestHarness.start_supervised(
+    MyApp.WebSocket.Client,
+    scenario: test_scenario
+  )
+
+  # Assert client reconnected correctly
+  assert_receive {:reconnect_complete}, 1000
+end
+```
+
+> **Note:** See `docs/examples/testing.md` for complete examples of testing WebSocket clients.
+
+### 2. Backpressure & Flow Control
+
+WebSockexNova includes mechanisms for controlling message flow and handling high-volume streams without overwhelming consumers:
+
+- **BackpressureHandler Behavior**: Callbacks for controlling message flow
+- **Buffer Management**: Configurable message buffering with overflow strategies
+- **Subscription Throttling**: Rate-limiting for high-volume subscription channels
+- **Consumer-driven Flow Control**: Allow consumers to pause/resume message delivery
+
+```elixir
+# Configuration example for backpressure control
+config :websockex_nova,
+  backpressure: [
+    buffer_size: 10_000,          # Maximum buffered messages
+    overflow_strategy: :drop_old, # :drop_old, :drop_new, or :block
+    warning_threshold: 0.8,       # Warning at 80% capacity
+    throttle_threshold: 0.9       # Apply backpressure at 90% capacity
+  ]
+```
+
+> **Note:** See `docs/examples/backpressure.md` for details on handling high-volume streams.
+
+### 3. Pluggable Codecs & Binary Protocols
+
+WebSockexNova supports multiple message encoding formats beyond JSON:
+
+- **CodecHandler Behavior**: Pluggable encoding/decoding for various formats
+- **Binary Frame Support**: First-class support for binary WebSocket frames
+- **Compression**: Support for permessage-deflate and custom compression
+- **Protocol Buffers**: Integration with Google Protocol Buffers
+- **MessagePack**: Support for MessagePack binary serialization
+
+```elixir
+# Example client with custom codec
+defmodule MyApp.ProtobufClient do
+  use WebSockexNova.Client,
+    codec: WebSockexNova.Codec.Protobuf,
+    codec_options: [
+      descriptor_module: MyApp.Protos,
+      default_message_type: MyApp.Protos.MarketData
+    ]
+end
+```
+
+> **Note:** See `docs/examples/codecs.md` for details on implementing and using custom codecs.
+
+### 4. Security & Secrets Management
+
+WebSockexNova provides robust security features:
+
+- **Credential Rotation**: Automatic API key rotation and refresh token handling
+- **Vault Integration**: Built-in integration with HashiCorp Vault and AWS Secrets Manager
+- **Encryption**: At-rest encryption for sensitive configuration
+- **Audit Logging**: Security-focused logging for sensitive operations
+
+```elixir
+# Example configuration with vault integration
+config :websockex_nova,
+  secrets_manager: [
+    adapter: WebSockexNova.SecretsManager.Vault,
+    auto_rotate: true,             # Automatically rotate credentials
+    rotation_frequency: :daily,    # :hourly, :daily, :weekly
+    vault_path: "secret/my-app/ws-credentials"
+  ]
+```
+
+> **Note:** See `docs/guides/security.md` for comprehensive security documentation.
+
+### 5. HTTP Fallback & Protocol Negotiation
+
+For environments where WebSockets may be blocked or unreliable:
+
+- **Transport Negotiation**: Automatic selection of optimal transport
+- **HTTP Polling Fallback**: RESTful polling when WebSockets aren't available
+- **Seamless API**: Consistent interface regardless of transport
+- **Upgrade/Downgrade**: Runtime switching between transport mechanisms
+
+```elixir
+# Configuration with transport fallback
+config :websockex_nova,
+  transport: [
+    preferred: :websocket,
+    fallbacks: [:http_polling, :sse],
+    negotiation_timeout: 5000,     # Milliseconds to try negotiation
+    polling_interval: 1000         # Poll interval for HTTP fallback
+  ]
+```
+
+> **Note:** See `docs/examples/transport.md` for details on transport options.
+
+### 6. Distributed Tracing & OpenTelemetry
+
+WebSockexNova offers comprehensive observability:
+
+- **OpenTelemetry Integration**: Native support for OpenTelemetry tracing
+- **Span Context**: Automatic propagation of trace context
+- **Custom Attributes**: Platform-specific span attributes
+- **Baggage Propagation**: Cross-process context propagation
+
+```elixir
+# Enabling OpenTelemetry tracing
+config :websockex_nova,
+  telemetry: [
+    # ...existing telemetry configuration...
+    tracing: [
+      enabled: true,
+      tracer_name: "websockex_nova",
+      span_prefix: "websocket.",
+      include_message_spans: true  # Create spans for individual messages
+    ]
+  ]
+```
+
+> **Note:** See `docs/guides/tracing.md` for distributed tracing integration examples.
+
+### 7. Dynamic Configuration & Hot Reload
+
+WebSockexNova supports runtime configuration changes:
+
+- **ConfigProvider Behavior**: Interface for configuration sources
+- **Live Updates**: Change behavior parameters without restarts
+- **Configuration Persistence**: Optional persistence of runtime config changes
+- **Centralized Management**: Integration with config management systems
+
+```elixir
+# Example of runtime configuration update
+WebSockexNova.configure(client,
+  reconnection: [max_attempts: 20],
+  rate_limit: [requests_per_second: 50]
+)
+```
+
+> **Note:** See `docs/guides/dynamic_configuration.md` for runtime configuration guidance.
+
+### 8. Release & CI Recommendations
+
+To ensure code quality and simplify deployment, WebSockexNova provides:
+
+- **GitHub Actions Workflows**: Ready-to-use CI workflows
+- **Quality Checks**: Credo, Dialyzer, and test coverage configs
+- **Release Process**: Documentation for hex publication
+- **Compatibility Testing**: Multi-version Erlang/Elixir matrix tests
+
+> **Note:** See `docs/guides/ci_cd.md` for continuous integration and delivery best practices.
