@@ -82,14 +82,14 @@ For detailed protocol integration examples and directory structures, see `docs/e
                        └─────────────────────┘
                                  │
                                  ▼
-                       ┌─────────────────────┐
-                       │  HeartbeatHandler   │
-                       └─────────────────────┘
-                                 │
-                                 ▼
-                       ┌─────────────────────┐
-                       │   RateLimitHandler  │
-                       └─────────────────────┘
+                       ┌─────────────────────┐     ┌───────────────────┐
+                       │  HeartbeatHandler   │     │   StateHelpers    │
+                       └─────────────────────┘     └───────────────────┘
+                                 │                         │
+                                 ▼                         ▼
+                       ┌─────────────────────┐     ┌───────────────────┐
+                       │   RateLimitHandler  │     │    StateTracer    │
+                       └─────────────────────┘     └───────────────────┘
 ```
 
 ### 2. Core Behaviors and Modules Overview
@@ -141,6 +141,26 @@ Handles authentication flows with callbacks:
   - `handle_node_transition/3`: React to node joins/leaves in the cluster
   - `handle_cluster_update/3`: Process state updates from other cluster nodes
   - `prepare_state_sync/1`: Prepare local state for synchronization to other nodes
+
+#### 2.7 Connection State Management
+
+The connection state management system provides robust tracking and management of WebSocket connection lifecycle:
+
+**ConnectionManager**: Core module that implements the state machine for connection transitions
+  - State transitions with validation
+  - Reconnection logic with configurable strategies
+  - Terminal error detection and handling
+
+**StateHelpers**: Provides consistent state operations and logging across the codebase
+  - Standardized state update operations (`handle_connection_established`, `handle_disconnection`, etc.)
+  - Consistent logging for state transitions
+  - Centralized error handling
+
+**StateTracer**: Advanced tracing for connection state with detailed history and statistics
+  - Records all state transitions with timestamps
+  - Tracks connection statistics (uptime, reconnection frequency)
+  - Provides searchable history of connection events
+  - Can export trace events to a file or monitoring system
 
 > **Note:** The specific implementations of these behaviors depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
 

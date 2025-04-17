@@ -28,6 +28,16 @@ lib/
     │   ├── error_handler.ex         # How to handle errors
     │   └── ...                      # Other behaviors
     │
+    ├── gun/                         # Gun-specific implementation
+    │   ├── connection_state.ex      # Connection state structure
+    │   ├── connection_manager.ex    # Connection lifecycle state machine
+    │   ├── connection_wrapper.ex    # Wrapper around Gun for WebSockets
+    │   ├── connection_wrapper/
+    │   │   └── message_handlers.ex  # Handlers for Gun messages
+    │   └── helpers/                 # Helper modules
+    │       ├── state_helpers.ex     # State mutation helpers
+    │       └── state_tracer.ex      # State transition tracing
+    │
     ├── transport/                   # Transport layer (Gun adapter)
     │   ├── gun_client.ex            # Wrapper around Gun for WebSockets
     │   └── reconnection.ex          # Reconnection strategies
