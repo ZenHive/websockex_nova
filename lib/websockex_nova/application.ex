@@ -7,6 +7,9 @@ defmodule WebsockexNova.Application do
 
   @impl true
   def start(_type, _args) do
+    # Initialize frame handlers table at application startup
+    WebSockexNova.Gun.FrameCodec.init_handlers_table()
+
     children = [
       # Starts a worker by calling: WebsockexNova.Worker.start_link(arg)
       # {WebsockexNova.Worker, arg}

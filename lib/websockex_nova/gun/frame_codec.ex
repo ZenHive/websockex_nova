@@ -44,14 +44,72 @@ defmodule WebSockexNova.Gun.FrameCodec do
   # Table name for handler registry
   @handlers_table :websockex_nova_frame_handlers
 
-  # Initialize the ETS table on module load
-  @doc false
-  def init_handlers_table do
-    if :ets.info(@handlers_table) == :undefined do
-      :ets.new(@handlers_table, [:named_table, :set, :public])
-    end
+  # Initialize the ETS table on module load - This is now called once at application startup
+  @doc """
+  Initializes the ETS table for frame handlers.
 
-    :ok
+  This function creates the ETS table for storing frame handlers if it doesn't exist yet.
+  It is called once at application startup to ensure the table exists before it's accessed.
+
+  ## Returns
+
+  * `:ok` - When the table is successfully initialized
+  * `{:error, :table_exists}` - When the table already exists
+  """
+  @spec init_handlers_table() :: :ok | {:error, :table_exists}
+  def init_handlers_table do
+    case :ets.info(@handlers_table) do
+      :undefined ->
+        # Table doesn't exist, create it and populate with default handlers
+        :ets.new(@handlers_table, [:named_table, :set, :public])
+
+        # Initialize with default handlers
+        Enum.each(@frame_handlers, fn {frame_type, handler} ->
+          :ets.insert(@handlers_table, {frame_type, handler})
+        end)
+
+        :ok
+
+      _ ->
+        # Table already exists, nothing to do
+        {:error, :table_exists}
+    end
+  end
+
+  # Private helper to safely get frame handler with fallback
+  defp safe_lookup_handler(frame_type) do
+    case ensure_table_exists() do
+      :ok ->
+        case :ets.lookup(@handlers_table, frame_type) do
+          [{^frame_type, handler}] ->
+            handler
+
+          [] ->
+            # Use fallback from module attribute if no entry in ETS
+            Map.get(
+              @frame_handlers,
+              frame_type,
+              WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+            )
+        end
+
+      {:error, _reason} ->
+        # Fallback to module attribute if table doesn't exist
+        Map.get(@frame_handlers, frame_type, WebSockexNova.Gun.FrameHandlers.ControlFrameHandler)
+    end
+  end
+
+  # Ensure the table exists with fallback mechanism
+  defp ensure_table_exists do
+    case :ets.info(@handlers_table) do
+      :undefined ->
+        # Table doesn't exist, but should have been created at startup
+        # This is a fallback mechanism for cases where init_handlers_table wasn't called
+        init_handlers_table()
+
+      _ ->
+        :ok
+    end
   end
 
   @doc """
@@ -73,9 +131,8 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec encode_frame(frame()) :: tuple() | atom()
   def encode_frame(frame) do
-    init_handlers_table()
     frame_type = frame_type(frame)
-    handler = frame_handler_for(frame_type)
+    handler = safe_lookup_handler(frame_type)
     handler.encode_frame(frame)
   end
 
@@ -98,13 +155,12 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec decode_frame(tuple() | atom()) :: decode_result()
   def decode_frame(frame) do
-    init_handlers_table()
     frame_type = frame_type(frame)
 
     if frame_type == :invalid do
       {:error, :invalid_frame}
     else
-      handler = frame_handler_for(frame_type)
+      handler = safe_lookup_handler(frame_type)
 
       try do
         handler.decode_frame(frame)
@@ -133,9 +189,8 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec validate_frame(frame()) :: validate_result()
   def validate_frame(frame) do
-    init_handlers_table()
     frame_type = frame_type(frame)
-    handler = frame_handler_for(frame_type)
+    handler = safe_lookup_handler(frame_type)
     handler.validate_frame(frame)
   rescue
     _ -> {:error, :invalid_frame}
@@ -276,15 +331,7 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec frame_handler_for(atom()) :: module()
   def frame_handler_for(frame_type) do
-    init_handlers_table()
-
-    case :ets.lookup(@handlers_table, frame_type) do
-      [{^frame_type, handler}] ->
-        handler
-
-      [] ->
-        Map.get(@frame_handlers, frame_type, WebSockexNova.Gun.FrameHandlers.ControlFrameHandler)
-    end
+    safe_lookup_handler(frame_type)
   end
 
   @doc """
@@ -301,17 +348,28 @@ defmodule WebSockexNova.Gun.FrameCodec do
   ## Returns
 
   * `:ok` - If the handler was registered successfully
+  * `{:error, :table_missing}` - If the handler registry table doesn't exist
   """
-  @spec register_frame_handler(atom(), module() | nil) :: :ok
+  @spec register_frame_handler(atom(), module() | nil) :: :ok | {:error, :table_missing}
   def register_frame_handler(frame_type, nil) do
-    init_handlers_table()
-    :ets.delete(@handlers_table, frame_type)
-    :ok
+    case ensure_table_exists() do
+      :ok ->
+        :ets.delete(@handlers_table, frame_type)
+        :ok
+
+      error ->
+        error
+    end
   end
 
   def register_frame_handler(frame_type, handler_module) do
-    init_handlers_table()
-    :ets.insert(@handlers_table, {frame_type, handler_module})
-    :ok
+    case ensure_table_exists() do
+      :ok ->
+        :ets.insert(@handlers_table, {frame_type, handler_module})
+        :ok
+
+      error ->
+        error
+    end
   end
 end

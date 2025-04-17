@@ -251,7 +251,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 0.5
 - **Dependencies**: T2.6
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.11
 - **Name**: Create integration tests for connection wrapper
