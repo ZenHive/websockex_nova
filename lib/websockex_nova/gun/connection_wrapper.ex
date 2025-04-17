@@ -299,7 +299,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
             :ping ->
               send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, :pong}})
 
-            other ->
+            _other ->
               nil
           end
         end
@@ -434,7 +434,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
   end
 
-  def handle_info({:reconnect, attempt}, state) do
+  def handle_info({:reconnect, _attempt}, state) do
     case initiate_connection(state) do
       {:ok, new_state} -> {:noreply, new_state}
       {:error, _reason, error_state} -> {:noreply, error_state}
@@ -449,7 +449,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info(other, state) do
-    Logger.warn("Unhandled message in ConnectionWrapper: #{inspect(other)}")
+    Logger.warning("Unhandled message in ConnectionWrapper: #{inspect(other)}")
     {:noreply, state}
   end
 
@@ -525,7 +525,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
         reconnecting_state
 
-      {:error, error_reason, error_state} ->
+      {:error, _error_reason, error_state} ->
         error_state
     end
   end

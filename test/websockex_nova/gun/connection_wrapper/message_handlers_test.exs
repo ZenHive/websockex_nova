@@ -86,7 +86,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
       # Verify callback was notified
       :timer.sleep(10)
       assert [message] = MockCallbacks.get_messages(mock_pid)
-      assert message == {:connection_down, reason}
+      assert message == {:connection_down, protocol, reason}
     end
   end
 

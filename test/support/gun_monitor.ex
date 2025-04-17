@@ -30,7 +30,7 @@ defmodule WebsockexNova.Test.Support.GunMonitor do
   end
 
   def handle_info({:gun_down, _, _, reason, _, _} = msg, %{target: target} = state) do
-    Logger.warn("Gun connection down: reason=#{inspect(reason)}")
+    Logger.warning("Gun connection down: reason=#{inspect(reason)}")
     send(target, msg)
     {:noreply, %{state | messages: [msg | state.messages]}}
   end
@@ -48,7 +48,7 @@ defmodule WebsockexNova.Test.Support.GunMonitor do
   end
 
   def handle_info({:gun_error, _, _, reason} = msg, %{target: target} = state) do
-    Logger.warn("Gun error: #{inspect(reason)}")
+    Logger.warning("Gun error: #{inspect(reason)}")
     send(target, msg)
     {:noreply, %{state | messages: [msg | state.messages]}}
   end

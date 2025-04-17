@@ -29,14 +29,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     :ok
   end
 
-  @doc """
-  Notifies the callback process of a WebSocket event.
+  # @doc """
+  # Notifies the callback process of a WebSocket event.
 
-  ## Parameters
+  # ## Parameters
 
-  * `callback_pid` - PID of the callback process to notify, if any
-  * `message` - The message to send to the callback
-  """
+  # * `callback_pid` - PID of the callback process to notify, if any
+  # * `message` - The message to send to the callback
+  # """
   def notify(callback_pid, message) when is_pid(callback_pid) do
     # Add logging to debug message handling
     Logger.debug("→ Sending message to callback #{inspect(callback_pid)}: #{inspect(message)}")

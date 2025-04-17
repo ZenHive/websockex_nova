@@ -164,7 +164,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   Forces a disconnect in test mode by sending a connection_down notification directly to the callback.
   Works together with ConnectionWrapper's test mode to simulate disconnects.
   """
-  def force_test_disconnect(server_pid, client_handler_pid) do
+  def force_test_disconnect(_server_pid, client_handler_pid) do
     Logger.info("Simulating server disconnect in test mode")
 
     if client_handler_pid && Process.alive?(client_handler_pid) do
@@ -173,7 +173,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
       Logger.debug("Disconnect notification sent to callback")
       :ok
     else
-      Logger.warn("Cannot send disconnect notification - client handler not alive")
+      Logger.warning("Cannot send disconnect notification - client handler not alive")
       {:error, :client_not_alive}
     end
   end
