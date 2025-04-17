@@ -1,7 +1,7 @@
-defmodule WebSockexNova.Gun.ConnectionWrapperTest do
+defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Gun.ConnectionWrapper
 
   # We'll use a mocked server to avoid real network connections in tests
   defmodule MockServer do

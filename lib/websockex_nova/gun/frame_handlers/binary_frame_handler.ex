@@ -1,11 +1,11 @@
-defmodule WebSockexNova.Gun.FrameHandlers.BinaryFrameHandler do
+defmodule WebsockexNova.Gun.FrameHandlers.BinaryFrameHandler do
   @moduledoc """
   Handler for WebSocket binary frames.
 
   Implements encoding, decoding, and validation specific to binary frames.
   """
 
-  @behaviour WebSockexNova.Gun.FrameHandlers.FrameHandler
+  @behaviour WebsockexNova.Gun.FrameHandlers.FrameHandler
 
   @impl true
   def validate_frame({:binary, data}) when is_binary(data) do

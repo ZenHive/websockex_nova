@@ -1,8 +1,8 @@
-defmodule WebSockexNova.Gun.ConnectionManagerTest do
+defmodule WebsockexNova.Gun.ConnectionManagerTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionState
-  alias WebSockexNova.Gun.ConnectionManager
+  alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionManager
 
   describe "state transitions" do
     test "allows transition from :initialized to :connecting" do

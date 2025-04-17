@@ -1,8 +1,8 @@
-defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
+defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionState
-  alias WebSockexNova.Gun.ConnectionWrapper.MessageHandlers
+  alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
 
   defmodule MockCallbacks do
     use GenServer

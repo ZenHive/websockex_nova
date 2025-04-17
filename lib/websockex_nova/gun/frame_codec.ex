@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.FrameCodec do
+defmodule WebsockexNova.Gun.FrameCodec do
   @moduledoc """
   Handles encoding and decoding of WebSocket frames.
 
@@ -34,11 +34,11 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   # Registry of frame handlers - can be extended at runtime
   @frame_handlers %{
-    text: WebSockexNova.Gun.FrameHandlers.TextFrameHandler,
-    binary: WebSockexNova.Gun.FrameHandlers.BinaryFrameHandler,
-    ping: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler,
-    pong: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler,
-    close: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+    text: WebsockexNova.Gun.FrameHandlers.TextFrameHandler,
+    binary: WebsockexNova.Gun.FrameHandlers.BinaryFrameHandler,
+    ping: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler,
+    pong: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler,
+    close: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
   }
 
   # Table name for handler registry
@@ -89,13 +89,13 @@ defmodule WebSockexNova.Gun.FrameCodec do
             Map.get(
               @frame_handlers,
               frame_type,
-              WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+              WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
             )
         end
 
       {:error, _reason} ->
         # Fallback to module attribute if table doesn't exist
-        Map.get(@frame_handlers, frame_type, WebSockexNova.Gun.FrameHandlers.ControlFrameHandler)
+        Map.get(@frame_handlers, frame_type, WebsockexNova.Gun.FrameHandlers.ControlFrameHandler)
     end
   end
 
@@ -120,13 +120,13 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.encode_frame({:text, "Hello"})
+      iex> WebsockexNova.Gun.FrameCodec.encode_frame({:text, "Hello"})
       {:text, "Hello"}
 
-      iex> WebSockexNova.Gun.FrameCodec.encode_frame(:ping)
+      iex> WebsockexNova.Gun.FrameCodec.encode_frame(:ping)
       :ping
 
-      iex> WebSockexNova.Gun.FrameCodec.encode_frame({:close, 1000, "Normal closure"})
+      iex> WebsockexNova.Gun.FrameCodec.encode_frame({:close, 1000, "Normal closure"})
       {:close, 1000, "Normal closure"}
   """
   @spec encode_frame(frame()) :: tuple() | atom()
@@ -144,13 +144,13 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.decode_frame({:text, "Hello"})
+      iex> WebsockexNova.Gun.FrameCodec.decode_frame({:text, "Hello"})
       {:ok, {:text, "Hello"}}
 
-      iex> WebSockexNova.Gun.FrameCodec.decode_frame(:ping)
+      iex> WebsockexNova.Gun.FrameCodec.decode_frame(:ping)
       {:ok, :ping}
 
-      iex> WebSockexNova.Gun.FrameCodec.decode_frame({:close, 1000, "Normal closure"})
+      iex> WebsockexNova.Gun.FrameCodec.decode_frame({:close, 1000, "Normal closure"})
       {:ok, {:close, 1000, "Normal closure"}}
   """
   @spec decode_frame(tuple() | atom()) :: decode_result()
@@ -178,13 +178,13 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_frame({:text, "Hello"})
+      iex> WebsockexNova.Gun.FrameCodec.validate_frame({:text, "Hello"})
       :ok
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_frame({:text, nil})
+      iex> WebsockexNova.Gun.FrameCodec.validate_frame({:text, nil})
       {:error, :invalid_text_data}
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_frame({:close, 1000})
+      iex> WebsockexNova.Gun.FrameCodec.validate_frame({:close, 1000})
       :ok
   """
   @spec validate_frame(frame()) :: validate_result()
@@ -212,7 +212,7 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec validate_control_frame_size(binary()) :: validate_result()
   def validate_control_frame_size(data) when is_binary(data) do
-    WebSockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_control_frame_size(data)
+    WebsockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_control_frame_size(data)
   end
 
   @doc """
@@ -220,18 +220,18 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_close_code(1000)
+      iex> WebsockexNova.Gun.FrameCodec.validate_close_code(1000)
       :ok
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_close_code(999)
+      iex> WebsockexNova.Gun.FrameCodec.validate_close_code(999)
       {:error, :invalid_close_code}
 
-      iex> WebSockexNova.Gun.FrameCodec.validate_close_code(1005)
+      iex> WebsockexNova.Gun.FrameCodec.validate_close_code(1005)
       {:error, :reserved_close_code}
   """
   @spec validate_close_code(non_neg_integer()) :: validate_result()
   def validate_close_code(code) do
-    WebSockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_close_code(code)
+    WebsockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_close_code(code)
   end
 
   @doc """
@@ -239,10 +239,10 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.is_valid_close_code?(1000)
+      iex> WebsockexNova.Gun.FrameCodec.is_valid_close_code?(1000)
       true
 
-      iex> WebSockexNova.Gun.FrameCodec.is_valid_close_code?(999)
+      iex> WebsockexNova.Gun.FrameCodec.is_valid_close_code?(999)
       false
   """
   @spec is_valid_close_code?(non_neg_integer()) :: boolean()
@@ -258,10 +258,10 @@ defmodule WebSockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebSockexNova.Gun.FrameCodec.close_code_meaning(1000)
+      iex> WebsockexNova.Gun.FrameCodec.close_code_meaning(1000)
       "Normal closure"
 
-      iex> WebSockexNova.Gun.FrameCodec.close_code_meaning(3000)
+      iex> WebsockexNova.Gun.FrameCodec.close_code_meaning(3000)
       "Unknown close code"
   """
   @spec close_code_meaning(non_neg_integer()) :: String.t()

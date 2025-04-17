@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.Helpers.StateTracer do
+defmodule WebsockexNova.Gun.Helpers.StateTracer do
   @moduledoc """
   Provides detailed tracing capabilities for connection state transitions.
 
@@ -14,7 +14,7 @@ defmodule WebSockexNova.Gun.Helpers.StateTracer do
   """
 
   require Logger
-  alias WebSockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionState
 
   @doc """
   Initializes a new trace context in the connection state.

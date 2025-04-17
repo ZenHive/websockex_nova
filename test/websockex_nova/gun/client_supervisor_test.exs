@@ -1,7 +1,7 @@
-defmodule WebSockexNova.Gun.ClientSupervisorTest do
+defmodule WebsockexNova.Gun.ClientSupervisorTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ClientSupervisor
+  alias WebsockexNova.Gun.ClientSupervisor
 
   describe "initialization" do
     test "starts the supervisor with default options" do
@@ -32,10 +32,10 @@ defmodule WebSockexNova.Gun.ClientSupervisorTest do
       child_spec = ClientSupervisor.child_spec(connection_opts)
 
       assert is_map(child_spec)
-      assert child_spec.id == WebSockexNova.Gun.ClientSupervisor
+      assert child_spec.id == WebsockexNova.Gun.ClientSupervisor
 
       assert child_spec.start ==
-               {WebSockexNova.Gun.ClientSupervisor, :start_link, [connection_opts]}
+               {WebsockexNova.Gun.ClientSupervisor, :start_link, [connection_opts]}
 
       assert child_spec.type == :supervisor
       assert child_spec.restart == :permanent

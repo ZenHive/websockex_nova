@@ -1,11 +1,11 @@
-defmodule WebSockexNova.Gun.FrameHandlers.TextFrameHandler do
+defmodule WebsockexNova.Gun.FrameHandlers.TextFrameHandler do
   @moduledoc """
   Handler for WebSocket text frames.
 
   Implements encoding, decoding, and validation specific to text frames.
   """
 
-  @behaviour WebSockexNova.Gun.FrameHandlers.FrameHandler
+  @behaviour WebsockexNova.Gun.FrameHandlers.FrameHandler
 
   @impl true
   def validate_frame({:text, data}) when is_binary(data) do

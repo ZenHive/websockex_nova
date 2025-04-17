@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.FrameHandlers.FrameHandler do
+defmodule WebsockexNova.Gun.FrameHandlers.FrameHandler do
   @moduledoc """
   Behavior defining how to handle different types of WebSocket frames.
 

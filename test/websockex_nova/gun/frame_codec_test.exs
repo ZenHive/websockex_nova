@@ -1,7 +1,7 @@
-defmodule WebSockexNova.Gun.FrameCodecTest do
+defmodule WebsockexNova.Gun.FrameCodecTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.FrameCodec
+  alias WebsockexNova.Gun.FrameCodec
 
   describe "encoding text frames" do
     test "encode_frame/1 encodes text frames" do
@@ -243,19 +243,19 @@ defmodule WebSockexNova.Gun.FrameCodecTest do
 
     test "frame_handler_for/1 returns correct handler for frame type" do
       assert FrameCodec.frame_handler_for(:text) ==
-               WebSockexNova.Gun.FrameHandlers.TextFrameHandler
+               WebsockexNova.Gun.FrameHandlers.TextFrameHandler
 
       assert FrameCodec.frame_handler_for(:binary) ==
-               WebSockexNova.Gun.FrameHandlers.BinaryFrameHandler
+               WebsockexNova.Gun.FrameHandlers.BinaryFrameHandler
 
       assert FrameCodec.frame_handler_for(:ping) ==
-               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+               WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
 
       assert FrameCodec.frame_handler_for(:pong) ==
-               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+               WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
 
       assert FrameCodec.frame_handler_for(:close) ==
-               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+               WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
     end
 
     test "register_frame_handler/2 registers a custom frame handler" do

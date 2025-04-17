@@ -1,7 +1,7 @@
-defmodule WebSockexNova.Gun.ConnectionStateTest do
+defmodule WebsockexNova.Gun.ConnectionStateTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionState
 
   describe "initialization" do
     test "new/3 creates a new state struct with default values" do

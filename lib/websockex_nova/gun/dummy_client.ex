@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.DummyClient do
+defmodule WebsockexNova.Gun.DummyClient do
   @moduledoc """
   A dummy Gun client module for testing the supervisor functionality.
 

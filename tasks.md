@@ -1,6 +1,6 @@
-# WebSockexNova Implementation Tasks
+# WebsockexNova Implementation Tasks
 
-This document outlines the prioritized tasks for implementing WebSockexNova with Gun as the transport layer, following Test-Driven Development principles.
+This document outlines the prioritized tasks for implementing WebsockexNova with Gun as the transport layer, following Test-Driven Development principles.
 
 ## Format
 
@@ -264,7 +264,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1
 - **Dependencies**: T2.8
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.12
 - **Name**: Improve edge case handling in connection wrapper

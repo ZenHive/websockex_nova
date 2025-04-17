@@ -1,11 +1,11 @@
-defmodule WebSockexNova.Gun.FrameHandlers.ControlFrameHandler do
+defmodule WebsockexNova.Gun.FrameHandlers.ControlFrameHandler do
   @moduledoc """
   Handler for WebSocket control frames (ping, pong, close).
 
   Implements encoding, decoding, and validation specific to control frames.
   """
 
-  @behaviour WebSockexNova.Gun.FrameHandlers.FrameHandler
+  @behaviour WebsockexNova.Gun.FrameHandlers.FrameHandler
 
   # Maximum control frame payload size per WebSocket protocol
   @max_control_payload_size 125

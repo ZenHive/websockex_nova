@@ -1,8 +1,8 @@
-defmodule WebSockexNova.Gun.Helpers.StateTracerTest do
+defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionState
-  alias WebSockexNova.Gun.Helpers.StateTracer
+  alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.Helpers.StateTracer
 
   describe "initialization" do
     test "init_trace/2 initializes trace context with default values" do

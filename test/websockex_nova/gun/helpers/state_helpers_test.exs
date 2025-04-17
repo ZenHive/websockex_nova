@@ -1,8 +1,8 @@
-defmodule WebSockexNova.Gun.Helpers.StateHelpersTest do
+defmodule WebsockexNova.Gun.Helpers.StateHelpersTest do
   use ExUnit.Case, async: true
 
-  alias WebSockexNova.Gun.ConnectionState
-  alias WebSockexNova.Gun.Helpers.StateHelpers
+  alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.Helpers.StateHelpers
 
   describe "state transition helpers" do
     setup do

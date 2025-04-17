@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.Helpers.StateHelpers do
+defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   @moduledoc """
   Helper functions for consistent state operations across the codebase.
 
@@ -10,7 +10,7 @@ defmodule WebSockexNova.Gun.Helpers.StateHelpers do
   """
 
   require Logger
-  alias WebSockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionState
 
   @doc """
   Updates state for a successful connection.
