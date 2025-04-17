@@ -17,6 +17,29 @@ WebsockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying Web
 
 WebsockexNova wraps Gun with a thin adapter layer that translates between the Gun API and WebsockexNova's behavior interfaces.
 
+### Gun Process Ownership and Message Routing
+
+A critical aspect of Gun's design is its process-based message routing:
+
+1. **Owner Process**: When a process calls `:gun.open/3`, it becomes the "owner" of the Gun connection
+   - Only the owner process receives Gun messages (`:gun_up`, `:gun_down`, `:gun_ws`, etc.)
+   - If the owner process terminates, Gun will automatically close the connection
+
+2. **Explicit Ownership Transfer**: Ownership can be transferred to another process using `:gun.set_owner/2`
+   - This is crucial for applications that separate connection establishment from message handling
+   - WebsockexNova's ConnectionWrapper ensures proper ownership setup
+
+3. **Message Handling Flow**: Gun messages follow this flow:
+   - Gun process establishes network connection
+   - Gun sends status messages (`:gun_up`, `:gun_down`) to the owner process
+   - Owner process must implement `handle_info/2` callbacks to receive these messages
+   - Messages can be forwarded to other processes if needed
+
+> **Implementation Note**: When working with Gun connections, always ensure that:
+> - The process intended to handle Gun messages is set as the owner
+> - All necessary `handle_info/2` callbacks are implemented in the owner process
+> - Or a proper message forwarding mechanism is in place
+
 ## Core Design Principles
 
 ### 1. Behavior Separation

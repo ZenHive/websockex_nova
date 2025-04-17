@@ -280,6 +280,19 @@ Tasks follow this format:
 - **Dependencies**: T2.11
 - **Status**: TODO
 
+### T2.13
+- ***Name***: Add robust Gun process ownership management
+- ***Description***: Ensure proper Gun ownership setup and message routing between processes
+- ***Acceptance Criteria***:
+  - Tests for proper Gun message routing
+  - Implementation of ownership management in ConnectionWrapper
+  - Documentation of ownership patterns
+  - Handling of ownership transfer edge cases
+- ***Priority***: P0
+- ***Effort***: 1
+- ***Dependencies***: T2.4
+- ***Status***: TODO
+
 ## Phase 3: Reconnection & Integration
 
 ### T3.1

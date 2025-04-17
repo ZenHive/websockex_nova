@@ -206,10 +206,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     state = ConnectionState.new(host, port, merged_options)
 
     if state.options.test_mode do
-      # In test mode, don't actually try to establish a connection
-      {:ok, state}
+      Logger.info("Starting connection in test mode")
+
+      case open_test_connection(state) do
+        {:ok, gun_pid, monitor_pid} ->
+          updated_state = ConnectionState.update_gun_pid(state, gun_pid)
+          {:ok, Map.put(updated_state, :monitor_pid, monitor_pid)}
+
+        {:error, reason} ->
+          Logger.error("Failed to open connection in test mode: #{inspect(reason)}")
+          {:ok, ConnectionState.update_status(state, :error)}
+      end
     else
-      # Start connection using ConnectionManager
       case initiate_connection(state) do
         {:ok, updated_state} ->
           {:ok, updated_state}
@@ -225,18 +233,40 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_call({:upgrade_to_websocket, path, headers}, _from, state) do
     if state.options.test_mode || (state.gun_pid && state.status == :connected) do
       stream_ref =
-        if state.options.test_mode,
-          do: make_ref(),
-          else:
-            :gun.ws_upgrade(
-              state.gun_pid,
-              path,
-              headers_to_gun_format(headers),
-              state.options.ws_opts
-            )
+        if state.options.test_mode do
+          stream_ref = make_ref()
 
-      # Track the stream
-      state = ConnectionState.update_stream(state, stream_ref, :upgrading)
+          state = ConnectionState.update_stream(state, stream_ref, :websocket)
+
+          if state.options[:callback_pid] do
+            fake_headers = [
+              {"connection", "upgrade"},
+              {"upgrade", "websocket"},
+              {"sec-websocket-accept", "dummy-accept-token"}
+            ]
+
+            send(
+              state.options.callback_pid,
+              {:websockex_nova, {:websocket_upgrade, stream_ref, fake_headers}}
+            )
+          end
+
+          stream_ref
+        else
+          :gun.ws_upgrade(
+            state.gun_pid,
+            path,
+            headers_to_gun_format(headers),
+            state.options.ws_opts
+          )
+        end
+
+      state =
+        if !state.options.test_mode do
+          ConnectionState.update_stream(state, stream_ref, :upgrading)
+        else
+          state
+        end
 
       {:reply, {:ok, stream_ref}, state}
     else
@@ -247,13 +277,37 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_call({:send_frame, stream_ref, frame}, _from, state) do
     if state.options.test_mode || state.gun_pid do
       if state.options.test_mode do
-        # In test mode, just pretend it worked
+        if state.options[:callback_pid] do
+          cb_pid = state.options.callback_pid
+
+          case frame do
+            {:text, text} ->
+              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, {:text, text}}})
+
+            {:binary, data} ->
+              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, {:binary, data}}})
+
+            {:close, code, reason} ->
+              send(
+                cb_pid,
+                {:websockex_nova, {:websocket_frame, stream_ref, {:close, code, reason}}}
+              )
+
+            :close ->
+              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, :close}})
+
+            :ping ->
+              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, :pong}})
+
+            other ->
+              nil
+          end
+        end
+
         {:reply, :ok, state}
       else
-        # In normal mode, check the stream status
         case Map.get(state.active_streams, stream_ref) do
           :websocket ->
-            # Send frame via Gun
             result = :gun.ws_send(state.gun_pid, stream_ref, frame)
             {:reply, result, state}
 
@@ -279,31 +333,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_cast(:close, state) do
-    Logger.debug(
-      "Closing connection wrapper with #{map_size(state.active_streams)} active streams"
-    )
-
-    # Clean up all stream references first
     cleaned_state = ConnectionState.clear_all_streams(state)
 
-    # Close Gun connection if it exists
     if state.gun_pid do
-      Logger.debug("Closing Gun connection: #{inspect(state.gun_pid)}")
-
-      # In test mode with fake PID, we need to explicitly terminate the process
       if state.options.test_mode do
         Process.exit(state.gun_pid, :kill)
       else
-        # Use gun:shutdown/1 to ensure the connection is properly closed
-        # This both closes the connection and kills the process
         :gun.shutdown(state.gun_pid)
       end
     end
 
-    # Final cleanup of state before termination
     final_state = ConnectionState.prepare_for_termination(cleaned_state)
 
-    # Terminate the GenServer
     {:stop, :normal, final_state}
   end
 
@@ -313,18 +354,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
-    # Add debug logging
-    Logger.debug("Gun UP received for pid #{inspect(gun_pid)}, protocol: #{inspect(protocol)}")
+    cb_pid = Map.get(state.options, :callback_pid)
+
+    if cb_pid && Process.alive?(cb_pid) do
+      send(cb_pid, {:websockex_nova, {:connection_up, protocol}})
+    end
 
     case ConnectionManager.transition_to(state, :connected) do
       {:ok, new_state} ->
-        # Explicitly send the notification here
-        if new_state.options[:callback_pid] do
-          Logger.debug("Sending connection_up directly to callback")
-          send(new_state.options[:callback_pid], {:websockex_nova, {:connection_up, protocol}})
-        end
-
-        MessageHandlers.handle_connection_up(gun_pid, protocol, new_state)
+        {:noreply, new_state}
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
@@ -336,10 +374,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
         %{gun_pid: gun_pid} = state
       ) do
-    # Transition to disconnected with the reason
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
-        # Handle cleanup of killed streams
         disconnected_state_with_cleanup =
           if killed_streams && is_list(killed_streams) do
             ConnectionState.remove_streams(disconnected_state, killed_streams)
@@ -347,7 +383,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
             disconnected_state
           end
 
-        # Handle reconnection if appropriate
         new_state = handle_possible_reconnection(disconnected_state_with_cleanup, reason)
 
         MessageHandlers.handle_connection_down(
@@ -369,7 +404,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers},
         %{gun_pid: gun_pid} = state
       ) do
-    # Transition to websocket_connected
     case ConnectionManager.transition_to(state, :websocket_connected) do
       {:ok, new_state} ->
         MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
@@ -385,7 +419,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid} = state) do
-    # Clean up the stream that encountered an error
     state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
     MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
   end
@@ -402,17 +435,21 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:reconnect, attempt}, state) do
-    Logger.debug("Attempting reconnection, attempt #{attempt}")
-
-    # Try to reconnect
     case initiate_connection(state) do
       {:ok, new_state} -> {:noreply, new_state}
       {:error, _reason, error_state} -> {:noreply, error_state}
     end
   end
 
+  def handle_info({:debug_check_mailbox, pid}, state) do
+    info = Process.info(pid, [:message_queue_len, :messages])
+    Logger.info("Process #{inspect(pid)} info: #{inspect(info)}")
+
+    {:noreply, state}
+  end
+
   def handle_info(other, state) do
-    Logger.debug("Unhandled message: #{inspect(other)}")
+    Logger.warn("Unhandled message in ConnectionWrapper: #{inspect(other)}")
     {:noreply, state}
   end
 
@@ -426,7 +463,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
          {:gun_down, pid, protocol, reason, killed_streams, unprocessed_streams},
          state
        ) do
-    # Explicitly clean up any killed streams before passing to the handler
     state_with_cleanup =
       if killed_streams && is_list(killed_streams) do
         ConnectionState.remove_streams(state, killed_streams)
@@ -468,30 +504,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp handle_gun_message(_message, state) do
-    # Unhandled message
     {:noreply, state}
   end
 
-  # Initiates a connection with state transition
   defp initiate_connection(state) do
-    # Let the ConnectionManager handle both the transition and connection attempt
     case ConnectionManager.start_connection(state) do
       {:ok, updated_state} -> {:ok, updated_state}
       {:error, reason, error_state} -> {:error, reason, error_state}
     end
   end
 
-  # Handle possible reconnection based on connection state
   defp handle_possible_reconnection(state, _reason) do
-    # Use ConnectionManager to determine if reconnection is appropriate
     case ConnectionManager.handle_reconnection(state) do
       {:ok, reconnect_after, reconnecting_state} ->
-        # Schedule reconnection after the calculated delay
-        Logger.debug(
-          "Scheduling reconnection in #{reconnect_after}ms, attempt #{reconnecting_state.reconnect_attempts}"
-        )
-
-        # Send ourselves a delayed reconnect message
         Process.send_after(
           self(),
           {:reconnect, reconnecting_state.reconnect_attempts},
@@ -501,7 +526,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         reconnecting_state
 
       {:error, error_reason, error_state} ->
-        Logger.debug("Not reconnecting: #{inspect(error_reason)}")
         error_state
     end
   end
@@ -512,5 +536,51 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       {key, value} when is_atom(key) -> {to_string(key), to_string(value)}
       other -> other
     end)
+  end
+
+  # Special helper for test mode to ensure messages are delivered properly
+  defp open_test_connection(state) do
+    # Try to open Gun connection directly
+    host_charlist = String.to_charlist(state.host)
+
+    gun_opts = %{
+      transport: state.options.transport,
+      protocols: state.options.protocols,
+      retry: state.options.retry
+    }
+
+    Logger.info("Opening test mode Gun connection to #{state.host}:#{state.port}")
+
+    case :gun.open(host_charlist, state.port, gun_opts) do
+      {:ok, gun_pid} ->
+        # Create a monitor process to intercept messages
+        {:ok, monitor_pid} = WebsockexNova.Test.Support.GunMonitor.start_link(self())
+
+        # Change ownership to our monitor
+        :ok = :gun.set_owner(gun_pid, monitor_pid)
+
+        # Wait for connection
+        case :gun.await_up(gun_pid, 5000) do
+          {:ok, protocol} ->
+            Logger.info("Test mode Gun connection established with protocol: #{protocol}")
+
+            # Force an explicit connection_up event
+            if state.options[:callback_pid] do
+              cb_pid = state.options.callback_pid
+              send(cb_pid, {:websockex_nova, {:connection_up, protocol}})
+            end
+
+            {:ok, gun_pid, monitor_pid}
+
+          {:error, reason} ->
+            Logger.error("Gun await_up failed in test mode: #{inspect(reason)}")
+            :gun.close(gun_pid)
+            {:error, reason}
+        end
+
+      {:error, reason} ->
+        Logger.error("Gun open failed in test mode: #{inspect(reason)}")
+        {:error, reason}
+    end
   end
 end

@@ -7,9 +7,14 @@ defmodule WebsockexNova.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps()
     ]
   end
+
+  # Specifies which paths to compile per environment
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -23,7 +28,14 @@ defmodule WebsockexNova.MixProject do
   defp deps do
     [
       {:gun, "~> 2.2"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      # Used for mock WebSocket server in tests
+      {:cowboy, "~> 2.10", only: :test},
+      # WebSock for standardized WebSocket handling
+      {:websock, "~> 0.5", only: :test},
+      {:websock_adapter, "~> 0.5", only: :test},
+      # Required for Plug.Cowboy.http/3
+      {:plug_cowboy, "~> 2.6", only: :test}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
