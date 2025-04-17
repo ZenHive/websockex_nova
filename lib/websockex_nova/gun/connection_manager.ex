@@ -86,6 +86,13 @@ defmodule WebSockexNova.Gun.ConnectionManager do
     :error => []
   }
 
+  # Map of state transitions to effect functions
+  @transition_effects %{
+    connected: &WebSockexNova.Gun.ConnectionManager.apply_connected_effects/2,
+    disconnected: &WebSockexNova.Gun.ConnectionManager.apply_disconnected_effects/2,
+    error: &WebSockexNova.Gun.ConnectionManager.apply_error_effects/2
+  }
+
   @doc """
   Attempts to transition the state machine to a new state.
 
@@ -166,7 +173,7 @@ defmodule WebSockexNova.Gun.ConnectionManager do
         {:error, :terminal_error, state}
 
       # Don't reconnect if the disconnect reason is terminal
-      is_terminal_error?(state.last_error) ->
+      terminal_error?(state.last_error) ->
         error_state = ConnectionState.update_status(state, :error)
         {:error, :terminal_error, error_state}
 
@@ -212,33 +219,65 @@ defmodule WebSockexNova.Gun.ConnectionManager do
     end
   end
 
+  @doc """
+  Starts a new connection by transitioning to connecting state and opening a connection.
+
+  This function centralizes the connection establishment process, handling both the
+  state transition and the actual connection attempt.
+
+  ## Parameters
+
+  * `state` - Current connection state
+
+  ## Returns
+
+  * `{:ok, updated_state}` on success
+  * `{:error, reason, updated_state}` on failure
+  """
+  @spec start_connection(ConnectionState.t()) ::
+          {:ok, ConnectionState.t()} | {:error, term(), ConnectionState.t()}
+  def start_connection(state) do
+    # First transition to connecting state
+    case transition_to(state, :connecting) do
+      {:ok, connecting_state} ->
+        # Then actually open the connection
+        case open_connection(connecting_state) do
+          {:ok, gun_pid} ->
+            # Update the state with the new gun_pid
+            {:ok, ConnectionState.update_gun_pid(connecting_state, gun_pid)}
+
+          {:error, reason} ->
+            # Transition to error state on failure
+            {:ok, error_state} =
+              transition_to(connecting_state, :error, %{reason: reason})
+
+            {:error, reason, error_state}
+        end
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
+  end
+
   # Private functions
 
-  # Apply side effects when transitioning to specific states
-  defp apply_transition_effects(state, :connected, _params) do
-    # Reset reconnection attempts when successful connection is established
-    ConnectionState.reset_reconnect_attempts(state)
-  end
+  @doc """
+  Checks if an error is considered terminal and should prevent reconnection attempts.
 
-  defp apply_transition_effects(state, :disconnected, params) do
-    # Record the disconnect reason if provided
-    if Map.has_key?(params, :reason) do
-      ConnectionState.record_error(state, params.reason)
-    else
-      state
-    end
-  end
+  Terminal errors are severe issues that indicate reconnection attempts would likely fail
+  or are not appropriate (e.g., authentication failures, connection refused).
 
-  defp apply_transition_effects(state, :error, params) do
-    # Record the error reason if provided
-    if Map.has_key?(params, :reason) do
-      ConnectionState.record_error(state, params.reason)
-    else
-      state
-    end
-  end
+  ## Parameters
 
-  defp apply_transition_effects(state, _to_state, _params), do: state
+  * `error` - The error to check
+
+  ## Returns
+
+  * `true` if the error is terminal
+  * `false` if the error is transient and reconnection can be attempted
+  """
+  @spec terminal_error?(term()) :: boolean()
+  def terminal_error?(error), do: is_terminal_error?(error)
 
   # Check if an error is considered terminal
   defp is_terminal_error?(nil), do: false
@@ -247,17 +286,102 @@ defmodule WebSockexNova.Gun.ConnectionManager do
     Enum.member?(@terminal_errors, error)
   end
 
+  # Handle complex error structures (tuples, maps)
+  defp is_terminal_error?({:error, reason}) when is_atom(reason) do
+    Enum.member?(@terminal_errors, reason)
+  end
+
+  defp is_terminal_error?(%{reason: reason}) when is_atom(reason) do
+    Enum.member?(@terminal_errors, reason)
+  end
+
   defp is_terminal_error?(_), do: false
 
-  # Check if max reconnection attempts have been reached
-  defp max_attempts_reached?(%{options: %{retry: :infinity}}), do: false
+  # Apply side effects when transitioning to specific states
+  defp apply_transition_effects(state, to_state, params) do
+    case Map.get(@transition_effects, to_state) do
+      nil -> state
+      effect_fun -> effect_fun.(state, params)
+    end
+  end
 
-  defp max_attempts_reached?(state) do
-    max_attempts = state.options.retry
-    state.reconnect_attempts >= max_attempts
+  # Effect function for connected state
+  @doc false
+  def apply_connected_effects(state, _params) do
+    # Reset reconnection attempts when successful connection is established
+    ConnectionState.reset_reconnect_attempts(state)
+  end
+
+  # Effect function for disconnected state
+  @doc false
+  def apply_disconnected_effects(state, params) do
+    # Record the disconnect reason if provided
+    if Map.has_key?(params, :reason) do
+      ConnectionState.record_error(state, params.reason)
+    else
+      state
+    end
+  end
+
+  # Effect function for error state
+  @doc false
+  def apply_error_effects(state, params) do
+    # Record the error reason if provided
+    if Map.has_key?(params, :reason) do
+      ConnectionState.record_error(state, params.reason)
+    else
+      state
+    end
+  end
+
+  # Establishes a connection to the server
+  defp open_connection(state) do
+    # Convert options from map to keyword list for gun
+    gun_opts =
+      %{}
+      |> Map.put(:transport, state.options.transport)
+      |> Map.put(:protocols, state.options.protocols)
+      |> Map.put(:retry, state.options.retry)
+
+    # Add transport_opts only if they're not empty
+    gun_opts =
+      if Enum.empty?(state.options.transport_opts) do
+        gun_opts
+      else
+        Map.put(gun_opts, :transport_opts, state.options.transport_opts)
+      end
+
+    # Try to open Gun connection
+    host_charlist = String.to_charlist(state.host)
+
+    case :gun.open(host_charlist, state.port, gun_opts) do
+      {:ok, pid} ->
+        Logger.debug("Gun connection opened to #{state.host}:#{state.port}")
+
+        # Wait for connection to be established
+        case :gun.await_up(pid, 5000) do
+          {:ok, _protocol} ->
+            {:ok, pid}
+
+          {:error, reason} ->
+            :gun.close(pid)
+            {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   # Calculate backoff delay based on reconnection attempts
+  #
+  # This function implements three backoff strategies:
+  # - `:linear` - Fixed delay regardless of attempt number (fastest recovery, no penalty for repeated failures)
+  # - `:exponential` - Delay grows as 2^n with a random jitter (standard backoff with retry penalty)
+  # - `:jittered` - Linear increase with random jitter (balanced approach)
+  #
+  # The jitter is added to prevent the "thundering herd" problem where multiple clients
+  # attempt to reconnect at exactly the same time following a server outage.
   defp calculate_backoff_delay(state) do
     base_backoff = Map.get(state.options, :base_backoff, 1000)
     backoff_type = Map.get(state.options, :backoff_type, :linear)
@@ -277,5 +401,13 @@ defmodule WebSockexNova.Gun.ConnectionManager do
         jitter = base_backoff * 0.2 * :rand.uniform()
         trunc(base_backoff * state.reconnect_attempts + jitter)
     end
+  end
+
+  # Check if max reconnection attempts have been reached
+  defp max_attempts_reached?(%{options: %{retry: :infinity}}), do: false
+
+  defp max_attempts_reached?(state) do
+    max_attempts = state.options.retry
+    state.reconnect_attempts >= max_attempts
   end
 end

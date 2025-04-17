@@ -413,25 +413,10 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   # Initiates a connection with state transition
   defp initiate_connection(state) do
-    # First transition to connecting state
-    case ConnectionManager.transition_to(state, :connecting) do
-      {:ok, connecting_state} ->
-        # Then actually open the connection
-        case open_connection(connecting_state) do
-          {:ok, gun_pid} ->
-            # Update the state with the new gun_pid
-            {:ok, ConnectionState.update_gun_pid(connecting_state, gun_pid)}
-
-          {:error, reason} ->
-            # Transition to error state on failure
-            {:ok, error_state} =
-              ConnectionManager.transition_to(connecting_state, :error, %{reason: reason})
-
-            {:error, reason, error_state}
-        end
-
-      {:error, reason} ->
-        {:error, reason, state}
+    # Let the ConnectionManager handle both the transition and connection attempt
+    case ConnectionManager.start_connection(state) do
+      {:ok, updated_state} -> {:ok, updated_state}
+      {:error, reason, error_state} -> {:error, reason, error_state}
     end
   end
 
@@ -460,43 +445,43 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
     end
   end
 
-  defp open_connection(state) do
-    # Convert options from map to keyword list for gun
-    gun_opts =
-      %{}
-      |> Map.put(:transport, state.options.transport)
-      |> Map.put(:protocols, state.options.protocols)
-      |> Map.put(:retry, state.options.retry)
+  # defp open_connection(state) do
+  #   # Convert options from map to keyword list for gun
+  #   gun_opts =
+  #     %{}
+  #     |> Map.put(:transport, state.options.transport)
+  #     |> Map.put(:protocols, state.options.protocols)
+  #     |> Map.put(:retry, state.options.retry)
 
-    # Add transport_opts only if they're not empty
-    gun_opts =
-      if Enum.empty?(state.options.transport_opts) do
-        gun_opts
-      else
-        Map.put(gun_opts, :transport_opts, state.options.transport_opts)
-      end
+  #   # Add transport_opts only if they're not empty
+  #   gun_opts =
+  #     if Enum.empty?(state.options.transport_opts) do
+  #       gun_opts
+  #     else
+  #       Map.put(gun_opts, :transport_opts, state.options.transport_opts)
+  #     end
 
-    # Try to open Gun connection
-    host_charlist = String.to_charlist(state.host)
+  #   # Try to open Gun connection
+  #   host_charlist = String.to_charlist(state.host)
 
-    case :gun.open(host_charlist, state.port, gun_opts) do
-      {:ok, pid} ->
-        Logger.debug("Gun connection opened to #{state.host}:#{state.port}")
+  #   case :gun.open(host_charlist, state.port, gun_opts) do
+  #     {:ok, pid} ->
+  #       Logger.debug("Gun connection opened to #{state.host}:#{state.port}")
 
-        # Wait for connection to be established
-        case :gun.await_up(pid, 5000) do
-          {:ok, _protocol} ->
-            {:ok, pid}
+  #       # Wait for connection to be established
+  #       case :gun.await_up(pid, 5000) do
+  #         {:ok, _protocol} ->
+  #           {:ok, pid}
 
-          {:error, reason} ->
-            :gun.close(pid)
-            {:error, reason}
-        end
+  #         {:error, reason} ->
+  #           :gun.close(pid)
+  #           {:error, reason}
+  #       end
 
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
+  #     {:error, reason} ->
+  #       {:error, reason}
+  #   end
+  # end
 
   defp headers_to_gun_format(headers) do
     Enum.map(headers, fn
