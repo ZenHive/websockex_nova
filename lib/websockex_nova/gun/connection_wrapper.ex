@@ -4,10 +4,16 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   This module abstracts away the complexity of dealing with Gun directly, offering
   functions for connecting, upgrading to WebSocket, sending frames, and processing messages.
+
+  It uses a structured state management approach and modular message handlers to improve
+  maintainability and testability.
   """
 
   use GenServer
   require Logger
+
+  alias WebSockexNova.Gun.ConnectionState
+  alias WebSockexNova.Gun.ConnectionWrapper.MessageHandlers
 
   @typedoc "Connection status"
   @type status :: :initialized | :connected | :disconnected | :websocket_connected | :error
@@ -156,7 +162,7 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   The current state of the connection wrapper.
   """
-  @spec get_state(pid()) :: map()
+  @spec get_state(pid()) :: ConnectionState.t()
   def get_state(pid) do
     GenServer.call(pid, :get_state)
   end
@@ -181,44 +187,37 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   # Server callbacks
 
   @impl true
-  def init({host, port, options, supervisor}) do
+  def init({host, port, options, _supervisor}) do
     merged_options = Map.merge(@default_options, options)
+    state = ConnectionState.new(host, port, merged_options)
 
-    state = %{
-      host: host,
-      port: port,
-      options: merged_options,
-      gun_pid: nil,
-      supervisor: supervisor,
-      status: :initialized,
-      active_streams: %{},
-      last_error: nil,
-      callback_pid: Map.get(merged_options, :callback_pid, self()),
-      test_mode: Map.get(merged_options, :test_mode, false)
-    }
-
-    if state.test_mode do
+    if state.options.test_mode do
       # In test mode, don't actually try to establish a connection
-      # but simulate a successful connection
       {:ok, state}
     else
       # Start Gun connection
       case open_connection(state) do
         {:ok, gun_pid} ->
-          {:ok, %{state | gun_pid: gun_pid}}
+          {:ok, ConnectionState.update_gun_pid(state, gun_pid)}
 
         {:error, reason} ->
           Logger.error("Failed to open Gun connection: #{inspect(reason)}")
-          {:ok, %{state | status: :error, last_error: reason}}
+
+          state =
+            state
+            |> ConnectionState.update_status(:error)
+            |> ConnectionState.record_error(reason)
+
+          {:ok, state}
       end
     end
   end
 
   @impl true
   def handle_call({:upgrade_to_websocket, path, headers}, _from, state) do
-    if state.test_mode || (state.gun_pid && state.status == :connected) do
+    if state.options.test_mode || (state.gun_pid && state.status == :connected) do
       stream_ref =
-        if state.test_mode,
+        if state.options.test_mode,
           do: make_ref(),
           else:
             :gun.ws_upgrade(
@@ -229,17 +228,17 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
             )
 
       # Track the stream
-      updated_streams = Map.put(state.active_streams, stream_ref, :upgrading)
+      state = ConnectionState.update_stream(state, stream_ref, :upgrading)
 
-      {:reply, {:ok, stream_ref}, %{state | active_streams: updated_streams}}
+      {:reply, {:ok, stream_ref}, state}
     else
       {:reply, {:error, :not_connected}, state}
     end
   end
 
   def handle_call({:send_frame, stream_ref, frame}, _from, state) do
-    if state.test_mode || state.gun_pid do
-      if state.test_mode do
+    if state.options.test_mode || state.gun_pid do
+      if state.options.test_mode do
         # In test mode, just pretend it worked
         {:reply, :ok, state}
       else
@@ -282,84 +281,45 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_cast({:set_status, status}, state) do
-    {:noreply, %{state | status: status}}
+    {:noreply, ConnectionState.update_status(state, status)}
   end
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
-    Logger.debug("Gun connection established with protocol: #{inspect(protocol)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:connection_up, protocol})
-
-    {:noreply, %{state | status: :connected}}
+    MessageHandlers.handle_connection_up(gun_pid, protocol, state)
   end
 
   def handle_info(
-        {:gun_down, gun_pid, _protocol, reason, _killed_streams, _unprocessed_streams},
+        {:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams},
         %{gun_pid: gun_pid} = state
       ) do
-    Logger.debug("Gun connection down: #{inspect(reason)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:connection_down, reason})
-
-    {:noreply, %{state | status: :disconnected, last_error: reason}}
+    MessageHandlers.handle_connection_down(gun_pid, protocol, reason, state)
   end
 
   def handle_info(
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers},
         %{gun_pid: gun_pid} = state
       ) do
-    Logger.debug("WebSocket upgrade successful for stream: #{inspect(stream_ref)}")
-
-    # Update stream status
-    updated_streams = Map.put(state.active_streams, stream_ref, :websocket)
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:websocket_upgrade, stream_ref, headers})
-
-    {:noreply, %{state | active_streams: updated_streams, status: :websocket_connected}}
+    MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, state)
   end
 
   def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid} = state) do
-    Logger.debug("Received WebSocket frame: #{inspect(frame)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:websocket_frame, stream_ref, frame})
-
-    {:noreply, state}
+    MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid} = state) do
-    Logger.error("Gun error: #{inspect(reason)} for stream: #{inspect(stream_ref)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:error, stream_ref, reason})
-
-    # Update state with error
-    {:noreply, %{state | last_error: reason}}
+    MessageHandlers.handle_error(gun_pid, stream_ref, reason, state)
   end
 
   def handle_info(
         {:gun_response, gun_pid, stream_ref, is_fin, status, headers},
         %{gun_pid: gun_pid} = state
       ) do
-    Logger.debug("HTTP response: #{status} for stream: #{inspect(stream_ref)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:http_response, stream_ref, is_fin, status, headers})
-
-    {:noreply, state}
+    MessageHandlers.handle_http_response(gun_pid, stream_ref, is_fin, status, headers, state)
   end
 
   def handle_info({:gun_data, gun_pid, stream_ref, is_fin, data}, %{gun_pid: gun_pid} = state) do
-    Logger.debug("HTTP data received for stream: #{inspect(stream_ref)}")
-
-    # Notify callback process if specified
-    notify_callback(state.callback_pid, {:http_data, stream_ref, is_fin, data})
-
-    {:noreply, state}
+    MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
   end
 
   def handle_info(other, state) do
@@ -369,35 +329,38 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   # Private functions
 
-  defp handle_gun_message({:gun_up, _pid, _protocol}, state) do
-    # Connection established
-    {:noreply, %{state | status: :connected}}
+  defp handle_gun_message({:gun_up, pid, protocol}, state) do
+    MessageHandlers.handle_connection_up(pid, protocol, state)
   end
 
   defp handle_gun_message(
-         {:gun_down, _pid, _protocol, reason, _killed_streams, _unprocessed_streams},
+         {:gun_down, pid, protocol, reason, _killed_streams, _unprocessed_streams},
          state
        ) do
-    # Connection lost
-    {:noreply, %{state | status: :disconnected, last_error: reason}}
+    MessageHandlers.handle_connection_down(pid, protocol, reason, state)
   end
 
-  defp handle_gun_message({:gun_upgrade, _pid, stream_ref, ["websocket"], _headers}, state) do
-    # WebSocket upgrade successful
-    updated_streams = Map.put(state.active_streams, stream_ref, :websocket)
-    {:noreply, %{state | active_streams: updated_streams}}
+  defp handle_gun_message({:gun_upgrade, pid, stream_ref, ["websocket"], headers}, state) do
+    MessageHandlers.handle_websocket_upgrade(pid, stream_ref, headers, state)
   end
 
-  defp handle_gun_message({:gun_ws, _pid, _stream_ref, _frame}, state) do
-    # WebSocket frame received
-    # In a real implementation, we'd process the frame based on its type
-    # and possibly forward to a message handler
-    {:noreply, state}
+  defp handle_gun_message({:gun_ws, pid, stream_ref, frame}, state) do
+    MessageHandlers.handle_websocket_frame(pid, stream_ref, frame, state)
   end
 
-  defp handle_gun_message({:gun_error, _pid, _stream_ref, reason}, state) do
-    # Error occurred
-    {:noreply, %{state | last_error: reason}}
+  defp handle_gun_message({:gun_error, pid, stream_ref, reason}, state) do
+    MessageHandlers.handle_error(pid, stream_ref, reason, state)
+  end
+
+  defp handle_gun_message(
+         {:gun_response, pid, stream_ref, is_fin, status, headers},
+         state
+       ) do
+    MessageHandlers.handle_http_response(pid, stream_ref, is_fin, status, headers, state)
+  end
+
+  defp handle_gun_message({:gun_data, pid, stream_ref, is_fin, data}, state) do
+    MessageHandlers.handle_http_data(pid, stream_ref, is_fin, data, state)
   end
 
   defp handle_gun_message(_message, state) do
@@ -442,12 +405,6 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
         {:error, reason}
     end
   end
-
-  defp notify_callback(callback_pid, message) when is_pid(callback_pid) do
-    send(callback_pid, {:websockex_nova, message})
-  end
-
-  defp notify_callback(_, _), do: :ok
 
   defp headers_to_gun_format(headers) do
     Enum.map(headers, fn

@@ -227,6 +227,59 @@ Tasks follow this format:
 - **Dependencies**: T2.7
 - **Status**: TODO
 
+### T2.9
+- **Name**: Improve resource cleanup handling
+- **Description**: Ensure resources are properly released when connections close or errors occur
+- **Acceptance Criteria**:
+  - Tests for stream cleanup on disconnect
+  - Tests for memory leaks in connection/state management
+  - Comprehensive connection teardown logic
+  - All tests passing
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: T2.8
+- **Status**: TODO
+
+### T2.10
+- **Name**: Optimize frame handler initialization
+- **Description**: Improve the ETS table initialization pattern for frame handlers
+- **Acceptance Criteria**:
+  - Single initialization point (application startup)
+  - Remove redundant init calls in public functions
+  - Add fallback mechanism for unexpected states
+  - All tests passing
+- **Priority**: P1
+- **Effort**: 0.5
+- **Dependencies**: T2.6
+- **Status**: TODO
+
+### T2.11
+- **Name**: Create integration tests for connection wrapper
+- **Description**: Test actual Gun interaction (not just test mode) in controlled environment
+- **Acceptance Criteria**:
+  - Tests with a mock WebSocket server
+  - Tests for real Gun client integration
+  - Tests for actual socket communication
+  - Tests for various network scenarios
+- **Priority**: P1
+- **Effort**: 1
+- **Dependencies**: T2.8
+- **Status**: TODO
+
+### T2.12
+- **Name**: Improve edge case handling in connection wrapper
+- **Description**: Add robust handling for edge cases and unexpected states
+- **Acceptance Criteria**:
+  - Tests for invalid stream references
+  - Tests for unexpected Gun messages
+  - Improved error logging and diagnostics
+  - Invalid state transition prevention
+  - All tests passing
+- **Priority**: P1
+- **Effort**: 0.5
+- **Dependencies**: T2.11
+- **Status**: TODO
+
 ## Phase 3: Reconnection & Integration
 
 ### T3.1

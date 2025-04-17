@@ -6,6 +6,10 @@ defmodule WebSockexNova.Gun.FrameCodec do
   It handles various frame types (text, binary, ping, pong, close) and provides
   utilities for validating frames and working with close codes.
 
+  The module uses a pluggable handler system that allows for custom frame handlers
+  to be registered, supporting extensions like permessage-deflate and other WebSocket
+  extensions.
+
   Gun WebSocket frames are represented as:
   - `{:text, binary()}` - Text frames
   - `{:binary, binary()}` - Binary frames
@@ -28,10 +32,33 @@ defmodule WebSockexNova.Gun.FrameCodec do
   @type decode_result :: {:ok, frame()} | {:error, atom()}
   @type validate_result :: :ok | {:error, atom()}
 
+  # Registry of frame handlers - can be extended at runtime
+  @frame_handlers %{
+    text: WebSockexNova.Gun.FrameHandlers.TextFrameHandler,
+    binary: WebSockexNova.Gun.FrameHandlers.BinaryFrameHandler,
+    ping: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler,
+    pong: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler,
+    close: WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+  }
+
+  # Table name for handler registry
+  @handlers_table :websockex_nova_frame_handlers
+
+  # Initialize the ETS table on module load
+  @doc false
+  def init_handlers_table do
+    if :ets.info(@handlers_table) == :undefined do
+      :ets.new(@handlers_table, [:named_table, :set, :public])
+    end
+
+    :ok
+  end
+
   @doc """
   Encodes a WebSocket frame for sending via Gun.
 
   Takes a frame in the internal format and converts it to the format expected by Gun.
+  Uses the appropriate frame handler based on the frame type.
 
   ## Examples
 
@@ -45,53 +72,18 @@ defmodule WebSockexNova.Gun.FrameCodec do
       {:close, 1000, "Normal closure"}
   """
   @spec encode_frame(frame()) :: tuple() | atom()
-  def encode_frame(frame)
-
-  # Text frames
-  def encode_frame({:text, data}) when is_binary(data) do
-    {:text, data}
-  end
-
-  # Binary frames
-  def encode_frame({:binary, data}) when is_binary(data) do
-    {:binary, data}
-  end
-
-  # Ping frames
-  def encode_frame(:ping) do
-    :ping
-  end
-
-  def encode_frame({:ping, data}) when is_binary(data) do
-    {:ping, data}
-  end
-
-  # Pong frames
-  def encode_frame(:pong) do
-    :pong
-  end
-
-  def encode_frame({:pong, data}) when is_binary(data) do
-    {:pong, data}
-  end
-
-  # Close frames
-  def encode_frame(:close) do
-    :close
-  end
-
-  def encode_frame({:close, code}) when is_integer(code) do
-    {:close, code, <<>>}
-  end
-
-  def encode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason) do
-    {:close, code, reason}
+  def encode_frame(frame) do
+    init_handlers_table()
+    frame_type = frame_type(frame)
+    handler = frame_handler_for(frame_type)
+    handler.encode_frame(frame)
   end
 
   @doc """
   Decodes a WebSocket frame received from Gun.
 
   Takes a frame in the Gun format and converts it to the internal format.
+  Uses the appropriate frame handler based on the frame type.
 
   ## Examples
 
@@ -105,58 +97,28 @@ defmodule WebSockexNova.Gun.FrameCodec do
       {:ok, {:close, 1000, "Normal closure"}}
   """
   @spec decode_frame(tuple() | atom()) :: decode_result()
-  def decode_frame(frame)
+  def decode_frame(frame) do
+    init_handlers_table()
+    frame_type = frame_type(frame)
 
-  # Text frames
-  def decode_frame({:text, data}) when is_binary(data) do
-    {:ok, {:text, data}}
-  end
+    if frame_type == :invalid do
+      {:error, :invalid_frame}
+    else
+      handler = frame_handler_for(frame_type)
 
-  # Binary frames
-  def decode_frame({:binary, data}) when is_binary(data) do
-    {:ok, {:binary, data}}
-  end
-
-  # Ping frames
-  def decode_frame(:ping) do
-    {:ok, :ping}
-  end
-
-  def decode_frame({:ping, data}) when is_binary(data) do
-    {:ok, {:ping, data}}
-  end
-
-  # Pong frames
-  def decode_frame(:pong) do
-    {:ok, :pong}
-  end
-
-  def decode_frame({:pong, data}) when is_binary(data) do
-    {:ok, {:pong, data}}
-  end
-
-  # Close frames
-  def decode_frame(:close) do
-    {:ok, :close}
-  end
-
-  def decode_frame({:close, code}) when is_integer(code) do
-    {:ok, {:close, code, ""}}
-  end
-
-  def decode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason) do
-    {:ok, {:close, code, reason}}
-  end
-
-  # Unknown/invalid frames
-  def decode_frame(_frame) do
-    {:error, :invalid_frame}
+      try do
+        handler.decode_frame(frame)
+      rescue
+        _ -> {:error, :invalid_frame}
+      end
+    end
   end
 
   @doc """
   Validates a WebSocket frame.
 
   Checks if a frame is valid according to the WebSocket spec.
+  Uses the appropriate frame handler based on the frame type.
 
   ## Examples
 
@@ -170,68 +132,32 @@ defmodule WebSockexNova.Gun.FrameCodec do
       :ok
   """
   @spec validate_frame(frame()) :: validate_result()
-  def validate_frame(frame)
-
-  # Text frames
-  def validate_frame({:text, data}) when is_binary(data) do
-    :ok
+  def validate_frame(frame) do
+    init_handlers_table()
+    frame_type = frame_type(frame)
+    handler = frame_handler_for(frame_type)
+    handler.validate_frame(frame)
+  rescue
+    _ -> {:error, :invalid_frame}
   end
 
-  def validate_frame({:text, _data}) do
-    {:error, :invalid_text_data}
-  end
+  @doc """
+  Validates the size of a control frame payload.
 
-  # Binary frames
-  def validate_frame({:binary, data}) when is_binary(data) do
-    :ok
-  end
+  WebSocket protocol limits control frame payloads to 125 bytes.
 
-  def validate_frame({:binary, _data}) do
-    {:error, :invalid_binary_data}
-  end
+  ## Parameters
 
-  # Ping frames
-  def validate_frame(:ping) do
-    :ok
-  end
+  * `data` - Binary payload data to validate
 
-  def validate_frame({:ping, data}) when is_binary(data) do
-    if byte_size(data) <= 125 do
-      :ok
-    else
-      {:error, :control_frame_too_large}
-    end
-  end
+  ## Returns
 
-  # Pong frames
-  def validate_frame(:pong) do
-    :ok
-  end
-
-  def validate_frame({:pong, data}) when is_binary(data) do
-    if byte_size(data) <= 125 do
-      :ok
-    else
-      {:error, :control_frame_too_large}
-    end
-  end
-
-  # Close frames
-  def validate_frame(:close) do
-    :ok
-  end
-
-  def validate_frame({:close, code}) when is_integer(code) do
-    validate_close_code(code)
-  end
-
-  def validate_frame({:close, code, reason}) when is_integer(code) and is_binary(reason) do
-    validate_close_code(code)
-  end
-
-  # Unknown frame types
-  def validate_frame(_frame) do
-    {:error, :invalid_frame}
+  * `:ok` - If the payload size is valid
+  * `{:error, :control_frame_too_large}` - If payload exceeds 125 bytes
+  """
+  @spec validate_control_frame_size(binary()) :: validate_result()
+  def validate_control_frame_size(data) when is_binary(data) do
+    WebSockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_control_frame_size(data)
   end
 
   @doc """
@@ -250,23 +176,7 @@ defmodule WebSockexNova.Gun.FrameCodec do
   """
   @spec validate_close_code(non_neg_integer()) :: validate_result()
   def validate_close_code(code) do
-    cond do
-      # Reserved codes that cannot be used
-      code in [1005, 1006, 1015] ->
-        {:error, :reserved_close_code}
-
-      # Other reserved codes
-      code in [1004] ->
-        {:error, :reserved_close_code}
-
-      # Valid ranges per WebSocket spec
-      code in 1000..1003 or code in 1007..1014 or code in 3000..4999 ->
-        :ok
-
-      # Invalid codes
-      true ->
-        {:error, :invalid_close_code}
-    end
+    WebSockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_close_code(code)
   end
 
   @doc """
@@ -320,5 +230,88 @@ defmodule WebSockexNova.Gun.FrameCodec do
       1015 -> "TLS handshake"
       _ -> "Unknown close code"
     end
+  end
+
+  @doc """
+  Determines the frame type of a WebSocket frame.
+
+  ## Parameters
+
+  * `frame` - The WebSocket frame
+
+  ## Returns
+
+  The frame type as an atom (`:text`, `:binary`, etc.)
+  """
+  @spec frame_type(frame()) :: atom()
+  def frame_type(frame) do
+    case frame do
+      {:text, _} -> :text
+      {:binary, _} -> :binary
+      :ping -> :ping
+      {:ping, _} -> :ping
+      :pong -> :pong
+      {:pong, _} -> :pong
+      :close -> :close
+      {:close, _} -> :close
+      {:close, _, _} -> :close
+      # If we can't determine the type, treat as invalid
+      _ -> :invalid
+    end
+  end
+
+  @doc """
+  Gets the handler module for a specific frame type.
+
+  Uses the built-in handler registry, which can be extended at runtime
+  with `register_frame_handler/2`.
+
+  ## Parameters
+
+  * `frame_type` - The type of frame to get a handler for
+
+  ## Returns
+
+  The handler module for the specified frame type
+  """
+  @spec frame_handler_for(atom()) :: module()
+  def frame_handler_for(frame_type) do
+    init_handlers_table()
+
+    case :ets.lookup(@handlers_table, frame_type) do
+      [{^frame_type, handler}] ->
+        handler
+
+      [] ->
+        Map.get(@frame_handlers, frame_type, WebSockexNova.Gun.FrameHandlers.ControlFrameHandler)
+    end
+  end
+
+  @doc """
+  Registers a custom frame handler for a specific frame type.
+
+  This allows for extending the WebSocket frame handling with custom
+  implementations, such as for handling extensions.
+
+  ## Parameters
+
+  * `frame_type` - The type of frame to register a handler for
+  * `handler_module` - The module that implements the handler behavior
+
+  ## Returns
+
+  * `:ok` - If the handler was registered successfully
+  """
+  @spec register_frame_handler(atom(), module() | nil) :: :ok
+  def register_frame_handler(frame_type, nil) do
+    init_handlers_table()
+    :ets.delete(@handlers_table, frame_type)
+    :ok
+  end
+
+  def register_frame_handler(frame_type, handler_module) do
+    init_handlers_table()
+    :ets.insert(@handlers_table, {frame_type, handler_module})
+    :ok
   end
 end

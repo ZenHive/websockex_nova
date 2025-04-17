@@ -225,4 +225,51 @@ defmodule WebSockexNova.Gun.FrameCodecTest do
       assert FrameCodec.is_valid_close_code?(1006) == false
     end
   end
+
+  describe "helper functions" do
+    test "validate_control_frame_size/1 validates control frame payload size" do
+      assert FrameCodec.validate_control_frame_size(<<>>) == :ok
+      assert FrameCodec.validate_control_frame_size("small payload") == :ok
+
+      # Control frames limited to 125 bytes
+      small_data = String.duplicate("a", 125)
+      large_data = String.duplicate("a", 126)
+
+      assert FrameCodec.validate_control_frame_size(small_data) == :ok
+
+      assert FrameCodec.validate_control_frame_size(large_data) ==
+               {:error, :control_frame_too_large}
+    end
+
+    test "frame_handler_for/1 returns correct handler for frame type" do
+      assert FrameCodec.frame_handler_for(:text) ==
+               WebSockexNova.Gun.FrameHandlers.TextFrameHandler
+
+      assert FrameCodec.frame_handler_for(:binary) ==
+               WebSockexNova.Gun.FrameHandlers.BinaryFrameHandler
+
+      assert FrameCodec.frame_handler_for(:ping) ==
+               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+
+      assert FrameCodec.frame_handler_for(:pong) ==
+               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+
+      assert FrameCodec.frame_handler_for(:close) ==
+               WebSockexNova.Gun.FrameHandlers.ControlFrameHandler
+    end
+
+    test "register_frame_handler/2 registers a custom frame handler" do
+      defmodule CustomHandler do
+      end
+
+      # Register a custom handler
+      FrameCodec.register_frame_handler(:custom, CustomHandler)
+
+      # Verify it's registered
+      assert FrameCodec.frame_handler_for(:custom) == CustomHandler
+
+      # Clean up
+      FrameCodec.register_frame_handler(:custom, nil)
+    end
+  end
 end
