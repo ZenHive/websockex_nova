@@ -2,7 +2,6 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
   use ExUnit.Case, async: true
 
   alias WebSockexNova.Gun.ConnectionWrapper
-  alias WebSockexNova.Gun.ClientSupervisor
 
   # We'll use a mocked server to avoid real network connections in tests
   defmodule MockServer do
@@ -99,7 +98,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
   describe "message handling" do
     test "process_gun_message/2 handles gun_up message" do
       {:ok, mock} = MockServer.start_link()
-      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
 
       # Simulate gun_up message
       message = {:gun_up, make_ref(), :http}
@@ -116,7 +117,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
 
     test "process_gun_message/2 handles gun_down message" do
       {:ok, mock} = MockServer.start_link()
-      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
 
       # First connect
       ConnectionWrapper.process_gun_message(wrapper_pid, {:gun_up, make_ref(), :http})
@@ -136,7 +139,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
 
     test "process_gun_message/2 handles gun_upgrade message" do
       {:ok, mock} = MockServer.start_link()
-      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
 
       # Simulate WebSocket upgrade
       stream_ref = make_ref()
@@ -154,7 +159,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
 
     test "process_gun_message/2 handles gun_ws message" do
       {:ok, mock} = MockServer.start_link()
-      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
 
       # Simulate WebSocket frame
       stream_ref = make_ref()
@@ -173,7 +180,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
 
     test "process_gun_message/2 handles gun_error message" do
       {:ok, mock} = MockServer.start_link()
-      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
 
       # Simulate error
       stream_ref = make_ref()

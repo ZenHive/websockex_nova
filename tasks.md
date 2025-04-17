@@ -187,7 +187,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 0.5
 - **Dependencies**: T2.4
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.6
 - **Name**: Implement WebSocket frame encoding/decoding
@@ -200,7 +200,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1
 - **Dependencies**: T2.5
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.7
 - **Name**: Create connection state management tests
