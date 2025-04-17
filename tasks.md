@@ -238,7 +238,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 0.5
 - **Dependencies**: T2.8
-- **Status**: TODO
+- **Status**: DONE
 
 ### T2.10
 - **Name**: Optimize frame handler initialization

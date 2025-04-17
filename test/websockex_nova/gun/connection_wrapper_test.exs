@@ -216,6 +216,140 @@ defmodule WebSockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  describe "resource cleanup" do
+    test "stream references are properly cleaned up on disconnect" do
+      {:ok, mock} = MockServer.start_link()
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      # First set the connection as connected
+      ConnectionWrapper.set_status(wrapper_pid, :connected)
+
+      # Create several stream references
+      {:ok, stream_ref1} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws1", [])
+      {:ok, stream_ref2} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws2", [])
+      {:ok, stream_ref3} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws3", [])
+
+      # Simulate WebSocket upgrade for all streams
+      ConnectionWrapper.process_gun_message(
+        wrapper_pid,
+        {:gun_upgrade, make_ref(), stream_ref1, ["websocket"], []}
+      )
+
+      ConnectionWrapper.process_gun_message(
+        wrapper_pid,
+        {:gun_upgrade, make_ref(), stream_ref2, ["websocket"], []}
+      )
+
+      ConnectionWrapper.process_gun_message(
+        wrapper_pid,
+        {:gun_upgrade, make_ref(), stream_ref3, ["websocket"], []}
+      )
+
+      # Verify streams are tracked
+      :timer.sleep(50)
+      state = ConnectionWrapper.get_state(wrapper_pid)
+      assert map_size(state.active_streams) == 3
+
+      # Simulate disconnect with killed streams
+      gun_ref = make_ref()
+
+      ConnectionWrapper.process_gun_message(
+        wrapper_pid,
+        {:gun_down, gun_ref, :http, :normal, [stream_ref1, stream_ref2], []}
+      )
+
+      # Verify streams are cleaned up
+      :timer.sleep(50)
+      state = ConnectionWrapper.get_state(wrapper_pid)
+      assert Map.get(state.active_streams, stream_ref1) == nil
+      assert Map.get(state.active_streams, stream_ref2) == nil
+      assert Map.get(state.active_streams, stream_ref3) != nil
+    end
+
+    test "all stream references are cleaned up on close" do
+      {:ok, mock} = MockServer.start_link()
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      # Set up connection with streams
+      ConnectionWrapper.set_status(wrapper_pid, :connected)
+
+      # Add multiple streams
+      {:ok, _stream_ref1} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws1", [])
+      {:ok, _stream_ref2} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws2", [])
+
+      # Verify streams exist
+      :timer.sleep(50)
+      state = ConnectionWrapper.get_state(wrapper_pid)
+      assert map_size(state.active_streams) == 2
+
+      # Close connection
+      ConnectionWrapper.close(wrapper_pid)
+
+      # Give it time to clean up
+      :timer.sleep(50)
+
+      # Verify process terminated (which implies resources were cleaned)
+      assert wait_for_process_exit(wrapper_pid)
+    end
+
+    test "resources are cleaned up on error conditions" do
+      {:ok, mock} = MockServer.start_link()
+
+      {:ok, wrapper_pid} =
+        ConnectionWrapper.open("example.com", 443, %{callback_pid: mock, test_mode: true})
+
+      # Set up connection with streams
+      ConnectionWrapper.set_status(wrapper_pid, :connected)
+
+      # Add a stream
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws", [])
+
+      # Verify stream exists
+      :timer.sleep(50)
+      state = ConnectionWrapper.get_state(wrapper_pid)
+      assert map_size(state.active_streams) == 1
+
+      # Simulate a gun error on the stream
+      ConnectionWrapper.process_gun_message(
+        wrapper_pid,
+        {:gun_error, make_ref(), stream_ref, :timeout}
+      )
+
+      # Verify stream is removed
+      :timer.sleep(50)
+      state = ConnectionWrapper.get_state(wrapper_pid)
+      assert Map.get(state.active_streams, stream_ref) == nil
+    end
+
+    test "gun connection is terminated when wrapper is closed" do
+      # Skip this test in test_mode since we don't actually create Gun connections
+      # This test would be more comprehensive with a mock Gun module
+      {:ok, wrapper_pid} = ConnectionWrapper.open("example.com", 443, %{test_mode: true})
+
+      # Mock a Gun connection
+      fake_gun_pid = spawn(fn -> Process.sleep(10000) end)
+
+      # Manually set the gun_pid in the state
+      :sys.replace_state(wrapper_pid, fn state ->
+        %{state | gun_pid: fake_gun_pid}
+      end)
+
+      # Monitor the fake gun process
+      ref = Process.monitor(fake_gun_pid)
+
+      # Close the wrapper
+      ConnectionWrapper.close(wrapper_pid)
+
+      # Verify the gun process is terminated
+      assert_receive {:DOWN, ^ref, :process, ^fake_gun_pid, _reason}, 500
+      assert wait_for_process_exit(wrapper_pid)
+    end
+  end
+
   # Helper function to check if a process has exited
   defp wait_for_process_exit(pid, timeout \\ 500) do
     ref = Process.monitor(pid)

@@ -130,6 +130,61 @@ defmodule WebSockexNova.Gun.ConnectionState do
   end
 
   @doc """
+  Removes a stream from the active streams map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `stream_ref` - Stream reference to remove
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec remove_stream(t(), reference()) :: t()
+  def remove_stream(state, stream_ref) do
+    %{state | active_streams: Map.delete(state.active_streams, stream_ref)}
+  end
+
+  @doc """
+  Removes multiple streams from the active streams map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `stream_refs` - List of stream references to remove
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec remove_streams(t(), [reference()]) :: t()
+  def remove_streams(state, stream_refs) when is_list(stream_refs) do
+    active_streams =
+      Enum.reduce(stream_refs, state.active_streams, fn ref, streams ->
+        Map.delete(streams, ref)
+      end)
+
+    %{state | active_streams: active_streams}
+  end
+
+  @doc """
+  Clears all active streams.
+
+  ## Parameters
+
+  * `state` - Current connection state
+
+  ## Returns
+
+  Updated connection state struct with empty active_streams
+  """
+  @spec clear_all_streams(t()) :: t()
+  def clear_all_streams(state) do
+    %{state | active_streams: %{}}
+  end
+
+  @doc """
   Increments the reconnection attempt counter.
 
   ## Parameters
@@ -159,5 +214,24 @@ defmodule WebSockexNova.Gun.ConnectionState do
   @spec reset_reconnect_attempts(t()) :: t()
   def reset_reconnect_attempts(state) do
     %{state | reconnect_attempts: 0}
+  end
+
+  @doc """
+  Prepares state for cleanup before termination.
+  Clears all active streams and references.
+
+  ## Parameters
+
+  * `state` - Current connection state
+
+  ## Returns
+
+  Cleaned up state struct
+  """
+  @spec prepare_for_termination(t()) :: t()
+  def prepare_for_termination(state) do
+    state
+    |> clear_all_streams()
+    |> Map.put(:gun_pid, nil)
   end
 end

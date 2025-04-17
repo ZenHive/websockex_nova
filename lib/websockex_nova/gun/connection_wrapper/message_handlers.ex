@@ -75,21 +75,43 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   * `protocol` - The protocol that was in use
   * `reason` - Reason for the connection loss
   * `state` - Current connection state
+  * `killed_streams` - List of stream references that were killed
+  * `unprocessed_streams` - List of stream references with unprocessed data
 
   ## Returns
 
   `{:noreply, updated_state}`
   """
-  @spec handle_connection_down(pid(), atom(), term(), ConnectionState.t()) ::
+  @spec handle_connection_down(
+          pid(),
+          atom(),
+          term(),
+          ConnectionState.t(),
+          [reference()] | nil,
+          [reference()] | nil
+        ) ::
           {:noreply, ConnectionState.t()}
-  def handle_connection_down(_gun_pid, protocol, reason, state) do
+  def handle_connection_down(
+        _gun_pid,
+        protocol,
+        reason,
+        state,
+        killed_streams \\ [],
+        _unprocessed_streams \\ []
+      ) do
     Logger.debug("Gun connection down: #{inspect(reason)}, protocol: #{inspect(protocol)}")
 
-    # Update state
+    # Log which streams were killed
+    unless Enum.empty?(killed_streams) do
+      Logger.debug("Streams killed on disconnect: #{inspect(killed_streams)}")
+    end
+
+    # Update state and clean up killed streams
     state =
       state
       |> ConnectionState.update_status(:disconnected)
       |> ConnectionState.record_error(reason)
+      |> ConnectionState.remove_streams(killed_streams)
 
     # Notify callback
     notify(state.callback_pid, {:connection_down, reason})
@@ -151,6 +173,21 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   def handle_websocket_frame(_gun_pid, stream_ref, frame, state) do
     Logger.debug("Received WebSocket frame: #{inspect(frame)}")
 
+    # Handle special case for close frames
+    state =
+      case frame do
+        {:close, _code, _reason} ->
+          Logger.debug("Received close frame for stream: #{inspect(stream_ref)}")
+          ConnectionState.remove_stream(state, stream_ref)
+
+        :close ->
+          Logger.debug("Received close frame for stream: #{inspect(stream_ref)}")
+          ConnectionState.remove_stream(state, stream_ref)
+
+        _ ->
+          state
+      end
+
     # Notify callback
     notify(state.callback_pid, {:websocket_frame, stream_ref, frame})
 
@@ -180,8 +217,11 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   def handle_error(_gun_pid, stream_ref, reason, state) do
     Logger.error("Gun error: #{inspect(reason)} for stream: #{inspect(stream_ref)}")
 
-    # Update state
-    state = ConnectionState.record_error(state, reason)
+    # Update state and clean up the stream with error
+    state =
+      state
+      |> ConnectionState.record_error(reason)
+      |> clean_stream_on_error(stream_ref)
 
     # Notify callback
     notify(state.callback_pid, {:error, stream_ref, reason})
@@ -214,6 +254,15 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   def handle_http_response(_gun_pid, stream_ref, is_fin, status, headers, state) do
     Logger.debug("HTTP response: #{status} for stream: #{inspect(stream_ref)}")
 
+    # If this is the final message and it's not a successful upgrade, clean up the stream
+    state =
+      if is_fin == :fin and (status < 200 or status >= 300) do
+        Logger.debug("Cleaning up stream after final HTTP response: #{inspect(stream_ref)}")
+        ConnectionState.remove_stream(state, stream_ref)
+      else
+        state
+      end
+
     # Notify callback
     notify(state.callback_pid, {:http_response, stream_ref, is_fin, status, headers})
 
@@ -240,9 +289,28 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   def handle_http_data(_gun_pid, stream_ref, is_fin, data, state) do
     Logger.debug("HTTP data received for stream: #{inspect(stream_ref)}")
 
+    # If this is the final message, clean up the stream
+    state =
+      if is_fin == :fin do
+        Logger.debug("Cleaning up stream after final HTTP data: #{inspect(stream_ref)}")
+        ConnectionState.remove_stream(state, stream_ref)
+      else
+        state
+      end
+
     # Notify callback
     notify(state.callback_pid, {:http_data, stream_ref, is_fin, data})
 
     {:noreply, state}
+  end
+
+  # Private helper functions
+
+  # Cleans up a stream when an error occurs
+  defp clean_stream_on_error(state, nil), do: state
+
+  defp clean_stream_on_error(state, stream_ref) do
+    Logger.debug("Cleaning up stream after error: #{inspect(stream_ref)}")
+    ConnectionState.remove_stream(state, stream_ref)
   end
 end

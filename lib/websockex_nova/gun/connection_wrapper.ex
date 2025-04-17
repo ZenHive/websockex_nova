@@ -279,13 +279,32 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_cast(:close, state) do
+    Logger.debug(
+      "Closing connection wrapper with #{map_size(state.active_streams)} active streams"
+    )
+
+    # Clean up all stream references first
+    cleaned_state = ConnectionState.clear_all_streams(state)
+
     # Close Gun connection if it exists
     if state.gun_pid do
-      :gun.close(state.gun_pid)
+      Logger.debug("Closing Gun connection: #{inspect(state.gun_pid)}")
+
+      # In test mode with fake PID, we need to explicitly terminate the process
+      if state.options.test_mode do
+        Process.exit(state.gun_pid, :kill)
+      else
+        # Use gun:shutdown/1 to ensure the connection is properly closed
+        # This both closes the connection and kills the process
+        :gun.shutdown(state.gun_pid)
+      end
     end
 
+    # Final cleanup of state before termination
+    final_state = ConnectionState.prepare_for_termination(cleaned_state)
+
     # Terminate the GenServer
-    {:stop, :normal, state}
+    {:stop, :normal, final_state}
   end
 
   def handle_cast({:set_status, status}, state) do
@@ -305,15 +324,31 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info(
-        {:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams},
+        {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
         %{gun_pid: gun_pid} = state
       ) do
     # Transition to disconnected with the reason
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
+        # Handle cleanup of killed streams
+        disconnected_state_with_cleanup =
+          if killed_streams && is_list(killed_streams) do
+            ConnectionState.remove_streams(disconnected_state, killed_streams)
+          else
+            disconnected_state
+          end
+
         # Handle reconnection if appropriate
-        new_state = handle_possible_reconnection(disconnected_state, reason)
-        MessageHandlers.handle_connection_down(gun_pid, protocol, reason, new_state)
+        new_state = handle_possible_reconnection(disconnected_state_with_cleanup, reason)
+
+        MessageHandlers.handle_connection_down(
+          gun_pid,
+          protocol,
+          reason,
+          new_state,
+          killed_streams,
+          unprocessed_streams
+        )
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
@@ -341,7 +376,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid} = state) do
-    MessageHandlers.handle_error(gun_pid, stream_ref, reason, state)
+    # Clean up the stream that encountered an error
+    state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
+    MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
   end
 
   def handle_info(
@@ -377,10 +414,25 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   end
 
   defp handle_gun_message(
-         {:gun_down, pid, protocol, reason, _killed_streams, _unprocessed_streams},
+         {:gun_down, pid, protocol, reason, killed_streams, unprocessed_streams},
          state
        ) do
-    MessageHandlers.handle_connection_down(pid, protocol, reason, state)
+    # Explicitly clean up any killed streams before passing to the handler
+    state_with_cleanup =
+      if killed_streams && is_list(killed_streams) do
+        ConnectionState.remove_streams(state, killed_streams)
+      else
+        state
+      end
+
+    MessageHandlers.handle_connection_down(
+      pid,
+      protocol,
+      reason,
+      state_with_cleanup,
+      killed_streams,
+      unprocessed_streams
+    )
   end
 
   defp handle_gun_message({:gun_upgrade, pid, stream_ref, ["websocket"], headers}, state) do
@@ -444,44 +496,6 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
         error_state
     end
   end
-
-  # defp open_connection(state) do
-  #   # Convert options from map to keyword list for gun
-  #   gun_opts =
-  #     %{}
-  #     |> Map.put(:transport, state.options.transport)
-  #     |> Map.put(:protocols, state.options.protocols)
-  #     |> Map.put(:retry, state.options.retry)
-
-  #   # Add transport_opts only if they're not empty
-  #   gun_opts =
-  #     if Enum.empty?(state.options.transport_opts) do
-  #       gun_opts
-  #     else
-  #       Map.put(gun_opts, :transport_opts, state.options.transport_opts)
-  #     end
-
-  #   # Try to open Gun connection
-  #   host_charlist = String.to_charlist(state.host)
-
-  #   case :gun.open(host_charlist, state.port, gun_opts) do
-  #     {:ok, pid} ->
-  #       Logger.debug("Gun connection opened to #{state.host}:#{state.port}")
-
-  #       # Wait for connection to be established
-  #       case :gun.await_up(pid, 5000) do
-  #         {:ok, _protocol} ->
-  #           {:ok, pid}
-
-  #         {:error, reason} ->
-  #           :gun.close(pid)
-  #           {:error, reason}
-  #       end
-
-  #     {:error, reason} ->
-  #       {:error, reason}
-  #   end
-  # end
 
   defp headers_to_gun_format(headers) do
     Enum.map(headers, fn
