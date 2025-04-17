@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.ConnectionManager do
+defmodule WebsockexNova.Gun.ConnectionManager do
   @moduledoc """
   Manages the WebSocket connection lifecycle using a state machine approach.
 
@@ -40,7 +40,7 @@ defmodule WebSockexNova.Gun.ConnectionManager do
   """
 
   require Logger
-  alias WebSockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionState
 
   # Define all possible connection states for reference
   # @connection_states [
@@ -88,9 +88,9 @@ defmodule WebSockexNova.Gun.ConnectionManager do
 
   # Map of state transitions to effect functions
   @transition_effects %{
-    connected: &WebSockexNova.Gun.ConnectionManager.apply_connected_effects/2,
-    disconnected: &WebSockexNova.Gun.ConnectionManager.apply_disconnected_effects/2,
-    error: &WebSockexNova.Gun.ConnectionManager.apply_error_effects/2
+    connected: &WebsockexNova.Gun.ConnectionManager.apply_connected_effects/2,
+    disconnected: &WebsockexNova.Gun.ConnectionManager.apply_disconnected_effects/2,
+    error: &WebsockexNova.Gun.ConnectionManager.apply_error_effects/2
   }
 
   @doc """

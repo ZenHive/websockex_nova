@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.ConnectionWrapper do
+defmodule WebsockexNova.Gun.ConnectionWrapper do
   @moduledoc """
   Wraps the Gun WebSocket connection functionality, providing a simplified interface.
 
@@ -12,9 +12,9 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
   use GenServer
   require Logger
 
-  alias WebSockexNova.Gun.ConnectionState
-  alias WebSockexNova.Gun.ConnectionManager
-  alias WebSockexNova.Gun.ConnectionWrapper.MessageHandlers
+  alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionManager
+  alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
 
   @typedoc "Connection status"
   @type status ::
@@ -313,8 +313,17 @@ defmodule WebSockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
+    # Add debug logging
+    Logger.debug("Gun UP received for pid #{inspect(gun_pid)}, protocol: #{inspect(protocol)}")
+
     case ConnectionManager.transition_to(state, :connected) do
       {:ok, new_state} ->
+        # Explicitly send the notification here
+        if new_state.options[:callback_pid] do
+          Logger.debug("Sending connection_up directly to callback")
+          send(new_state.options[:callback_pid], {:websockex_nova, {:connection_up, protocol}})
+        end
+
         MessageHandlers.handle_connection_up(gun_pid, protocol, new_state)
 
       {:error, reason} ->

@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.ClientSupervisor do
+defmodule WebsockexNova.Gun.ClientSupervisor do
   @moduledoc """
   Supervisor for Gun WebSocket client connections.
 
@@ -39,9 +39,9 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
 
   ## Examples
 
-      {:ok, pid} = WebSockexNova.Gun.ClientSupervisor.start_link()
+      {:ok, pid} = WebsockexNova.Gun.ClientSupervisor.start_link()
 
-      {:ok, pid} = WebSockexNova.Gun.ClientSupervisor.start_link(
+      {:ok, pid} = WebsockexNova.Gun.ClientSupervisor.start_link(
         name: :my_gun_supervisor,
         strategy: :one_for_one,
         max_restarts: 5,
@@ -92,7 +92,7 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
 
   ## Examples
 
-      {:ok, client} = WebSockexNova.Gun.ClientSupervisor.start_client(
+      {:ok, client} = WebsockexNova.Gun.ClientSupervisor.start_client(
         supervisor_pid,
         host: "echo.websocket.org",
         port: 443,
@@ -129,7 +129,7 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
 
   ## Examples
 
-      :ok = WebSockexNova.Gun.ClientSupervisor.terminate_client(supervisor_pid, client_pid)
+      :ok = WebsockexNova.Gun.ClientSupervisor.terminate_client(supervisor_pid, client_pid)
   """
   def terminate_client(supervisor, client_pid) when is_pid(client_pid) do
     Supervisor.terminate_child(supervisor, client_pid)
@@ -148,7 +148,7 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
 
   ## Examples
 
-      clients = WebSockexNova.Gun.ClientSupervisor.list_clients(supervisor_pid)
+      clients = WebsockexNova.Gun.ClientSupervisor.list_clients(supervisor_pid)
   """
   def list_clients(supervisor) do
     Supervisor.which_children(supervisor)
@@ -160,7 +160,7 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
   ## Examples
 
       children = [
-        WebSockexNova.Gun.ClientSupervisor.child_spec([])
+        WebsockexNova.Gun.ClientSupervisor.child_spec([])
       ]
   """
   def child_spec(opts) do
@@ -182,7 +182,7 @@ defmodule WebSockexNova.Gun.ClientSupervisor do
 
     %{
       id: make_ref(),
-      start: {WebSockexNova.Gun.DummyClient, :start_link, [client_opts, name]},
+      start: {WebsockexNova.Gun.DummyClient, :start_link, [client_opts, name]},
       restart: :transient,
       shutdown: 5000,
       type: :worker

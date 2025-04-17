@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.ConnectionState do
+defmodule WebsockexNova.Gun.ConnectionState do
   @moduledoc """
   State structure for ConnectionWrapper.
 
@@ -6,7 +6,7 @@ defmodule WebSockexNova.Gun.ConnectionState do
   providing better type safety and organization of state data.
   """
 
-  alias WebSockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Gun.ConnectionWrapper
 
   @typedoc "Connection state structure"
   @type t :: %__MODULE__{

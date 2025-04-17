@@ -1,4 +1,4 @@
-defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
+defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @moduledoc """
   Handles Gun message processing for the ConnectionWrapper.
 
@@ -9,7 +9,7 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   """
 
   require Logger
-  alias WebSockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.ConnectionState
 
   @doc """
   Notifies a callback process of an event.
@@ -26,7 +26,19 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec notify(pid() | nil, term()) :: :ok
   def notify(nil, _message), do: :ok
 
+  @doc """
+  Notifies the callback process of a WebSocket event.
+
+  ## Parameters
+
+  * `callback_pid` - PID of the callback process to notify, if any
+  * `message` - The message to send to the callback
+  """
   def notify(callback_pid, message) when is_pid(callback_pid) do
+    # Add logging to debug message handling
+    require Logger
+    Logger.debug("→ Sending message to callback: #{inspect(message)}")
+
     send(callback_pid, {:websockex_nova, message})
     :ok
   end
@@ -113,8 +125,8 @@ defmodule WebSockexNova.Gun.ConnectionWrapper.MessageHandlers do
       |> ConnectionState.record_error(reason)
       |> ConnectionState.remove_streams(killed_streams)
 
-    # Notify callback
-    notify(state.callback_pid, {:connection_down, reason})
+    # This message pattern must match what the test expects
+    notify(state.callback_pid, {:connection_down, protocol, reason})
 
     {:noreply, state}
   end
