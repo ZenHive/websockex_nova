@@ -1,6 +1,6 @@
-# WebSockexNova: Using Gun as Transport Layer
+# WebsockexNova: Using Gun as Transport Layer
 
-This document outlines a comprehensive implementation plan for WebSockexNova to use [:gun](https://github.com/ninenines/gun) as the underlying WebSocket transport layer while building our behavior-based architecture on top.
+This document outlines a comprehensive implementation plan for WebsockexNova to use [:gun](https://github.com/ninenines/gun) as the underlying WebSocket transport layer while building our behavior-based architecture on top.
 
 ## Why Use Gun?
 
@@ -12,7 +12,7 @@ This document outlines a comprehensive implementation plan for WebSockexNova to 
 4. **Automatic Reconnection**: Built-in reconnection capabilities
 5. **TLS Support**: Modern TLS options
 
-Using Gun allows us to focus on the application-specific aspects of WebSockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
+Using Gun allows us to focus on the application-specific aspects of WebsockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
 
 ## Project Overview
 
@@ -74,7 +74,7 @@ lib/
 
 ```elixir
 # mix.exs
-defmodule WebSockexNova.MixProject do
+defmodule WebsockexNova.MixProject do
   use Mix.Project
 
   # ...
@@ -110,7 +110,7 @@ Start by defining behavior interfaces with TDD:
 
 ### Phase 2: Core Infrastructure (2 weeks)
 
-#### 2.1 Implement WebSockexNova Main Module
+#### 2.1 Implement WebsockexNova Main Module
 
 
 # lib/websockex_nova.ex

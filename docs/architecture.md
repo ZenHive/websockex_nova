@@ -1,12 +1,12 @@
-# WebSockexNova Architecture Overview
+# WebsockexNova Architecture Overview
 
-> **Maintainer Note:** This document provides a high-level architectural overview of WebSockexNova. For implementation details, concrete code examples, and comprehensive guides, please refer to the dedicated documentation in the `docs/guides/` and `docs/examples/` directories.
+> **Maintainer Note:** This document provides a high-level architectural overview of WebsockexNova. For implementation details, concrete code examples, and comprehensive guides, please refer to the dedicated documentation in the `docs/guides/` and `docs/examples/` directories.
 
-> **Note:** This document provides a high-level architectural overview of WebSockexNova. For implementation details and comprehensive examples, please refer to the API documentation and guides in the `docs/guides/` directory.
+> **Note:** This document provides a high-level architectural overview of WebsockexNova. For implementation details and comprehensive examples, please refer to the API documentation and guides in the `docs/guides/` directory.
 
 ## Transport Layer: Gun Integration
 
-WebSockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying WebSocket transport layer. Gun is a mature HTTP/WebSocket client for Erlang/OTP maintained by the Cowboy team, offering:
+WebsockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying WebSocket transport layer. Gun is a mature HTTP/WebSocket client for Erlang/OTP maintained by the Cowboy team, offering:
 
 1. **Battle-tested implementation**: Robust WebSocket protocol handling
 2. **Connection Management**: Built-in connection pooling and management
@@ -15,7 +15,7 @@ WebSockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying Web
 
 ### Gun Adapter
 
-WebSockexNova wraps Gun with a thin adapter layer that translates between the Gun API and WebSockexNova's behavior interfaces.
+WebsockexNova wraps Gun with a thin adapter layer that translates between the Gun API and WebsockexNova's behavior interfaces.
 
 ## Core Design Principles
 
@@ -43,7 +43,7 @@ WebSockexNova wraps Gun with a thin adapter layer that translates between the Gu
 
 #### Platform Integrations
 
-WebSockexNova provides structured organization for platform-specific adapters. Each platform integration follows a consistent pattern with adapter, client, message handling, and subscription management modules.
+WebsockexNova provides structured organization for platform-specific adapters. Each platform integration follows a consistent pattern with adapter, client, message handling, and subscription management modules.
 
 For detailed platform integration examples and directory structures, see `docs/examples/platform_integration.md`.
 
@@ -53,7 +53,7 @@ Protocol integrations follow similar organization patterns but focus on protocol
 
 For detailed protocol integration examples and directory structures, see `docs/examples/protocol_integration.md`.
 
-## WebSockexNova Architecture
+## WebsockexNova Architecture
 
 ### 1. High-Level Component Diagram
 
@@ -94,7 +94,7 @@ For detailed protocol integration examples and directory structures, see `docs/e
 
 ### 2. Core Behaviors and Modules Overview
 
-WebSockexNova defines a set of behaviors that establish contracts for different aspects of WebSocket communication. Each behavior serves a specific purpose and can be customized based on application requirements.
+WebsockexNova defines a set of behaviors that establish contracts for different aspects of WebSocket communication. Each behavior serves a specific purpose and can be customized based on application requirements.
 
 #### 2.1 ConnectionHandler Behavior
 
@@ -203,7 +203,7 @@ As the library evolves, new behaviors and callbacks will be added judiciously:
 
 ## Telemetry and Observability
 
-WebSockexNova implements standardized telemetry events for monitoring performance, reliability, and behavior.
+WebsockexNova implements standardized telemetry events for monitoring performance, reliability, and behavior.
 
 ### Core Telemetry Events
 
@@ -227,7 +227,7 @@ Each implementation profile includes appropriate telemetry settings:
 
 ## Clustering Support
 
-For applications requiring high availability and geo-distribution, WebSockexNova provides clustering capabilities.
+For applications requiring high availability and geo-distribution, WebsockexNova provides clustering capabilities.
 
 ### Key Clustering Features
 
@@ -241,7 +241,7 @@ For applications requiring high availability and geo-distribution, WebSockexNova
 
 ## Document Organization
 
-To maintain clarity while providing complete information, WebSockexNova documentation is organized into several components:
+To maintain clarity while providing complete information, WebsockexNova documentation is organized into several components:
 
 1. **Architecture Overview** (this document): High-level design and concepts
 2. **API Documentation** (`docs/api/`): Complete behavior specifications
@@ -257,7 +257,7 @@ To maintain clarity while providing complete information, WebSockexNova document
 
 ## Implementation Profiles
 
-WebSockexNova is designed to support different application profiles with varying requirements for performance, reliability, and complexity.
+WebsockexNova is designed to support different application profiles with varying requirements for performance, reliability, and complexity.
 
 ### 1. Financial Platform Profile
 
@@ -418,7 +418,7 @@ Applications can define custom profiles by overriding specific behaviors:
 
 ```elixir
 defmodule MyApp.CustomConnectionHandler do
-  @behaviour WebSockexNova.ConnectionHandler
+  @behaviour WebsockexNova.ConnectionHandler
 
   # Custom implementation optimized for specific use case
 end
@@ -431,11 +431,11 @@ config :my_app, :websocket,
 
 ## Common Macros and Using Directives
 
-WebSockexNova provides macros for common WebSocket client patterns through `__using__` directives:
+WebsockexNova provides macros for common WebSocket client patterns through `__using__` directives:
 
 ```elixir
 defmodule MyApp.WebSocket.DeribitClient do
-  use WebSockexNova.Client,
+  use WebsockexNova.Client,
     strategy: :always_reconnect,  # Reconnection strategy
     platform: :deribit,           # Platform-specific adapters
     profile: :financial           # Configuration profile
@@ -454,14 +454,14 @@ Available strategies include:
 
 ### 1. Error Handling Strategies
 
-WebSockexNova provides multiple error handling approaches:
+WebsockexNova provides multiple error handling approaches:
 
 #### Financial-Grade Error Handling
 
 ```elixir
 # This example is simplified - implementation details are in separate guides
 defmodule MyApp.FinancialErrorHandler do
-  @behaviour WebSockexNova.ErrorHandler
+  @behaviour WebsockexNova.ErrorHandler
 
   def handle_error(error, context, state) do
     # Advanced error categorization
@@ -498,7 +498,7 @@ end
 ```elixir
 # This example is simplified - implementation details are in separate guides
 defmodule MyApp.LightweightErrorHandler do
-  @behaviour WebSockexNova.ErrorHandler
+  @behaviour WebsockexNova.ErrorHandler
 
   def handle_error(error, context, state) do
     # Simple logging
@@ -553,7 +553,7 @@ For applications with simpler requirements:
 
 ### Choosing the Right Profile
 
-When implementing WebSockexNova for your application:
+When implementing WebsockexNova for your application:
 
 1. **Assess Your Requirements**:
    - Is your application financial or time-critical? → Financial Profile
@@ -587,11 +587,11 @@ When implementing WebSockexNova for your application:
    - Monitor message throughput and latency
    - Alert on abnormal reconnection patterns
 
-> **Maintainer Note:** As WebSockexNova profiles and behaviors evolve, revisit these best practice recommendations to ensure they remain aligned with the library's capabilities and recommended usage patterns.
+> **Maintainer Note:** As WebsockexNova profiles and behaviors evolve, revisit these best practice recommendations to ensure they remain aligned with the library's capabilities and recommended usage patterns.
 
 ## Conclusion
 
-WebSockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviors and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
+WebsockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviors and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
 
 The use of Gun as the transport layer ensures a reliable foundation, while the behavior interfaces enable custom implementations tailored to specific requirements.
 
@@ -599,11 +599,11 @@ For implementation details and examples, please refer to the additional document
 
 ## Advanced Capabilities
 
-WebSockexNova provides several advanced capabilities to support enterprise-grade WebSocket applications with sophisticated requirements:
+WebsockexNova provides several advanced capabilities to support enterprise-grade WebSocket applications with sophisticated requirements:
 
 ### 1. Test Harness & Mocks
 
-Testing WebSocket applications traditionally requires complex infrastructure or live connections. WebSockexNova provides comprehensive testing utilities:
+Testing WebSocket applications traditionally requires complex infrastructure or live connections. WebsockexNova provides comprehensive testing utilities:
 
 - **Mock WebSocket Server**: In-memory WebSocket server for testing client behavior
 - **Frame Sequence Simulator**: Pre-defined or programmatic frame sequences for testing
@@ -611,16 +611,16 @@ Testing WebSocket applications traditionally requires complex infrastructure or 
 - **Latency Simulation**: Test behavior under various network conditions
 
 ```elixir
-# Example test with WebSockexNova test harness
+# Example test with WebsockexNova test harness
 test "reconnects after disconnect" do
-  test_scenario = WebSockexNova.TestHarness.Scenario.new()
-    |> WebSockexNova.TestHarness.Scenario.connect_success()
-    |> WebSockexNova.TestHarness.Scenario.send_frame(:text, ~s({"type":"welcome"}))
-    |> WebSockexNova.TestHarness.Scenario.disconnect(code: 1000)
-    |> WebSockexNova.TestHarness.Scenario.expect_reconnect()
-    |> WebSockexNova.TestHarness.Scenario.connect_success()
+  test_scenario = WebsockexNova.TestHarness.Scenario.new()
+    |> WebsockexNova.TestHarness.Scenario.connect_success()
+    |> WebsockexNova.TestHarness.Scenario.send_frame(:text, ~s({"type":"welcome"}))
+    |> WebsockexNova.TestHarness.Scenario.disconnect(code: 1000)
+    |> WebsockexNova.TestHarness.Scenario.expect_reconnect()
+    |> WebsockexNova.TestHarness.Scenario.connect_success()
 
-  {:ok, _client} = WebSockexNova.TestHarness.start_supervised(
+  {:ok, _client} = WebsockexNova.TestHarness.start_supervised(
     MyApp.WebSocket.Client,
     scenario: test_scenario
   )
@@ -634,7 +634,7 @@ end
 
 ### 2. Backpressure & Flow Control
 
-WebSockexNova includes mechanisms for controlling message flow and handling high-volume streams without overwhelming consumers:
+WebsockexNova includes mechanisms for controlling message flow and handling high-volume streams without overwhelming consumers:
 
 - **BackpressureHandler Behavior**: Callbacks for controlling message flow
 - **Buffer Management**: Configurable message buffering with overflow strategies
@@ -656,7 +656,7 @@ config :websockex_nova,
 
 ### 3. Pluggable Codecs & Binary Protocols
 
-WebSockexNova supports multiple message encoding formats beyond JSON:
+WebsockexNova supports multiple message encoding formats beyond JSON:
 
 - **CodecHandler Behavior**: Pluggable encoding/decoding for various formats
 - **Binary Frame Support**: First-class support for binary WebSocket frames
@@ -667,8 +667,8 @@ WebSockexNova supports multiple message encoding formats beyond JSON:
 ```elixir
 # Example client with custom codec
 defmodule MyApp.ProtobufClient do
-  use WebSockexNova.Client,
-    codec: WebSockexNova.Codec.Protobuf,
+  use WebsockexNova.Client,
+    codec: WebsockexNova.Codec.Protobuf,
     codec_options: [
       descriptor_module: MyApp.Protos,
       default_message_type: MyApp.Protos.MarketData
@@ -680,7 +680,7 @@ end
 
 ### 4. Security & Secrets Management
 
-WebSockexNova provides robust security features:
+WebsockexNova provides robust security features:
 
 - **Credential Rotation**: Automatic API key rotation and refresh token handling
 - **Vault Integration**: Built-in integration with HashiCorp Vault and AWS Secrets Manager
@@ -691,7 +691,7 @@ WebSockexNova provides robust security features:
 # Example configuration with vault integration
 config :websockex_nova,
   secrets_manager: [
-    adapter: WebSockexNova.SecretsManager.Vault,
+    adapter: WebsockexNova.SecretsManager.Vault,
     auto_rotate: true,             # Automatically rotate credentials
     rotation_frequency: :daily,    # :hourly, :daily, :weekly
     vault_path: "secret/my-app/ws-credentials"
@@ -724,7 +724,7 @@ config :websockex_nova,
 
 ### 6. Distributed Tracing & OpenTelemetry
 
-WebSockexNova offers comprehensive observability:
+WebsockexNova offers comprehensive observability:
 
 - **OpenTelemetry Integration**: Native support for OpenTelemetry tracing
 - **Span Context**: Automatic propagation of trace context
@@ -749,7 +749,7 @@ config :websockex_nova,
 
 ### 7. Dynamic Configuration & Hot Reload
 
-WebSockexNova supports runtime configuration changes:
+WebsockexNova supports runtime configuration changes:
 
 - **ConfigProvider Behavior**: Interface for configuration sources
 - **Live Updates**: Change behavior parameters without restarts
@@ -758,7 +758,7 @@ WebSockexNova supports runtime configuration changes:
 
 ```elixir
 # Example of runtime configuration update
-WebSockexNova.configure(client,
+WebsockexNova.configure(client,
   reconnection: [max_attempts: 20],
   rate_limit: [requests_per_second: 50]
 )
@@ -768,7 +768,7 @@ WebSockexNova.configure(client,
 
 ### 8. Release & CI Recommendations
 
-To ensure code quality and simplify deployment, WebSockexNova provides:
+To ensure code quality and simplify deployment, WebsockexNova provides:
 
 - **GitHub Actions Workflows**: Ready-to-use CI workflows
 - **Quality Checks**: Credo, Dialyzer, and test coverage configs
