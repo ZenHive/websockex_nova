@@ -174,42 +174,36 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @spec handle_reconnection(ConnectionState.t()) ::
           {:ok, non_neg_integer(), ConnectionState.t()}
           | {:error, atom(), ConnectionState.t()}
-  def handle_reconnection(state) do
-    Logger.debug("Handling reconnection - current state: #{state.status}, last error: #{inspect(state.last_error)}")
+  def handle_reconnection(%ConnectionState{status: :error} = state) do
+    Logger.debug("Not reconnecting: already in error state")
+    {:error, :terminal_error, state}
+  end
 
-    cond do
-      # Don't reconnect if in error state
-      state.status == :error ->
-        Logger.debug("Not reconnecting: already in error state")
-        {:error, :terminal_error, state}
+  def handle_reconnection(%ConnectionState{last_error: last_error} = state) do
+    if not is_nil(last_error) and terminal_error?(last_error) do
+      Logger.debug("Not reconnecting: terminal error detected - #{inspect(last_error)}")
+      error_state = ConnectionState.update_status(state, :error)
+      {:error, :terminal_error, error_state}
+    else
+      handle_reconnection_attempts(state)
+    end
+  end
 
-      # Don't reconnect if the disconnect reason is terminal
-      terminal_error?(state.last_error) ->
-        Logger.debug("Not reconnecting: terminal error detected - #{inspect(state.last_error)}")
-        error_state = ConnectionState.update_status(state, :error)
-        {:error, :terminal_error, error_state}
+  defp handle_reconnection_attempts(state) do
+    if max_attempts_reached?(state) do
+      Logger.debug("Not reconnecting: max attempts reached (#{state.reconnect_attempts}/#{state.options.retry})")
+      error_state = ConnectionState.update_status(state, :error)
+      {:error, :max_attempts_reached, error_state}
+    else
+      reconnect_after = calculate_backoff_delay(state)
+      Logger.debug("Reconnecting in #{reconnect_after}ms, attempt #{state.reconnect_attempts + 1}")
 
-      # Don't reconnect if max attempts reached
-      max_attempts_reached?(state) ->
-        Logger.debug("Not reconnecting: max attempts reached (#{state.reconnect_attempts}/#{state.options.retry})")
+      updated_state =
+        state
+        |> ConnectionState.increment_reconnect_attempts()
+        |> ConnectionState.update_status(:reconnecting)
 
-        error_state = ConnectionState.update_status(state, :error)
-        {:error, :max_attempts_reached, error_state}
-
-      # Otherwise, reconnect
-      true ->
-        # Calculate backoff delay
-        reconnect_after = calculate_backoff_delay(state)
-
-        Logger.debug("Reconnecting in #{reconnect_after}ms, attempt #{state.reconnect_attempts + 1}")
-
-        # Increment reconnect attempts and set state to reconnecting
-        updated_state =
-          state
-          |> ConnectionState.increment_reconnect_attempts()
-          |> ConnectionState.update_status(:reconnecting)
-
-        {:ok, reconnect_after, updated_state}
+      {:ok, reconnect_after, updated_state}
     end
   end
 
@@ -238,16 +232,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
     case handle_reconnection(state) do
       {:ok, reconnect_after, reconnecting_state} ->
-        # Execute callback with the delay and attempt number
         callback.(reconnect_after, reconnecting_state.reconnect_attempts)
-
-        # Return the updated state
         reconnecting_state
 
       {:error, reason, error_state} ->
         Logger.debug("Not scheduling reconnection: #{inspect(reason)}")
-
-        # Return error state without executing callback
         error_state
     end
   end
@@ -296,33 +285,21 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   def start_connection(state) do
     Logger.debug("Starting connection to #{state.host}:#{state.port} from state: #{state.status}")
 
-    # First transition to connecting state
-    case transition_to(state, :connecting) do
-      {:ok, connecting_state} ->
-        # Then actually open the connection
-        case open_connection(connecting_state) do
-          {:ok, gun_pid, monitor_ref} ->
-            Logger.debug("Connection successfully established with Gun pid: #{inspect(gun_pid)}")
-            # Update the state with the new gun_pid and monitor reference
-            updated_state =
-              connecting_state
-              |> ConnectionState.update_gun_pid(gun_pid)
-              |> update_gun_monitor_ref(monitor_ref)
+    with {:ok, connecting_state} <- transition_to(state, :connecting),
+         {:ok, gun_pid, monitor_ref} <- open_connection(connecting_state) do
+      Logger.debug("Connection successfully established with Gun pid: #{inspect(gun_pid)}")
 
-            {:ok, updated_state}
+      updated_state =
+        connecting_state
+        |> ConnectionState.update_gun_pid(gun_pid)
+        |> update_gun_monitor_ref(monitor_ref)
 
-          {:error, reason} ->
-            Logger.error("Connection failed: #{inspect(reason)}")
-            # Transition to error state on failure
-            {:ok, error_state} =
-              transition_to(connecting_state, :error, %{reason: reason})
-
-            {:error, reason, error_state}
-        end
-
+      {:ok, updated_state}
+    else
       {:error, reason} ->
-        Logger.error("Failed to transition to connecting state: #{inspect(reason)}")
-        {:error, reason, state}
+        Logger.error("Connection failed: #{inspect(reason)}")
+        {:ok, error_state} = transition_to(state, :error, %{reason: reason})
+        {:error, reason, error_state}
     end
   end
 
@@ -402,77 +379,102 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   # Establishes a connection to the server
   defp open_connection(state) do
-    # Convert options from map to keyword list for gun
-    gun_opts =
+    gun_opts = build_gun_options(state)
+    Logger.info("Opening Gun connection to #{state.host}:#{state.port}")
+    host_charlist = String.to_charlist(state.host)
+
+    with {:ok, pid} <- gun_open(host_charlist, state.port, gun_opts),
+         {:ok, gun_monitor_ref} <- monitor_gun_process(pid),
+         {:ok, protocol} <- await_gun_up(pid, gun_monitor_ref),
+         :ok <- set_gun_owner(pid),
+         :ok <- verify_gun_owner(pid) do
+      send_gun_up_message(pid, protocol)
+      {:ok, pid, gun_monitor_ref}
+    else
+      {:error, reason} ->
+        Logger.error("Gun connection failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp build_gun_options(state) do
+    base_opts =
       %{}
       |> Map.put(:transport, state.options.transport)
       |> Map.put(:protocols, state.options.protocols)
       |> Map.put(:retry, state.options.retry)
 
-    gun_opts =
-      cond do
-        Enum.empty?(state.options.transport_opts) ->
-          gun_opts
+    cond do
+      Enum.empty?(state.options.transport_opts) ->
+        base_opts
 
-        state.options.transport == :tls ->
-          Map.put(gun_opts, :tls_opts, state.options.transport_opts)
+      state.options.transport == :tls ->
+        Map.put(base_opts, :tls_opts, state.options.transport_opts)
 
-        true ->
-          Map.put(gun_opts, :transport_opts, state.options.transport_opts)
-      end
+      true ->
+        Map.put(base_opts, :transport_opts, state.options.transport_opts)
+    end
+  end
 
-    Logger.info("Opening Gun connection to #{state.host}:#{state.port}")
-
-    # Try to open Gun connection
-    host_charlist = String.to_charlist(state.host)
-
-    case :gun.open(host_charlist, state.port, gun_opts) do
+  defp gun_open(host, port, opts) do
+    case :gun.open(host, port, opts) do
       {:ok, pid} ->
-        # Create a monitor for the gun process
-        gun_monitor_ref = Process.monitor(pid)
-        Logger.debug("Created monitor for Gun process: #{inspect(gun_monitor_ref)}")
-
-        # Use gun:await_up with the monitor reference to avoid blocking indefinitely
-        case :gun.await_up(pid, 5000, gun_monitor_ref) do
-          {:ok, protocol} ->
-            Logger.info("Gun connection established with protocol: #{protocol}")
-
-            # IMPORTANT: Explicitly set the current process (ConnectionWrapper GenServer)
-            # as the owner of the Gun connection to ensure proper message routing
-            case :gun.set_owner(pid, self()) do
-              :ok ->
-                Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
-
-                # Get owner info to verify it's set correctly
-                case :gun.info(pid) do
-                  %{owner: owner} when owner == self() ->
-                    Logger.debug("Gun connection owner is correctly set to: #{inspect(owner)}")
-
-                  # Use debug level for any other case
-                  _ ->
-                    Logger.debug("Gun connection owner info not available or not matching self()")
-                end
-
-                # Note: gun:await_up already consumed the gun_up message,
-                # so we'll manually trigger a gun_up message to maintain consistent behavior
-                send(self(), {:gun_up, pid, protocol})
-
-                {:ok, pid, gun_monitor_ref}
-
-                # Intentionally removed unreachable pattern match
-            end
-
-          {:error, reason} ->
-            Process.demonitor(gun_monitor_ref)
-            :gun.close(pid)
-            Logger.error("Gun connection failed to come up: #{inspect(reason)}")
-            {:error, reason}
-        end
+        {:ok, pid}
 
       {:error, reason} ->
         Logger.error("Gun open failed: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+
+  defp monitor_gun_process(pid) do
+    gun_monitor_ref = Process.monitor(pid)
+    Logger.debug("Created monitor for Gun process: #{inspect(gun_monitor_ref)}")
+    {:ok, gun_monitor_ref}
+  end
+
+  defp await_gun_up(pid, monitor_ref) do
+    case :gun.await_up(pid, 5000, monitor_ref) do
+      {:ok, protocol} ->
+        Logger.info("Gun connection established with protocol: #{protocol}")
+        {:ok, protocol}
+
+      {:error, reason} ->
+        Process.demonitor(monitor_ref)
+        :gun.close(pid)
+        Logger.error("Gun connection failed to come up: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  defp set_gun_owner(pid) do
+    case :gun.set_owner(pid, self()) do
+      :ok ->
+        Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
+        :ok
+
+        # dialyzer says this is unreachable
+        # other ->
+        #   Logger.debug("Failed to set Gun connection owner: #{inspect(other)}")
+        #   {:error, :set_owner_failed}
+    end
+  end
+
+  defp verify_gun_owner(pid) do
+    case :gun.info(pid) do
+      %{owner: owner} when owner == self() ->
+        Logger.debug("Gun connection owner is correctly set to: #{inspect(owner)}")
+        :ok
+
+      _ ->
+        Logger.debug("Gun connection owner info not available or not matching self()")
+        :ok
+    end
+  end
+
+  defp send_gun_up_message(pid, protocol) do
+    send(self(), {:gun_up, pid, protocol})
+    :ok
   end
 
   # Helper to update the gun monitor reference in the connection state
