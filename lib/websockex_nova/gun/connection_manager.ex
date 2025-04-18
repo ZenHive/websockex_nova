@@ -218,6 +218,45 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   end
 
   @doc """
+  Schedules a reconnection attempt and executes the provided callback.
+
+  This function centralizes the reconnection scheduling logic by:
+  1. Determining if reconnection should be attempted
+  2. Setting the appropriate state
+  3. Calculating the delay time
+  4. Executing the callback function with the delay and attempt number
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `callback` - Function to call with (delay, attempt_number) when reconnection should be attempted
+
+  ## Returns
+
+  * `updated_state` - The new connection state after scheduling (or not scheduling) reconnection
+  """
+  @spec schedule_reconnection(ConnectionState.t(), (non_neg_integer(), non_neg_integer() -> any())) ::
+          ConnectionState.t()
+  def schedule_reconnection(state, callback) when is_function(callback, 2) do
+    Logger.debug("Scheduling reconnection for state: #{state.status}")
+
+    case handle_reconnection(state) do
+      {:ok, reconnect_after, reconnecting_state} ->
+        # Execute callback with the delay and attempt number
+        callback.(reconnect_after, reconnecting_state.reconnect_attempts)
+
+        # Return the updated state
+        reconnecting_state
+
+      {:error, reason, error_state} ->
+        Logger.debug("Not scheduling reconnection: #{inspect(reason)}")
+
+        # Return error state without executing callback
+        error_state
+    end
+  end
+
+  @doc """
   Initiates a connection.
 
   ## Parameters

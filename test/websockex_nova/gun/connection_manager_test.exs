@@ -200,13 +200,91 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
       # First attempt
       {:ok, first_delay, state} = ConnectionManager.handle_reconnection(state)
 
+      # Should be around 100ms (base_backoff) with jitter
+      assert first_delay >= 100
+      assert first_delay <= 120
+
       # Set back to disconnected for second attempt
       {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
 
-      # Second attempt - should have longer delay
+      # Second attempt should have increased delay
       {:ok, second_delay, _state} = ConnectionManager.handle_reconnection(state)
 
-      assert second_delay > first_delay
+      # Should be around 200ms (2^1 * base_backoff) with jitter
+      assert second_delay >= 200
+      assert second_delay <= 240
+    end
+
+    test "handles reconnection scheduling" do
+      # Create a test process to receive messages
+      test_pid = self()
+
+      # Create a callback function that will be called when reconnect is scheduled
+      callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
+
+      # Create initial state
+      state =
+        ConnectionState.new("example.com", 80, %{
+          retry: 2,
+          backoff_type: :linear,
+          base_backoff: 100
+        })
+
+      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
+      {:ok, state} = ConnectionManager.transition_to(state, :connected)
+      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
+
+      # Test scheduling a reconnection
+      new_state = ConnectionManager.schedule_reconnection(state, callback)
+
+      # Verify the state is updated properly
+      assert new_state.status == :reconnecting
+      assert new_state.reconnect_attempts == 1
+
+      # Verify the callback was called with the right parameters
+      assert_receive {:reconnect_scheduled, delay, 1}
+      assert delay >= 100
+
+      # Test what happens when max attempts is reached
+      {:ok, state} = ConnectionManager.transition_to(new_state, :disconnected)
+
+      # This should be the last attempt (max_retries = 2)
+      new_state = ConnectionManager.schedule_reconnection(state, callback)
+      assert new_state.reconnect_attempts == 2
+      assert_receive {:reconnect_scheduled, _delay, 2}
+
+      # One more attempt should fail and go to error state
+      {:ok, state} = ConnectionManager.transition_to(new_state, :disconnected)
+
+      final_state = ConnectionManager.schedule_reconnection(state, callback)
+      assert final_state.status == :error
+      # No callback message should be sent
+      refute_receive {:reconnect_scheduled, _delay, _attempt}
+    end
+
+    test "does not schedule reconnection for terminal errors" do
+      # Create a test process to receive messages
+      test_pid = self()
+
+      # Create a callback function
+      callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
+
+      # Create initial state with a terminal error
+      state =
+        ConnectionState.new("example.com", 80, %{retry: 3})
+        |> ConnectionState.record_error(:econnrefused)
+
+      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
+      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
+
+      # Try to schedule reconnection with a terminal error
+      new_state = ConnectionManager.schedule_reconnection(state, callback)
+
+      # Should transition to error state
+      assert new_state.status == :error
+
+      # No callback should have been called
+      refute_receive {:reconnect_scheduled, _delay, _attempt}
     end
   end
 

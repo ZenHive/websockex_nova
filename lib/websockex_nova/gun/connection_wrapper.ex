@@ -459,7 +459,16 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
             disconnected_state
           end
 
-        new_state = handle_possible_reconnection(disconnected_state_with_cleanup, reason)
+        # Use schedule_reconnection instead of handle_possible_reconnection
+        reconnect_callback = fn delay, _attempt ->
+          Process.send_after(self(), {:reconnect, :timer}, delay)
+        end
+
+        new_state =
+          ConnectionManager.schedule_reconnection(
+            disconnected_state_with_cleanup,
+            reconnect_callback
+          )
 
         MessageHandlers.handle_connection_down(
           gun_pid,
@@ -472,7 +481,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
-        {:noreply, state}
+
+        ErrorHandler.handle_transition_error(
+          state.status,
+          :disconnected,
+          transition_reason,
+          state
+        )
     end
   end
 
@@ -522,32 +537,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:gun_info, info}, state) do
-    # This message is received when we become the new owner after a transfer
-    # Update our state with the information from the previous owner
-    updated_state =
-      state
-      |> ConnectionState.update_gun_pid(info.gun_pid)
-      |> ConnectionState.update_status(info.status)
-
-    Logger.info("Received Gun connection info after ownership transfer")
-
-    # If we don't already have a monitor, create one
-    updated_state_with_monitor =
-      if updated_state.gun_monitor_ref do
-        updated_state
-      else
-        monitor_ref = Process.monitor(info.gun_pid)
-        ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
-      end
-
-    # Update active streams if needed
-    final_state =
-      if map_size(info.active_streams) > 0 do
-        %{updated_state_with_monitor | active_streams: info.active_streams}
-      else
-        updated_state_with_monitor
-      end
-
+    # Use StateHelpers to handle the ownership transfer
+    final_state = WebsockexNova.Gun.Helpers.StateHelpers.handle_ownership_transfer(state, info)
     {:noreply, final_state}
   end
 
@@ -568,8 +559,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         # Try to transition to disconnected state first
         case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
           {:ok, disconnected_state} ->
-            # Handle possible reconnection if needed
-            new_state = handle_possible_reconnection(disconnected_state, reason)
+            # Schedule reconnection if needed
+            reconnect_callback = fn delay, _attempt ->
+              Process.send_after(self(), {:reconnect, :monitor}, delay)
+            end
+
+            new_state =
+              ConnectionManager.schedule_reconnection(disconnected_state, reconnect_callback)
 
             # Notify the callback about connection down if available
             if new_state.callback_pid do
@@ -665,22 +661,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     case ConnectionManager.start_connection(state) do
       {:ok, updated_state} -> {:ok, updated_state}
       {:error, reason, error_state} -> {:error, reason, error_state}
-    end
-  end
-
-  defp handle_possible_reconnection(state, _reason) do
-    case ConnectionManager.handle_reconnection(state) do
-      {:ok, reconnect_after, reconnecting_state} ->
-        Process.send_after(
-          self(),
-          {:reconnect, reconnecting_state.reconnect_attempts},
-          reconnect_after
-        )
-
-        reconnecting_state
-
-      {:error, _error_reason, error_state} ->
-        error_state
     end
   end
 

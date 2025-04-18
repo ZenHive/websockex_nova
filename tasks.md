@@ -346,16 +346,20 @@ Tasks follow this format:
    - Create consistent error pattern for all error cases
    - Add helpers for common error scenarios
 
-2. **Business Logic Migration** [HIGH]
+2. **Business Logic Migration** [HIGH] ✅
 
    - Identify and move reconnection logic to ConnectionManager
    - Extract state transition decisions from handle_info callbacks
    - Use ConnectionManager for all connection lifecycle decisions
 
-3. **State Management Improvements** [HIGH]
-   - Audit current state updates for consistency
-   - Ensure all state changes go through ConnectionState helpers
-   - Remove any direct map updates in ConnectionWrapper
+3. **State Management Improvements** [HIGH] ✅
+   - Audit current state updates for consistency ✅
+   - Ensure all state changes go through ConnectionState helpers ✅
+   - Remove any direct map updates in ConnectionWrapper ✅
+   - Added new update_active_streams/2 helper to ConnectionState
+   - Created handle_ownership_transfer/2 in StateHelpers
+   - Added comprehensive tests for new helpers
+   - Refactored ConnectionWrapper to use the new helpers
 
 **Sprint 2: Architecture Alignment (Days 4-6)**
 

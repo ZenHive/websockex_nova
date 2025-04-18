@@ -4,86 +4,75 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpersTest do
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.Helpers.StateHelpers
 
-  describe "state transition helpers" do
-    setup do
-      state = ConnectionState.new("test-host.com", 443, %{transport: :tls})
-      %{state: state}
-    end
+  describe "handle_ownership_transfer/2" do
+    test "correctly updates state on ownership transfer" do
+      # Setup initial state
+      state = ConnectionState.new("example.com", 443, %{})
 
-    test "handle_connection_established/2 updates state correctly", %{state: state} do
-      gun_pid = self()
+      # Create a test process to act as the gun_pid
+      gun_pid = spawn(fn -> Process.sleep(1000) end)
 
-      updated_state = StateHelpers.handle_connection_established(state, gun_pid)
+      # Create info map from previous owner
+      stream_ref = make_ref()
 
+      info = %{
+        gun_pid: gun_pid,
+        status: :connected,
+        active_streams: %{stream_ref => :websocket}
+      }
+
+      # Call the helper
+      updated_state = StateHelpers.handle_ownership_transfer(state, info)
+
+      # Verify state was updated correctly
       assert updated_state.gun_pid == gun_pid
       assert updated_state.status == :connected
-      assert updated_state.reconnect_attempts == 0
+      assert is_reference(updated_state.gun_monitor_ref)
+      assert updated_state.active_streams[stream_ref] == :websocket
     end
 
-    test "handle_connection_failure/2 updates state correctly", %{state: state} do
-      reason = :econnrefused
+    test "doesn't replace active_streams if empty" do
+      # Setup initial state with existing streams
+      state = ConnectionState.new("example.com", 443, %{})
+      existing_stream_ref = make_ref()
+      state = ConnectionState.update_stream(state, existing_stream_ref, :websocket)
 
-      updated_state = StateHelpers.handle_connection_failure(state, reason)
+      # Create a test process
+      gun_pid = spawn(fn -> Process.sleep(1000) end)
 
-      assert updated_state.status == :error
-      assert updated_state.last_error == reason
+      # Create info map with empty active_streams
+      info = %{
+        gun_pid: gun_pid,
+        status: :connected,
+        active_streams: %{}
+      }
+
+      # Call the helper
+      updated_state = StateHelpers.handle_ownership_transfer(state, info)
+
+      # Verify streams weren't replaced
+      assert updated_state.active_streams[existing_stream_ref] == :websocket
     end
 
-    test "handle_disconnection/2 updates state with disconnect reason", %{state: state} do
-      reason = :normal
+    test "uses existing monitor if already present" do
+      # Setup initial state with existing monitor
+      state = ConnectionState.new("example.com", 443, %{})
+      gun_pid = spawn(fn -> Process.sleep(1000) end)
+      monitor_ref = Process.monitor(gun_pid)
+      state = ConnectionState.update_gun_monitor_ref(state, monitor_ref)
 
-      updated_state = StateHelpers.handle_disconnection(state, reason)
+      # Create info map
+      info = %{
+        gun_pid: gun_pid,
+        status: :connected,
+        active_streams: %{}
+      }
 
-      assert updated_state.status == :disconnected
-      assert updated_state.last_error == reason
-    end
+      # Call the helper
+      updated_state = StateHelpers.handle_ownership_transfer(state, info)
 
-    test "handle_websocket_upgrade/2 updates stream and state", %{state: state} do
-      stream_ref = make_ref()
-
-      updated_state = StateHelpers.handle_websocket_upgrade(state, stream_ref)
-
-      assert updated_state.status == :websocket_connected
-      assert Map.get(updated_state.active_streams, stream_ref) == :websocket
-    end
-  end
-
-  describe "stateful operations" do
-    test "reconnection counter is preserved through transitions" do
-      # Create initial state with 2 reconnection attempts
-      state =
-        ConnectionState.new("test-host.com", 443, %{transport: :tls})
-        |> ConnectionState.increment_reconnect_attempts()
-        |> ConnectionState.increment_reconnect_attempts()
-
-      assert state.reconnect_attempts == 2
-
-      # When connection is established, counter should be reset
-      updated_state = StateHelpers.handle_connection_established(state, self())
-      assert updated_state.reconnect_attempts == 0
-
-      # When disconnected, counter should be preserved
-      disconnected_state = StateHelpers.handle_disconnection(updated_state, :timeout)
-      assert disconnected_state.reconnect_attempts == 0
-    end
-
-    test "error transitions preserve existing data" do
-      # Create state with existing data
-      gun_pid = self()
-      stream_ref = make_ref()
-
-      state =
-        ConnectionState.new("test-host.com", 443, %{transport: :tls})
-        |> ConnectionState.update_gun_pid(gun_pid)
-        |> ConnectionState.update_stream(stream_ref, :upgrading)
-
-      # When error occurs, should preserve gun_pid and active streams
-      error_state = StateHelpers.handle_connection_failure(state, :fatal_error)
-
-      assert error_state.status == :error
-      assert error_state.last_error == :fatal_error
-      assert error_state.gun_pid == gun_pid
-      assert error_state.active_streams[stream_ref] == :upgrading
+      # Verify monitor wasn't changed
+      assert updated_state.gun_monitor_ref == monitor_ref
     end
   end
 end

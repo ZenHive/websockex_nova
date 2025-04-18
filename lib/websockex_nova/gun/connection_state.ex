@@ -236,6 +236,23 @@ defmodule WebsockexNova.Gun.ConnectionState do
   end
 
   @doc """
+  Updates the entire active_streams map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `active_streams` - New active streams map to replace the existing one
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_active_streams(t(), %{reference() => atom()}) :: t()
+  def update_active_streams(state, active_streams) when is_map(active_streams) do
+    %{state | active_streams: active_streams}
+  end
+
+  @doc """
   Prepares state for cleanup before termination.
   Clears all active streams and references.
 

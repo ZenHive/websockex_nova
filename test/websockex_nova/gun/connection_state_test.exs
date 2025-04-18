@@ -95,5 +95,18 @@ defmodule WebsockexNova.Gun.ConnectionStateTest do
       updated_state = ConnectionState.reset_reconnect_attempts(state)
       assert updated_state.reconnect_attempts == 0
     end
+
+    test "update_active_streams/2 replaces the entire active_streams map", %{state: state} do
+      # Create a test stream reference and map
+      stream_ref = make_ref()
+      new_streams = %{stream_ref => :websocket}
+
+      # Update the map
+      updated_state = ConnectionState.update_active_streams(state, new_streams)
+
+      # Verify the update happened correctly
+      assert updated_state.active_streams == new_streams
+      assert updated_state.active_streams[stream_ref] == :websocket
+    end
   end
 end

@@ -167,6 +167,55 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
     new_state
   end
 
+  @doc """
+  Updates state when receiving connection ownership info from another process.
+
+  Performs standard updates for Gun connection ownership transfer:
+  - Updates Gun PID
+  - Updates connection status
+  - Creates a monitor if needed
+  - Updates active streams if provided
+  - Logs the ownership transfer
+
+  ## Parameters
+
+  * `state` - The current connection state
+  * `info` - Connection info map from previous owner
+
+  ## Returns
+
+  Updated connection state
+  """
+  @spec handle_ownership_transfer(ConnectionState.t(), map()) :: ConnectionState.t()
+  def handle_ownership_transfer(state, info) do
+    log_state_transition(
+      state,
+      info.status,
+      "Received Gun connection ownership from another process"
+    )
+
+    updated_state =
+      state
+      |> ConnectionState.update_gun_pid(info.gun_pid)
+      |> ConnectionState.update_status(info.status)
+
+    # If we don't already have a monitor, create one
+    updated_state_with_monitor =
+      if updated_state.gun_monitor_ref do
+        updated_state
+      else
+        monitor_ref = Process.monitor(info.gun_pid)
+        ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+      end
+
+    # Update active streams if needed
+    if map_size(info.active_streams) > 0 do
+      ConnectionState.update_active_streams(updated_state_with_monitor, info.active_streams)
+    else
+      updated_state_with_monitor
+    end
+  end
+
   # Private helper functions
 
   # Logs state transitions with standardized format and appropriate log level
