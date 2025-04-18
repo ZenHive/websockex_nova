@@ -182,7 +182,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       state
       |> ConnectionState.update_status(:disconnected)
       |> ConnectionState.record_error(reason)
-      |> ConnectionState.remove_streams(killed_streams)
+      |> clean_up_killed_streams(killed_streams)
 
     # This message pattern must match what the test expects
     Logger.debug(
@@ -210,6 +210,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
         {:stop, reason, updated_state}
     end
   end
+
+  # Helper function to clean up killed streams safely
+  defp clean_up_killed_streams(state, killed_streams) when is_list(killed_streams) do
+    ConnectionState.remove_streams(state, killed_streams)
+  end
+
+  defp clean_up_killed_streams(state, _), do: state
 
   #
   # WebSocket message handlers
