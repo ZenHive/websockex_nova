@@ -160,7 +160,22 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           | :close
           | {:close, non_neg_integer(), binary}
 
-  @typedoc "Options for connection wrapper"
+  @typedoc """
+  Options for connection wrapper
+
+  ## Possible error atoms returned by API functions:
+  - :not_connected — The connection is not established or Gun process is missing
+  - :stream_not_found — The provided stream reference does not exist or is closed
+  - :no_gun_pid — No Gun process is available for ownership transfer
+  - :invalid_target_process — The target process for ownership transfer is invalid or dead
+  - :gun_process_not_alive — The Gun process is no longer alive
+  - :invalid_gun_pid — The provided Gun PID is invalid or dead
+  - :http_error — HTTP upgrade or response error (see tuple for details)
+  - :invalid_stream_status — The stream is not in a valid state for the requested operation
+  - :terminal_error — A terminal error occurred, preventing reconnection
+  - :transition_error — State machine transition failed
+  - :reconnect_failed — Reconnection attempt failed
+  """
   @type options :: %{
           optional(:transport) => :tcp | :tls,
           optional(:transport_opts) => Keyword.t(),
@@ -447,6 +462,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:reply, {:ok, stream_ref}, updated_state}
     else
+      # Return error if not connected or Gun process missing
       {:reply, {:error, :not_connected}, state}
     end
   end
@@ -459,12 +475,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           {:reply, result, state}
 
         nil ->
+          # Return error if stream reference is not found
           ErrorHandler.handle_stream_error(stream_ref, :stream_not_found, state)
 
         status ->
+          # Return error if stream is not in a valid state for sending
           ErrorHandler.handle_stream_error(stream_ref, {:invalid_stream_status, status}, state)
       end
     else
+      # Return error if Gun process is missing (not connected)
       ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end
@@ -476,9 +495,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do
     case validate_transfer_ownership(state, new_owner_pid) do
       :ok ->
+        # Perform ownership transfer if validation passes
         perform_ownership_transfer(state, new_owner_pid)
 
       {:error, reason} ->
+        # Return error if validation fails (e.g., no Gun pid, invalid target process)
         {:reply, {:error, reason}, state}
     end
   end
@@ -486,9 +507,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_call({:receive_ownership, gun_pid}, _from, state) do
     case validate_gun_pid(gun_pid) do
       :ok ->
+        # Receive ownership and update state if Gun pid is valid
         receive_ownership_and_update_state(state, gun_pid)
 
       {:error, reason} ->
+        # Return error if Gun pid is invalid or dead
         {:reply, {:error, reason}, state}
     end
   end
@@ -499,6 +522,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       result = :gun.await(state.gun_pid, stream_ref, timeout, monitor_ref)
       handle_websocket_upgrade_result(result, stream_ref, state)
     else
+      # Return error if Gun process is missing (not connected)
       ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end

@@ -1,0 +1,1 @@
+[verbose: true, private: false, skip: false, router: nil, exit: :low, format: "txt", out: nil, threshold: :low, ignore: ["Traversal"], ignore_files: [], version: false]

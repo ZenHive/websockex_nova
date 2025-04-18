@@ -315,7 +315,9 @@ Tasks follow this format:
 - **Effort**: 0.5
 - **Dependencies**: T2.11
 - **Status**: TODO
-- **Code Review Rating** Rating: 4.5/5,
+- **Code Review Rating** Rating: 4.5/5
+  Why not a 5?
+  The only minor deductions are for some non-deterministic test outcomes (due to the realities of process death and async messaging), and the use of direct state mutation in tests. These are pragmatic choices, but with a bit more abstraction or deterministic error handling, it could be a perfect 5.
 
 ### T2.13
 

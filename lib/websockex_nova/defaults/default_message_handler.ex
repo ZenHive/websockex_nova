@@ -34,6 +34,11 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   @behaviour WebsockexNova.Behaviors.MessageHandler
 
+  @allowed_types Enum.map(~w(subscription ping pong error info data), &String.to_atom/1)
+  @allowed_methods Enum.map(~w(subscribe unsubscribe publish), &String.to_atom/1)
+  @allowed_actions Enum.map(~w(join leave update ping), &String.to_atom/1)
+  @allowed_statuses Enum.map(~w(subscribed unsubscribed), &String.to_atom/1)
+
   @impl true
   def handle_message(%{"type" => "error"} = message, state) do
     # Handle error messages
@@ -46,7 +51,11 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   def handle_message(%{"type" => "subscription"} = message, state) do
     # Track subscription status
     channel = Map.get(message, "channel")
-    status = message |> Map.get("status", "unknown") |> String.to_atom()
+
+    status =
+      message
+      |> Map.get("status", "unknown")
+      |> safe_to_atom(@allowed_statuses, :unknown)
 
     subscriptions = Map.get(state, :subscriptions, %{})
     subscriptions = Map.put(subscriptions, channel, status)
@@ -97,18 +106,15 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   @impl true
   def message_type(%{"type" => type}) when is_binary(type) do
-    # Extract from type field
-    String.to_atom(type)
+    safe_to_atom(type, @allowed_types, :unknown)
   end
 
   def message_type(%{"method" => method}) when is_binary(method) do
-    # Extract from method field if no type
-    String.to_atom(method)
+    safe_to_atom(method, @allowed_methods, :unknown)
   end
 
   def message_type(%{"action" => action}) when is_binary(action) do
-    # Extract from action field if no type or method
-    String.to_atom(action)
+    safe_to_atom(action, @allowed_actions, :unknown)
   end
 
   def message_type(message) when is_map(message) do
@@ -154,5 +160,16 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     {:ok, :text, encoded}
   rescue
     e -> {:error, {:encode_failed, e}}
+  end
+
+  defp safe_to_atom(string, allowed_atoms, fallback) when is_binary(string) do
+    atom =
+      try do
+        String.to_existing_atom(string)
+      rescue
+        ArgumentError -> nil
+      end
+
+    if atom in allowed_atoms, do: atom, else: fallback
   end
 end

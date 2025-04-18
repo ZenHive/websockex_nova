@@ -1,10 +1,9 @@
-@moduledoc """
-Integration and edge case tests for WebsockexNova.Gun.ConnectionWrapper.
-Covers connection lifecycle, frame handling, error handling, ownership transfer, and edge cases.
-Ensures robust error handling, consistent error returns, and correct state transitions.
-"""
-
 defmodule WebsockexNova.Gun.ConnectionWrapperTest do
+  @moduledoc """
+  Integration and edge case tests for WebsockexNova.Gun.ConnectionWrapper.
+  Covers connection lifecycle, frame handling, error handling, ownership transfer, and edge cases.
+  Ensures robust error handling, consistent error returns, and correct state transitions.
+  """
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
@@ -699,7 +698,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       MockWebSockServer.stop(server_pid)
     end
 
-    # This test ensures that sending after close returns a consistent error or exit, and documents all accepted outcomes.
+    # This test ensures that sending after close returns a consistent error or exit, and documents all
+    # accepted outcomes.
     test "send after close returns error" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
