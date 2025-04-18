@@ -5,6 +5,7 @@ This document outlines the prioritized tasks for implementing WebsockexNova with
 ## Format
 
 Tasks follow this format:
+
 - **ID**: Unique task identifier (e.g., T1.1)
 - **Name**: Short description
 - **Description**: Detailed explanation of the task
@@ -17,6 +18,7 @@ Tasks follow this format:
 ## Phase 1: Project Setup & Core Behaviors
 
 ### T1.1
+
 - **Name**: Add Gun dependency to mix.exs
 - **Description**: Add the Gun package as a dependency and configure it
 - **Acceptance Criteria**:
@@ -29,6 +31,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.2
+
 - **Name**: Define ConnectionHandler behavior test cases
 - **Description**: Create test cases for the ConnectionHandler behavior
 - **Acceptance Criteria**:
@@ -41,6 +44,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.3
+
 - **Name**: Define ConnectionHandler behavior
 - **Description**: Create behavior module that defines connection lifecycle callbacks
 - **Acceptance Criteria**:
@@ -53,6 +57,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.4
+
 - **Name**: Define MessageHandler behavior test cases
 - **Description**: Create test cases for the MessageHandler behavior
 - **Acceptance Criteria**:
@@ -64,6 +69,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.5
+
 - **Name**: Define MessageHandler behavior
 - **Description**: Create behavior module for message processing
 - **Acceptance Criteria**:
@@ -76,6 +82,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.6
+
 - **Name**: Define ErrorHandler behavior test cases
 - **Description**: Create test cases for error handling behavior
 - **Acceptance Criteria**:
@@ -87,6 +94,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.7
+
 - **Name**: Define ErrorHandler behavior
 - **Description**: Create behavior module for standardized error handling
 - **Acceptance Criteria**:
@@ -99,6 +107,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.8
+
 - **Name**: Create default behavior implementation tests
 - **Description**: Test the default implementations of all behaviors
 - **Acceptance Criteria**:
@@ -111,6 +120,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T1.9
+
 - **Name**: Implement default behavior implementations
 - **Description**: Create default modules that implement each behavior
 - **Acceptance Criteria**:
@@ -126,6 +136,7 @@ Tasks follow this format:
 ## Phase 2: Gun Integration
 
 ### T2.1
+
 - **Name**: Create Gun client supervisor tests
 - **Description**: Test cases for Gun client supervisor
 - **Acceptance Criteria**:
@@ -138,6 +149,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.2
+
 - **Name**: Create Gun client supervisor
 - **Description**: Implement supervisor for Gun client processes
 - **Acceptance Criteria**:
@@ -151,6 +163,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.3
+
 - **Name**: Create Gun connection wrapper tests
 - **Description**: Test cases for the Gun connection wrapper
 - **Acceptance Criteria**:
@@ -164,6 +177,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.4
+
 - **Name**: Implement basic Gun connection wrapper
 - **Description**: Create a module that wraps Gun's connection functionality
 - **Acceptance Criteria**:
@@ -177,6 +191,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.5
+
 - **Name**: Create WebSocket frame encoder/decoder tests
 - **Description**: Test cases for WebSocket frame handling
 - **Acceptance Criteria**:
@@ -190,6 +205,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.6
+
 - **Name**: Implement WebSocket frame encoding/decoding
 - **Description**: Create module for handling WebSocket frame formats
 - **Acceptance Criteria**:
@@ -203,6 +219,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.7
+
 - **Name**: Create connection state management tests
 - **Description**: Test cases for connection state management
 - **Acceptance Criteria**:
@@ -215,6 +232,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.8
+
 - **Name**: Implement connection state management
 - **Description**: Create module for managing WebSocket connection state
 - **Acceptance Criteria**:
@@ -228,6 +246,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.9
+
 - **Name**: Improve resource cleanup handling
 - **Description**: Ensure resources are properly released when connections close or errors occur
 - **Acceptance Criteria**:
@@ -241,6 +260,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.10
+
 - **Name**: Optimize frame handler initialization
 - **Description**: Improve the ETS table initialization pattern for frame handlers
 - **Acceptance Criteria**:
@@ -254,6 +274,7 @@ Tasks follow this format:
 - **Status**: DONE
 
 ### T2.11
+
 - **Name**: Create integration tests for connection wrapper
 - **Description**: Test actual Gun interaction (not just test mode) in controlled environment
 - **Acceptance Criteria**:
@@ -267,6 +288,7 @@ Tasks follow this format:
 - **Status**: IN_PROGRESS
 
 ### T2.12
+
 - **Name**: Improve edge case handling in connection wrapper
 - **Description**: Add robust handling for edge cases and unexpected states
 - **Acceptance Criteria**:
@@ -281,21 +303,23 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T2.13
-- ***Name***: Add robust Gun process ownership management
-- ***Description***: Ensure proper Gun ownership setup and message routing between processes
-- ***Acceptance Criteria***:
+
+- **Name**: Add robust Gun process ownership management
+- **Description**: Ensure proper Gun ownership setup and message routing between processes
+- **Acceptance Criteria**:
   - Tests for proper Gun message routing
   - Implementation of ownership management in ConnectionWrapper
   - Documentation of ownership patterns
   - Handling of ownership transfer edge cases
-- ***Priority***: P0
-- ***Effort***: 1
-- ***Dependencies***: T2.4
-- ***Status***: IN_PROGRESS
+- **Priority**: P0
+- **Effort**: 1
+- **Dependencies**: T2.4
+- **Status**: IN_PROGRESS
 
 ## Phase 3: Reconnection & Integration
 
 ### T3.1
+
 - **Name**: Create reconnection strategy tests
 - **Description**: Test cases for reconnection strategies
 - **Acceptance Criteria**:
@@ -309,6 +333,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T3.2
+
 - **Name**: Implement reconnection strategies
 - **Description**: Create modules for different reconnection approaches
 - **Acceptance Criteria**:
@@ -323,6 +348,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T3.3
+
 - **Name**: Create Gun-to-behavior bridge tests
 - **Description**: Test the integration between Gun and behaviors
 - **Acceptance Criteria**:
@@ -335,6 +361,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T3.4
+
 - **Name**: Implement Gun-to-behavior bridge
 - **Description**: Create module to connect Gun events to behavior callbacks
 - **Acceptance Criteria**:
@@ -350,6 +377,7 @@ Tasks follow this format:
 ## Phase 4: Enhanced Features
 
 ### T4.1
+
 - **Name**: Define SubscriptionHandler behavior tests
 - **Description**: Test cases for subscription management
 - **Acceptance Criteria**:
@@ -361,6 +389,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.2
+
 - **Name**: Define SubscriptionHandler behavior
 - **Description**: Create behavior for managing channel subscriptions
 - **Acceptance Criteria**:
@@ -374,6 +403,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.3
+
 - **Name**: Create subscription management tests
 - **Description**: Test implementation of subscription tracking
 - **Acceptance Criteria**:
@@ -386,6 +416,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.4
+
 - **Name**: Implement subscription management
 - **Description**: Create module for tracking and managing subscriptions
 - **Acceptance Criteria**:
@@ -399,6 +430,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.5
+
 - **Name**: Create telemetry integration tests
 - **Description**: Test cases for telemetry events
 - **Acceptance Criteria**:
@@ -411,6 +443,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.6
+
 - **Name**: Add telemetry integration
 - **Description**: Add standardized telemetry events throughout the library
 - **Acceptance Criteria**:
@@ -425,6 +458,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.7
+
 - **Name**: Define AuthHandler behavior tests
 - **Description**: Test cases for authentication handling
 - **Acceptance Criteria**:
@@ -436,6 +470,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.8
+
 - **Name**: Define AuthHandler behavior
 - **Description**: Create behavior for authentication flows
 - **Acceptance Criteria**:
@@ -449,6 +484,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.9
+
 - **Name**: Create authentication flow tests
 - **Description**: Test implementation of authentication
 - **Acceptance Criteria**:
@@ -461,6 +497,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.10
+
 - **Name**: Implement authentication flow
 - **Description**: Create module for handling authentication
 - **Acceptance Criteria**:
@@ -474,6 +511,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.11
+
 - **Name**: Create rate limiting tests
 - **Description**: Test cases for rate limiting functionality
 - **Acceptance Criteria**:
@@ -486,6 +524,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.12
+
 - **Name**: Implement rate limiting
 - **Description**: Create module for controlling request rates
 - **Acceptance Criteria**:
@@ -499,6 +538,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.13
+
 - **Name**: Define LoggingHandler behavior tests
 - **Description**: Test cases for standardized logging behavior
 - **Acceptance Criteria**:
@@ -511,6 +551,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.14
+
 - **Name**: Define LoggingHandler behavior
 - **Description**: Create behavior for standardized, configurable logging
 - **Acceptance Criteria**:
@@ -524,6 +565,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.15
+
 - **Name**: Implement DefaultLoggingHandler
 - **Description**: Create default implementation of LoggingHandler
 - **Acceptance Criteria**:
@@ -538,6 +580,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.16
+
 - **Name**: Define MetricsCollector behavior tests
 - **Description**: Test cases for metrics collection
 - **Acceptance Criteria**:
@@ -550,6 +593,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.17
+
 - **Name**: Define MetricsCollector behavior
 - **Description**: Create behavior for collecting operational metrics
 - **Acceptance Criteria**:
@@ -564,6 +608,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T4.18
+
 - **Name**: Implement DefaultMetricsCollector
 - **Description**: Create default implementation of MetricsCollector
 - **Acceptance Criteria**:
@@ -580,6 +625,7 @@ Tasks follow this format:
 ## Phase 5: Platform Integration
 
 ### T5.1
+
 - **Name**: Create platform adapter template tests
 - **Description**: Test cases for the platform adapter base module
 - **Acceptance Criteria**:
@@ -592,6 +638,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.2
+
 - **Name**: Create platform adapter template
 - **Description**: Base module for platform-specific adapters
 - **Acceptance Criteria**:
@@ -605,6 +652,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.3
+
 - **Name**: Create Deribit adapter tests
 - **Description**: Test cases for Deribit platform adapter
 - **Acceptance Criteria**:
@@ -618,6 +666,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.4
+
 - **Name**: Implement Deribit platform adapter
 - **Description**: Create adapter for the Deribit exchange
 - **Acceptance Criteria**:
@@ -632,6 +681,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.5
+
 - **Name**: Create platform adapter macro tests
 - **Description**: Test cases for platform adapter macros
 - **Acceptance Criteria**:
@@ -644,10 +694,11 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.6
+
 - **Name**: Create using macros for platform adapters
 - **Description**: Create macros to simplify adapter creation
 - **Acceptance Criteria**:
-  - __using__ macro for adapters
+  - **using** macro for adapters
   - Configuration options in macro
   - Generated code for common tasks
   - All tests passing
@@ -657,6 +708,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.7
+
 - **Name**: Create platform client template tests
 - **Description**: Test cases for platform-specific clients
 - **Acceptance Criteria**:
@@ -669,6 +721,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T5.8
+
 - **Name**: Create platform-specific client templates
 - **Description**: Templates for building platform-specific clients
 - **Acceptance Criteria**:
@@ -684,6 +737,7 @@ Tasks follow this format:
 ## Phase 6: Testing Infrastructure & Documentation
 
 ### T6.1
+
 - **Name**: Create module documentation tests
 - **Description**: Tests that verify documentation completeness
 - **Acceptance Criteria**:
@@ -696,6 +750,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T6.2
+
 - **Name**: Create API documentation
 - **Description**: Comprehensive documentation for public API
 - **Acceptance Criteria**:
@@ -710,6 +765,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T6.3
+
 - **Name**: Implement test coverage reporting
 - **Description**: Add tools for measuring test coverage
 - **Acceptance Criteria**:
@@ -722,6 +778,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T6.4
+
 - **Name**: Create example usage guides
 - **Description**: Create comprehensive guides with examples
 - **Acceptance Criteria**:
@@ -737,6 +794,7 @@ Tasks follow this format:
 ## Phase 7: Advanced Features
 
 ### T7.1
+
 - **Name**: Create CodecHandler behavior tests
 - **Description**: Test cases for codec handling
 - **Acceptance Criteria**:
@@ -749,6 +807,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T7.2
+
 - **Name**: Add binary protocol support (CodecHandler)
 - **Description**: Create pluggable codec system for different formats
 - **Acceptance Criteria**:
@@ -763,6 +822,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T7.3
+
 - **Name**: Create backpressure mechanism tests
 - **Description**: Test cases for flow control
 - **Acceptance Criteria**:
@@ -775,6 +835,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T7.4
+
 - **Name**: Implement backpressure mechanisms
 - **Description**: Create flow control for high-volume streams
 - **Acceptance Criteria**:
@@ -788,6 +849,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T7.5
+
 - **Name**: Create dynamic configuration tests
 - **Description**: Test cases for runtime configuration
 - **Acceptance Criteria**:
@@ -800,6 +862,7 @@ Tasks follow this format:
 - **Status**: TODO
 
 ### T7.6
+
 - **Name**: Add dynamic configuration support
 - **Description**: Create system for runtime configuration changes
 - **Acceptance Criteria**:
