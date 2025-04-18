@@ -45,7 +45,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           optional(:callback_pid) => pid(),
           optional(:ws_opts) => map(),
           optional(:backoff_type) => :linear | :exponential | :jittered,
-          optional(:base_backoff) => non_neg_integer()
+          optional(:base_backoff) => non_neg_integer(),
+          optional(:callback_handler) => module(),
+          optional(:message_handler) => module(),
+          optional(:error_handler) => module()
         }
 
   @default_options %{
@@ -254,6 +257,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def init({host, port, options, _supervisor}) do
     merged_options = Map.merge(@default_options, options)
     state = ConnectionState.new(host, port, merged_options)
+
+    # Set up behavior handlers if provided in options
+    state =
+      state
+      |> initialize_connection_handler(merged_options)
+      |> initialize_message_handler(merged_options)
+      |> initialize_error_handler(merged_options)
 
     case initiate_connection(state) do
       {:ok, updated_state} ->
@@ -485,8 +495,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
         %{gun_pid: gun_pid} = state
       ) do
+    # First transition to disconnected state
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
+        # Clean up killed streams
         disconnected_state_with_cleanup =
           if killed_streams && is_list(killed_streams) do
             ConnectionState.remove_streams(disconnected_state, killed_streams)
@@ -494,25 +506,40 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
             disconnected_state
           end
 
-        # Use schedule_reconnection instead of handle_possible_reconnection
-        reconnect_callback = fn delay, _attempt ->
-          Process.send_after(self(), {:reconnect, :timer}, delay)
+        # Pass to MessageHandlers to handle standard notifications and behavior callbacks
+        case MessageHandlers.handle_connection_down(
+               gun_pid,
+               protocol,
+               reason,
+               disconnected_state_with_cleanup,
+               killed_streams,
+               unprocessed_streams
+             ) do
+          # Standard response
+          {:noreply, new_state} ->
+            # Default behavior - schedule reconnection
+            reconnect_callback = fn delay, _attempt ->
+              Process.send_after(self(), {:reconnect, :timer}, delay)
+            end
+
+            final_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
+            {:noreply, final_state}
+
+          # Handler explicitly requested reconnection
+          {:noreply, {:reconnect, reconnect_state}} ->
+            reconnect_callback = fn delay, _attempt ->
+              Process.send_after(self(), {:reconnect, :timer}, delay)
+            end
+
+            final_state =
+              ConnectionManager.schedule_reconnection(reconnect_state, reconnect_callback)
+
+            {:noreply, final_state}
+
+          # Handler requested stop
+          {:stop, stop_reason, final_state} ->
+            {:stop, stop_reason, final_state}
         end
-
-        new_state =
-          ConnectionManager.schedule_reconnection(
-            disconnected_state_with_cleanup,
-            reconnect_callback
-          )
-
-        MessageHandlers.handle_connection_down(
-          gun_pid,
-          protocol,
-          reason,
-          new_state,
-          killed_streams,
-          unprocessed_streams
-        )
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
@@ -532,7 +559,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       ) do
     case ConnectionManager.transition_to(state, :websocket_connected) do
       {:ok, new_state} ->
-        MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
+        # Delegate to MessageHandlers which will call behavior callbacks
+        result = MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
+
+        # Handle any specific return values from the handler
+        case result do
+          {:noreply, updated_state} ->
+            {:noreply, updated_state}
+
+          # Other return values like stop
+          other ->
+            other
+        end
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
@@ -541,7 +579,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid} = state) do
-    MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
+    # Delegate to MessageHandlers which will call behavior callbacks
+    result = MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
+
+    # Handle any specific return values from the handler
+    case result do
+      {:noreply, updated_state} ->
+        {:noreply, updated_state}
+
+      # Other return values like stop
+      other ->
+        other
+    end
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid} = state) do
@@ -705,5 +754,53 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       {key, value} when is_atom(key) -> {to_string(key), to_string(value)}
       other -> other
     end)
+  end
+
+  # Private helper functions
+
+  defp initialize_connection_handler(state, options) do
+    case Map.get(options, :callback_handler) do
+      nil ->
+        state
+
+      handler_module when is_atom(handler_module) ->
+        # Filter options to pass to the handler, removing Gun-specific options
+        handler_options =
+          options
+          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+          |> Map.put(:connection_wrapper_pid, self())
+
+        ConnectionState.setup_connection_handler(state, handler_module, handler_options)
+    end
+  end
+
+  defp initialize_message_handler(state, options) do
+    case Map.get(options, :message_handler) do
+      nil ->
+        state
+
+      handler_module when is_atom(handler_module) ->
+        handler_options =
+          options
+          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+          |> Map.put(:connection_wrapper_pid, self())
+
+        ConnectionState.setup_message_handler(state, handler_module, handler_options)
+    end
+  end
+
+  defp initialize_error_handler(state, options) do
+    case Map.get(options, :error_handler) do
+      nil ->
+        state
+
+      handler_module when is_atom(handler_module) ->
+        handler_options =
+          options
+          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+          |> Map.put(:connection_wrapper_pid, self())
+
+        ConnectionState.setup_error_handler(state, handler_module, handler_options)
+    end
   end
 end

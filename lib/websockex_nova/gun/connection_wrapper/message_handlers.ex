@@ -10,6 +10,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
   require Logger
   alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Gun.Helpers.BehaviorHelpers
 
   @doc """
   Notifies a callback process of an event.
@@ -93,6 +94,44 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     Logger.debug("Sending connection_up notification with protocol: #{inspect(protocol)}")
     notify(state.callback_pid, {:connection_up, protocol})
 
+    # Call behavior callback for connection established
+    extra_info = %{protocol: protocol}
+
+    state =
+      case BehaviorHelpers.call_handle_connect(state, extra_info) do
+        {:ok, updated_state} ->
+          updated_state
+
+        {:reply, frame_type, data, updated_state} ->
+          # If a reply is requested, we'll need to find an active websocket stream
+          # to send the frame on. If none is available, we'll just log a warning.
+          if websocket_stream = find_websocket_stream(updated_state) do
+            :gun.ws_send(updated_state.gun_pid, websocket_stream, {frame_type, data})
+          else
+            Logger.warning("Cannot send frame: no active websocket stream available")
+          end
+
+          updated_state
+
+        {:close, code, reason, updated_state} ->
+          # Similarly, if a close is requested, we need a stream
+          if websocket_stream = find_websocket_stream(updated_state) do
+            :gun.ws_send(updated_state.gun_pid, websocket_stream, {:close, code, reason})
+          else
+            Logger.warning("Cannot send close frame: no active websocket stream available")
+          end
+
+          updated_state
+
+        {:stop, _reason, updated_state} ->
+          # We'll let the caller handle the stop action
+          updated_state
+
+        {:error, _reason} ->
+          # If there's an error, just keep the original state
+          state
+      end
+
     {:noreply, state}
   end
 
@@ -121,6 +160,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           [reference()] | nil
         ) ::
           {:noreply, ConnectionState.t()}
+          | {:noreply, {:reconnect, ConnectionState.t()}}
+          | {:stop, term(), ConnectionState.t()}
   def handle_connection_down(
         _gun_pid,
         protocol,
@@ -150,7 +191,24 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
     notify(state.callback_pid, {:connection_down, protocol, reason})
 
-    {:noreply, state}
+    # Call behavior callback for disconnection
+    result = BehaviorHelpers.call_handle_disconnect(state, reason)
+
+    # Handle the result of the callback
+    case result do
+      {:ok, updated_state} ->
+        # No reconnection needed
+        {:noreply, updated_state}
+
+      {:reconnect, updated_state} ->
+        # Delegate reconnection to the ConnectionManager through the main module
+        # We'll signal this by returning a special tuple
+        {:noreply, {:reconnect, updated_state}}
+
+      {:stop, reason, updated_state} ->
+        # Signal that we should stop
+        {:stop, reason, updated_state}
+    end
   end
 
   #
@@ -186,6 +244,41 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     Logger.debug("Sending websocket_upgrade notification: stream=#{inspect(stream_ref)}")
     notify(state.callback_pid, {:websocket_upgrade, stream_ref, headers})
 
+    # Call behavior callback for connect again, with updated info
+    protocol = extract_protocol_from_headers(headers)
+    path = Map.get(state.options, :path, "/")
+
+    extra_info = %{
+      protocol: protocol,
+      path: path,
+      stream_ref: stream_ref,
+      headers: headers
+    }
+
+    state =
+      case BehaviorHelpers.call_handle_connect(state, extra_info) do
+        {:ok, updated_state} ->
+          updated_state
+
+        {:reply, frame_type, data, updated_state} ->
+          # Send the frame on the newly established websocket stream
+          :gun.ws_send(updated_state.gun_pid, stream_ref, {frame_type, data})
+          updated_state
+
+        {:close, code, reason, updated_state} ->
+          # Send a close frame if requested
+          :gun.ws_send(updated_state.gun_pid, stream_ref, {:close, code, reason})
+          updated_state
+
+        {:stop, _reason, updated_state} ->
+          # Let the caller handle the stop
+          updated_state
+
+        {:error, _reason} ->
+          # If there's an error, just keep the state as is
+          state
+      end
+
     {:noreply, state}
   end
 
@@ -205,7 +298,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   """
   @spec handle_websocket_frame(pid(), reference(), tuple() | atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
-  def handle_websocket_frame(_gun_pid, stream_ref, frame, state) do
+  def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
     Logger.debug("Received WebSocket frame: #{inspect(frame)}")
 
     # Handle special case for close frames
@@ -226,14 +319,34 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           state
       end
 
-    # Notify callback
+    # Notify callback - this is required for tests to pass
     Logger.debug(
       "Sending websocket_frame notification: stream=#{inspect(stream_ref)}, frame=#{inspect(frame)}"
     )
 
     notify(state.callback_pid, {:websocket_frame, stream_ref, frame})
 
-    {:noreply, state}
+    # Extract frame data to pass to behavior callback
+    {frame_type, frame_data} = extract_frame_data(frame)
+
+    # Call behavior callback for frame received
+    result = BehaviorHelpers.call_handle_frame(state, frame_type, frame_data, stream_ref)
+
+    # Handle response from the callback
+    case result do
+      {:ok, updated_state} ->
+        {:noreply, updated_state}
+
+      {:reply, reply_type, reply_data, updated_state, stream_ref} ->
+        # Send reply frame
+        :gun.ws_send(gun_pid, stream_ref, {reply_type, reply_data})
+        {:noreply, updated_state}
+
+      {:close, code, reason, updated_state, stream_ref} ->
+        # Send close frame
+        :gun.ws_send(gun_pid, stream_ref, {:close, code, reason})
+        {:noreply, updated_state}
+    end
   end
 
   #
@@ -363,5 +476,34 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   defp clean_stream_on_error(state, stream_ref) do
     Logger.debug("Cleaning up stream after error: #{inspect(stream_ref)}")
     ConnectionState.remove_stream(state, stream_ref)
+  end
+
+  # Find the first active WebSocket stream in the state
+  defp find_websocket_stream(state) do
+    case Enum.find(state.active_streams, fn {_ref, status} -> status == :websocket end) do
+      nil -> nil
+      {stream_ref, _} -> stream_ref
+    end
+  end
+
+  # Extract protocol from headers
+  defp extract_protocol_from_headers(headers) do
+    case Enum.find(headers, fn {name, _} -> name == "sec-websocket-protocol" end) do
+      nil -> nil
+      {_, protocol} -> protocol
+    end
+  end
+
+  # Extract frame type and data from different frame formats
+  defp extract_frame_data(frame) do
+    case frame do
+      {:text, data} -> {:text, data}
+      {:binary, data} -> {:binary, data}
+      :ping -> {:ping, ""}
+      :pong -> {:pong, ""}
+      :close -> {:close, ""}
+      {:close, code, reason} -> {:close, "#{code}:#{reason}"}
+      other -> {:unknown, inspect(other)}
+    end
   end
 end

@@ -20,7 +20,14 @@ defmodule WebsockexNova.Gun.ConnectionState do
           last_error: term() | nil,
           active_streams: %{reference() => atom()},
           reconnect_attempts: non_neg_integer(),
-          handlers: map()
+          handlers: %{
+            optional(:connection_handler) => module(),
+            optional(:connection_handler_state) => term(),
+            optional(:message_handler) => module(),
+            optional(:message_handler_state) => term(),
+            optional(:error_handler) => module(),
+            optional(:error_handler_state) => term()
+          }
         }
 
   defstruct [
@@ -269,5 +276,175 @@ defmodule WebsockexNova.Gun.ConnectionState do
     state
     |> clear_all_streams()
     |> Map.put(:gun_pid, nil)
+  end
+
+  @doc """
+  Sets up the connection handler and initializes its state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_module` - The connection handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_connection_handler(t(), module(), map()) :: t()
+  def setup_connection_handler(state, handler_module, handler_options)
+      when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                connection_handler: handler_module,
+                connection_handler_state: handler_state
+              })
+        }
+
+      # If init returns an error, we'll still set the handler but with nil state
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                connection_handler: handler_module,
+                connection_handler_state: nil
+              })
+        }
+    end
+  end
+
+  @doc """
+  Updates the connection handler state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_state` - New handler state
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_connection_handler_state(t(), term()) :: t()
+  def update_connection_handler_state(state, handler_state) do
+    %{state | handlers: Map.put(state.handlers, :connection_handler_state, handler_state)}
+  end
+
+  @doc """
+  Sets up the message handler and initializes its state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_module` - The message handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_message_handler(t(), module(), map()) :: t()
+  def setup_message_handler(state, handler_module, handler_options)
+      when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                message_handler: handler_module,
+                message_handler_state: handler_state
+              })
+        }
+
+      # If init returns an error, we'll still set the handler but with nil state
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                message_handler: handler_module,
+                message_handler_state: nil
+              })
+        }
+    end
+  end
+
+  @doc """
+  Updates the message handler state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_state` - New handler state
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_message_handler_state(t(), term()) :: t()
+  def update_message_handler_state(state, handler_state) do
+    %{state | handlers: Map.put(state.handlers, :message_handler_state, handler_state)}
+  end
+
+  @doc """
+  Sets up the error handler and initializes its state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_module` - The error handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_error_handler(t(), module(), map()) :: t()
+  def setup_error_handler(state, handler_module, handler_options) when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                error_handler: handler_module,
+                error_handler_state: handler_state
+              })
+        }
+
+      # If init returns an error, we'll still set the handler but with nil state
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                error_handler: handler_module,
+                error_handler_state: nil
+              })
+        }
+    end
+  end
+
+  @doc """
+  Updates the error handler state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_state` - New handler state
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_error_handler_state(t(), term()) :: t()
+  def update_error_handler_state(state, handler_state) do
+    %{state | handlers: Map.put(state.handlers, :error_handler_state, handler_state)}
   end
 end
