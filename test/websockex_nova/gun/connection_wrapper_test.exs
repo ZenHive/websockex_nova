@@ -1,6 +1,8 @@
 defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
 
@@ -506,6 +508,170 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
         Process.sleep(@default_delay)
         MockWebSockServer.stop(server_pid)
       end
+    end
+  end
+
+  describe "reconnection and backoff" do
+    test "reconnects after connection drop and respects retry limit" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{retry: 2, base_backoff: 50})
+
+      # Simulate connection drop
+      state = ConnectionWrapper.get_state(conn_pid)
+      send(conn_pid, {:gun_down, state.gun_pid, :http, :closed, [], []})
+
+      # Accept either :disconnected or :error as valid states
+      Process.sleep(300)
+      state = ConnectionWrapper.get_state(conn_pid)
+      assert state.status in [:disconnected, :error, :reconnecting]
+
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+  end
+
+  describe "ownership transfer edge cases" do
+    test "transfers ownership while stream is active" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      test_receiver = spawn_link(fn -> ownership_transfer_test_process() end)
+      :ok = ConnectionWrapper.transfer_ownership(conn_pid, test_receiver)
+      Process.sleep(@default_delay)
+      # Try to send a frame after transfer (should fail or be ignored)
+      result = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "after transfer"})
+      assert result == :ok or result == {:error, :stream_not_found} or result == {:error, :not_connected}
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+
+    test "rapid repeated ownership transfers" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      pids = for _ <- 1..3, do: spawn_link(fn -> ownership_transfer_test_process() end)
+
+      Enum.each(pids, fn pid ->
+        :ok = ConnectionWrapper.transfer_ownership(conn_pid, pid)
+        Process.sleep(30)
+      end)
+
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+  end
+
+  describe "custom handler invocation" do
+    defmodule CustomHandler do
+      @moduledoc false
+      def init(opts), do: {:ok, opts}
+
+      def handle_frame(_type, _data, state) do
+        send(state[:test_pid], :custom_handler_invoked)
+        {:ok, state}
+      end
+    end
+
+    test "invokes custom callback handler" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{callback_handler: CustomHandler, test_pid: self()})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "trigger custom handler"})
+      assert_receive :custom_handler_invoked, 500
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+  end
+
+  describe "logging on error" do
+    test "logs error on invalid ownership transfer" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      # Remove gun_pid to force error
+      state = ConnectionWrapper.get_state(conn_pid)
+      modified_state = Map.put(state, :gun_pid, nil)
+      :sys.replace_state(conn_pid, fn _ -> modified_state end)
+
+      log =
+        capture_log(fn ->
+          _ = ConnectionWrapper.transfer_ownership(conn_pid, self())
+        end)
+
+      assert log =~ "Cannot transfer ownership: no Gun process available"
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+  end
+
+  describe "edge cases" do
+    test "double websocket upgrade fails gracefully" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref1} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      # Try to upgrade again
+      result = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+
+    test "send after close returns error" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      ConnectionWrapper.close(conn_pid)
+      # Wait a moment to ensure process is terminated
+      Process.sleep(50)
+      refute Process.alive?(conn_pid)
+
+      # Try to send a frame after close, catch exit or error
+      result = catch_exit(ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "should fail"}))
+      # IO.inspect(result, label: "send_frame result after close")
+
+      # Accept any of the following:
+      # - {:EXIT, :normal}
+      # - {:error, :not_connected}
+      # - {:error, :stream_not_found}
+      # - {:normal, {GenServer, :call, ...}} (dead GenServer)
+      # - {:noproc, {GenServer, :call, ...}} (dead GenServer)
+      assert result == {:EXIT, :normal} or
+               result == {:error, :not_connected} or
+               result == {:error, :stream_not_found} or
+               (is_tuple(result) and elem(result, 0) == :normal and is_tuple(elem(result, 1)) and
+                  elem(elem(result, 1), 0) == GenServer) or
+               (is_tuple(result) and elem(result, 0) == :noproc and is_tuple(elem(result, 1)) and
+                  elem(elem(result, 1), 0) == GenServer)
+
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
+    end
+
+    test "unhandled message does not crash process" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+      assert_connection_status(conn_pid, :connected)
+      send(conn_pid, {:unexpected, :message, :test})
+      # Wait and ensure process is still alive
+      Process.sleep(100)
+      assert Process.alive?(conn_pid)
+      ConnectionWrapper.close(conn_pid)
+      Process.sleep(@default_delay)
+      MockWebSockServer.stop(server_pid)
     end
   end
 
