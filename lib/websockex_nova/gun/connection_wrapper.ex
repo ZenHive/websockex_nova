@@ -414,22 +414,29 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def init({host, port, options, _supervisor}) do
-    merged_options = Map.merge(@default_options, options)
-    state = ConnectionState.new(host, port, merged_options)
+    case WebsockexNova.Gun.ConnectionOptions.parse_and_validate(options) do
+      {:ok, validated_options} ->
+        state = ConnectionState.new(host, port, validated_options)
 
-    # Set up behavior handlers if provided in options
-    state =
-      state
-      |> initialize_connection_handler(merged_options)
-      |> initialize_message_handler(merged_options)
-      |> initialize_error_handler(merged_options)
+        # Set up behavior handlers if provided in options
+        state =
+          state
+          |> initialize_connection_handler(validated_options)
+          |> initialize_message_handler(validated_options)
+          |> initialize_error_handler(validated_options)
 
-    case initiate_connection(state) do
-      {:ok, updated_state} ->
-        {:ok, updated_state}
+        case initiate_connection(state) do
+          {:ok, updated_state} ->
+            {:ok, updated_state}
 
-      {:error, reason, error_state} ->
-        Logger.error("Failed to open connection: #{inspect(reason)}")
+          {:error, reason, error_state} ->
+            Logger.error("Failed to open connection: #{inspect(reason)}")
+            {:ok, error_state}
+        end
+
+      {:error, msg} ->
+        Logger.error("Invalid connection options: #{msg}")
+        error_state = host |> ConnectionState.new(port, %{}) |> ConnectionState.update_status(:error)
         {:ok, error_state}
     end
   end

@@ -2,12 +2,39 @@ defmodule WebsockexNova.Gun.ConnectionOptions do
   @moduledoc """
   Centralized parsing and validation for Gun connection options.
 
+  ## Defaults and Security
+
+  - The default transport is `:tls` (HTTPS/WSS) for secure connections.
+  - For most production APIs and public WebSocket endpoints, this is required.
+  - If you are connecting to a local or non-TLS endpoint (e.g., localhost:80), you must override:
+
+      %{transport: :tcp, port: 80}
+
+  - For self-signed certificates in development, you can use:
+
+      %{transport: :tls, transport_opts: [verify: :verify_none]}
+
+    **Never use `verify: :verify_none` in production!**
+
+  ## Example Usage
+
+      # Production (default)
+      {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("api.example.com", 443)
+
+      # Local development (plain HTTP)
+      {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("localhost", 80, %{transport: :tcp})
+
+      # Local development (self-signed HTTPS)
+      {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("localhost", 443, %{transport_opts: [verify: :verify_none]})
+
   This module merges user options with defaults, validates required fields,
   and normalizes option values for consistent downstream usage.
   """
 
+  require Logger
+
   @default_options %{
-    transport: :tcp,
+    transport: :tls,
     transport_opts: [],
     protocols: [:http],
     retry: 5,
@@ -19,6 +46,11 @@ defmodule WebsockexNova.Gun.ConnectionOptions do
   @spec parse_and_validate(map()) :: {:ok, map()} | {:error, String.t()}
   def parse_and_validate(opts) do
     opts = Map.merge(@default_options, opts)
+
+    # Warn if using TLS with port 80 (common misconfiguration)
+    if opts[:transport] == :tls and Map.get(opts, :port, 443) == 80 do
+      Logger.warning("You are connecting to port 80 with TLS. This is unusual—did you mean to use transport: :tcp?")
+    end
 
     with :ok <- validate_transport(opts),
          :ok <- validate_protocols(opts),

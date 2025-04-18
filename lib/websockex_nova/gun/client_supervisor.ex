@@ -107,7 +107,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
       raise ArgumentError, "Both :host and :port are required options"
     end
 
-    # Extract client options
+    # Parse and validate client options
     client_opts = %{
       host: opts[:host],
       port: opts[:port],
@@ -118,11 +118,14 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
       websocket_path: opts[:websocket_path] || "/"
     }
 
-    # Define a child spec for the Gun client
-    client_spec = generate_client_spec(client_opts, opts[:name])
+    case WebsockexNova.Gun.ConnectionOptions.parse_and_validate(client_opts) do
+      {:ok, validated_opts} ->
+        client_spec = generate_client_spec(validated_opts, opts[:name])
+        Supervisor.start_child(supervisor, client_spec)
 
-    # Start the child and return the result
-    Supervisor.start_child(supervisor, client_spec)
+      {:error, msg} ->
+        raise ArgumentError, "Invalid Gun client options: #{msg}"
+    end
   end
 
   @doc """
