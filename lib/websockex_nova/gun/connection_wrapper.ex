@@ -236,7 +236,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         if state.options.test_mode do
           stream_ref = make_ref()
 
-          state = ConnectionState.update_stream(state, stream_ref, :websocket)
+          # Always update the state with the stream reference in test mode
+          # Make sure we're using :upgrading status initially for streams
+          state = ConnectionState.update_stream(state, stream_ref, :upgrading)
 
           if state.options[:callback_pid] do
             fake_headers = [
@@ -261,14 +263,22 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           )
         end
 
-      state =
+      # Update state with stream reference (only for non-test mode as we already did it for test mode)
+      updated_state =
         if !state.options.test_mode do
           ConnectionState.update_stream(state, stream_ref, :upgrading)
         else
           state
         end
 
-      {:reply, {:ok, stream_ref}, state}
+      # For debugging
+      if state.options.test_mode do
+        Logger.debug(
+          "Stream #{inspect(stream_ref)} added to active_streams: #{inspect(updated_state.active_streams)}"
+        )
+      end
+
+      {:reply, {:ok, stream_ref}, updated_state}
     else
       {:reply, {:error, :not_connected}, state}
     end
@@ -354,20 +364,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
-    cb_pid = Map.get(state.options, :callback_pid)
-
-    if cb_pid && Process.alive?(cb_pid) do
-      send(cb_pid, {:websockex_nova, {:connection_up, protocol}})
-    end
-
-    case ConnectionManager.transition_to(state, :connected) do
-      {:ok, new_state} ->
-        {:noreply, new_state}
-
-      {:error, reason} ->
-        Logger.error("Failed to transition state: #{inspect(reason)}")
-        {:noreply, state}
-    end
+    # Use MessageHandlers to ensure consistent callback notification format
+    {:noreply, new_state} = MessageHandlers.handle_connection_up(gun_pid, protocol, state)
+    {:noreply, new_state}
   end
 
   def handle_info(

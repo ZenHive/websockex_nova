@@ -105,13 +105,7 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     Logger.debug("Opening connection to 127.0.0.1:#{port}")
 
-    # Add more debug info when opening the connection
-    opts = %{
-      callback_pid: cb,
-      # Enable test mode to use our monitor
-      test_mode: true,
-      protocols: [:http]
-    }
+    opts = %{callback_pid: cb}
 
     Logger.debug("Connection options: #{inspect(opts)}")
 
@@ -135,8 +129,14 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
              CallbackHandler.wait_for(
                cb,
                fn
-                 {:connection_up, _} -> true
-                 _ -> false
+                 # The CallbackHandler already unwraps {:websockex_nova, msg} and just stores msg
+                 {:connection_up, _} ->
+                   true
+
+                 # Additional pattern for debugging
+                 msg ->
+                   Logger.debug("Message didn't match: #{inspect(msg)}")
+                   false
                end,
                @timeout
              )
@@ -167,7 +167,6 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     {:ok, pid} =
       ConnectionWrapper.open("127.0.0.1", port, %{
         callback_pid: cb,
-        test_mode: true,
         protocols: [:http]
       })
 
@@ -238,7 +237,6 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     {:ok, pid} =
       ConnectionWrapper.open("127.0.0.1", port, %{
         callback_pid: cb,
-        test_mode: true,
         protocols: [:http]
       })
 

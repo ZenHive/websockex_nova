@@ -278,13 +278,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       ConnectionWrapper.set_status(wrapper_pid, :connected)
 
       # Add multiple streams
-      {:ok, _stream_ref1} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws1", [])
-      {:ok, _stream_ref2} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws2", [])
+      {:ok, stream_ref1} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws1", [])
+      {:ok, stream_ref2} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws2", [])
 
-      # Verify streams exist
+      # State check immediately after creating streams
       :timer.sleep(50)
-      state = ConnectionWrapper.get_state(wrapper_pid)
-      assert map_size(state.active_streams) == 2
+      state_after_creation = ConnectionWrapper.get_state(wrapper_pid)
+      assert map_size(state_after_creation.active_streams) == 2
+      assert Map.has_key?(state_after_creation.active_streams, stream_ref1)
+      assert Map.has_key?(state_after_creation.active_streams, stream_ref2)
 
       # Close connection
       ConnectionWrapper.close(wrapper_pid)
@@ -308,10 +310,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       # Add a stream
       {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, "/ws", [])
 
-      # Verify stream exists
+      # State check immediately after creating stream
       :timer.sleep(50)
-      state = ConnectionWrapper.get_state(wrapper_pid)
-      assert map_size(state.active_streams) == 1
+      state_after_creation = ConnectionWrapper.get_state(wrapper_pid)
+      assert map_size(state_after_creation.active_streams) == 1
+      assert Map.has_key?(state_after_creation.active_streams, stream_ref)
 
       # Simulate a gun error on the stream
       ConnectionWrapper.process_gun_message(

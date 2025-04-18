@@ -264,7 +264,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1
 - **Dependencies**: T2.8
-- **Status**: DONE
+- **Status**: IN_PROGRESS
 
 ### T2.12
 - **Name**: Improve edge case handling in connection wrapper
@@ -291,7 +291,7 @@ Tasks follow this format:
 - ***Priority***: P0
 - ***Effort***: 1
 - ***Dependencies***: T2.4
-- ***Status***: TODO
+- ***Status***: IN_PROGRESS
 
 ## Phase 3: Reconnection & Integration
 

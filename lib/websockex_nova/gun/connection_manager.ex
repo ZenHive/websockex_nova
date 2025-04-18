@@ -393,6 +393,16 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
     case :gun.open(host_charlist, state.port, gun_opts) do
       {:ok, pid} ->
+        # IMPORTANT: Explicitly set the current process (ConnectionWrapper GenServer)
+        # as the owner of the Gun connection to ensure proper message routing
+        case :gun.set_owner(pid, self()) do
+          :ok ->
+            Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
+
+          {:error, reason} ->
+            Logger.error("Failed to set Gun connection owner: #{inspect(reason)}")
+        end
+
         # Get owner info to verify it's set correctly
         case :gun.info(pid) do
           %{owner: owner} ->
@@ -402,17 +412,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
             Logger.debug("Could not retrieve Gun connection owner info")
         end
 
-        # Wait for connection to be established
-        case :gun.await_up(pid, 5000) do
-          {:ok, protocol} ->
-            Logger.info("Gun connection established with protocol: #{protocol}")
-            {:ok, pid}
-
-          {:error, reason} ->
-            Logger.error("Gun connection failed during await_up: #{inspect(reason)}")
-            :gun.close(pid)
-            {:error, reason}
-        end
+        # DON'T use gun.await_up here - it consumes the gun_up message!
+        # Instead, return the pid immediately and let the handle_info callback
+        # in ConnectionWrapper process the gun_up message naturally
+        Logger.info("Gun connection process started, waiting for gun_up message")
+        {:ok, pid}
 
       {:error, reason} ->
         Logger.error("Gun open failed: #{inspect(reason)}")

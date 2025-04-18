@@ -41,8 +41,25 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
       send(state.parent, {:websocket_message, self(), :text, message})
     end
 
-    # Return without reply - real response will be sent later by parent
-    {:ok, state}
+    # ECHO the text message back to the client automatically
+    {:push, {:text, message}, state}
+  end
+
+  @impl WebSock
+  # Additional handler to match the format actually being sent by WebSockAdapter
+  def handle_in({text_message, [opcode: :text]}, state) when is_binary(text_message) do
+    Logger.debug(
+      "MockWebSockHandler received TEXT frame in alternate format: #{inspect(text_message)}"
+    )
+
+    # Forward message to parent if configured
+    if state.parent do
+      Logger.debug("Forwarding text message to parent: #{inspect(state.parent)}")
+      send(state.parent, {:websocket_message, self(), :text, text_message})
+    end
+
+    # ECHO the text message back to the client automatically
+    {:push, {:text, text_message}, state}
   end
 
   @impl WebSock
@@ -57,8 +74,25 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
       send(state.parent, {:websocket_message, self(), :binary, message})
     end
 
-    # Return without reply - real response will be sent later by parent
-    {:ok, state}
+    # ECHO the binary message back to the client automatically
+    {:push, {:binary, message}, state}
+  end
+
+  @impl WebSock
+  # Additional handler for binary frames in the alternate format
+  def handle_in({binary_message, [opcode: :binary]}, state) when is_binary(binary_message) do
+    Logger.debug(
+      "MockWebSockHandler received BINARY frame in alternate format: #{byte_size(binary_message)} bytes"
+    )
+
+    # Forward message to parent if configured
+    if state.parent do
+      Logger.debug("Forwarding binary message to parent: #{inspect(state.parent)}")
+      send(state.parent, {:websocket_message, self(), :binary, binary_message})
+    end
+
+    # ECHO the binary message back to the client automatically
+    {:push, {:binary, binary_message}, state}
   end
 
   @impl WebSock
