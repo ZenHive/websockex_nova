@@ -52,7 +52,12 @@ defmodule WebsockexNova.MixProject do
       {:websock_adapter, "~> 0.5", only: :test},
       # Required for Plug.Cowboy.http/3
       {:plug_cowboy, "~> 2.6", only: :test},
-      {:styler, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
+      # For generating temporary files (certificates) in tests
+      {:temp, "~> 0.4", only: :test},
+      # For generating self-signed certificates in tests
+      {:x509, "~> 0.8", only: :test},
+      {:certifi, "~> 2.5"}
 
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}

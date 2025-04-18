@@ -5,10 +5,33 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   This module provides a WebSocket server using the WebSock behavior,
   which can be controlled by test code to simulate various scenarios
   like disconnects, delayed responses, and errors.
+
+  ## Protocol Support
+
+  The server supports multiple protocols and transports:
+
+  * `:http` - Standard HTTP/1.1 (ws://)
+  * `:http2` - HTTP/2 (h2c://)
+  * `:tls` - HTTP/1.1 over TLS (wss://)
+  * `:https2` - HTTP/2 over TLS (h2://)
+
+  ## Example
+
+  ```elixir
+  # Start a TLS (secure WebSocket) server
+  {:ok, server_pid, port} = MockWebSockServer.start_link(protocol: :tls)
+
+  # Use ConnectionWrapper to connect with proper options
+  {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{
+    transport: :tls,
+    transport_opts: [verify: :verify_none]
+  })
+  ```
   """
 
   use GenServer
 
+  alias WebsockexNova.Test.Support.CertificateHelper
   alias WebsockexNova.Test.Support.MockWebSockServer.Router
 
   require Logger
@@ -22,6 +45,13 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   * `:port` - (optional) Port number to use. Defaults to a random available port.
   * `:path` - (optional) WebSocket path. Defaults to "/ws".
+  * `:protocol` - (optional) Protocol to use. Options:
+      * `:http` - HTTP/1.1 (default)
+      * `:http2` - HTTP/2
+      * `:tls` - HTTP/1.1 over TLS
+      * `:https2` - HTTP/2 over TLS
+  * `:certfile` - (optional) Path to TLS certificate file. Auto-generated if not provided.
+  * `:keyfile` - (optional) Path to TLS key file. Auto-generated if not provided.
 
   ## Returns
 
@@ -63,6 +93,15 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   """
   def get_port(server_pid) do
     GenServer.call(server_pid, :get_port)
+  end
+
+  @doc """
+  Gets the protocol the server is using.
+
+  Returns one of: `:http`, `:http2`, `:tls`, or `:https2`
+  """
+  def get_protocol(server_pid) do
+    GenServer.call(server_pid, :get_protocol)
   end
 
   @doc """
@@ -188,8 +227,12 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     path = Keyword.get(opts, :path, "/ws")
     # 0 means use a random port
     port = Keyword.get(opts, :port, 0)
+    protocol = Keyword.get(opts, :protocol, :http)
 
-    Logger.debug("Initializing MockWebSockServer with path: #{path}, port: #{port}")
+    # Check for TLS certificates or generate if needed
+    {certfile, keyfile} = get_tls_files(protocol, opts)
+
+    Logger.debug("Initializing MockWebSockServer with path: #{path}, port: #{port}, protocol: #{protocol}")
 
     # Create a unique name for this server instance to avoid conflicts
     server_name = :"mock_websocket_server_#{System.unique_integer([:positive])}"
@@ -197,8 +240,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     # Set the parent process for the router to reference
     Process.put(:server_parent, self())
 
-    # Start the server
-    case Plug.Cowboy.http(Router, [], port: port, ref: server_name) do
+    # Start the server with appropriate protocol options
+    start_result = start_server(protocol, server_name, port, certfile, keyfile)
+
+    case start_result do
       {:ok, _pid} ->
         # Get the actual port the server is listening on
         actual_port = :ranch.get_port(server_name)
@@ -206,11 +251,14 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
         state = %{
           port: actual_port,
           path: path,
+          protocol: protocol,
           clients: %{},
           messages: [],
           scenario: :normal,
           response_delay: 0,
-          server_name: server_name
+          server_name: server_name,
+          certfile: certfile,
+          keyfile: keyfile
         }
 
         Logger.info("MockWebSockServer started on port #{actual_port}")
@@ -233,6 +281,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   @impl true
   def handle_call(:get_port, _from, state) do
     {:reply, {:ok, state.port}, state}
+  end
+
+  @impl true
+  def handle_call(:get_protocol, _from, state) do
+    {:reply, state.protocol, state}
   end
 
   @impl true
@@ -350,6 +403,71 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     Logger.debug("Message handled with scenario #{state.scenario}, action: #{scenario_response}")
     {:noreply, %{state | messages: messages}}
   end
+
+  @impl true
+  def handle_info({:delayed_echo, client_pid, type, message}, state) do
+    Logger.debug("Processing delayed echo for client: #{inspect(client_pid)}")
+    echo_message(client_pid, type, message, state)
+    {:noreply, state}
+  end
+
+  # Private functions
+
+  # Start server with appropriate protocol
+  defp start_server(:http, server_name, port, _certfile, _keyfile) do
+    Logger.debug("Starting HTTP server (ws://) on port #{port}")
+    Plug.Cowboy.http(Router, [], port: port, ref: server_name)
+  end
+
+  defp start_server(:http2, server_name, port, _certfile, _keyfile) do
+    Logger.debug("Starting HTTP/2 server (h2c://) on port #{port}")
+    # HTTP/2 cleartext (h2c) with fallback to HTTP/1.1
+    Plug.Cowboy.http(Router, [],
+      port: port,
+      ref: server_name,
+      protocol_options: [versions: [:h2, :"http/1.1"]]
+    )
+  end
+
+  defp start_server(:tls, server_name, port, certfile, keyfile) do
+    Logger.debug("Starting HTTPS server (wss://) on port #{port}")
+    # HTTPS with TLS
+    Plug.Cowboy.https(Router, [],
+      port: port,
+      ref: server_name,
+      keyfile: keyfile,
+      certfile: certfile
+    )
+  end
+
+  defp start_server(:https2, server_name, port, certfile, keyfile) do
+    Logger.debug("Starting HTTP/2 over TLS server (h2://) on port #{port}")
+    # HTTP/2 over TLS (h2) with fallback to HTTP/1.1
+    Plug.Cowboy.https(Router, [],
+      port: port,
+      ref: server_name,
+      keyfile: keyfile,
+      certfile: certfile,
+      protocol_options: [versions: [:h2, :"http/1.1"]]
+    )
+  end
+
+  # Get or generate TLS certificate and key files
+  defp get_tls_files(protocol, opts) when protocol in [:tls, :https2] do
+    certfile = Keyword.get(opts, :certfile)
+    keyfile = Keyword.get(opts, :keyfile)
+
+    if certfile && keyfile do
+      # Use provided files
+      {certfile, keyfile}
+    else
+      # Generate temporary self-signed certificate
+      Logger.debug("No TLS certificates provided, generating temporary self-signed certificates")
+      CertificateHelper.generate_self_signed_certificate()
+    end
+  end
+
+  defp get_tls_files(_protocol, _opts), do: {nil, nil}
 
   defp handle_scenario(:normal, client_pid, type, message, state) do
     Logger.debug("Scenario: normal - echoing message back immediately")

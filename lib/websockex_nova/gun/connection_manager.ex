@@ -409,12 +409,16 @@ defmodule WebsockexNova.Gun.ConnectionManager do
       |> Map.put(:protocols, state.options.protocols)
       |> Map.put(:retry, state.options.retry)
 
-    # Add transport_opts only if they're not empty
     gun_opts =
-      if Enum.empty?(state.options.transport_opts) do
-        gun_opts
-      else
-        Map.put(gun_opts, :transport_opts, state.options.transport_opts)
+      cond do
+        Enum.empty?(state.options.transport_opts) ->
+          gun_opts
+
+        state.options.transport == :tls ->
+          Map.put(gun_opts, :tls_opts, state.options.transport_opts)
+
+        true ->
+          Map.put(gun_opts, :transport_opts, state.options.transport_opts)
       end
 
     Logger.info("Opening Gun connection to #{state.host}:#{state.port}")
