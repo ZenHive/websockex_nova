@@ -605,14 +605,20 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
   end
 
-  def handle_info({:reconnect, _attempt}, state) do
+  def handle_info({:reconnect, attempt_source}, state) do
+    Logger.debug("Reconnection attempt initiated by: #{inspect(attempt_source)}")
+
     case initiate_connection(state) do
       {:ok, new_state} ->
         {:noreply, new_state}
 
       {:error, reason, error_state} ->
-        Logger.error("Failed to reconnect: #{inspect(reason)}")
-        ErrorHandler.handle_async_error(nil, {:reconnect_failed, reason}, error_state)
+        # Use standard error handler with reconnect-specific context
+        ErrorHandler.handle_async_error(
+          nil,
+          {:reconnect_failed, reason, attempt_source},
+          error_state
+        )
     end
   end
 
@@ -620,13 +626,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     # Use StateHelpers to handle the ownership transfer
     final_state = WebsockexNova.Gun.Helpers.StateHelpers.handle_ownership_transfer(state, info)
     {:noreply, final_state}
-  end
-
-  def handle_info({:debug_check_mailbox, pid}, state) do
-    info = Process.info(pid, [:message_queue_len, :messages])
-    Logger.info("Process #{inspect(pid)} info: #{inspect(info)}")
-
-    {:noreply, state}
   end
 
   @impl true
@@ -685,13 +684,29 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   # Private functions
 
-  defp handle_gun_message({:gun_up, pid, protocol}, state) do
-    # Properly handle return values from MessageHandlers
-    case MessageHandlers.handle_connection_up(pid, protocol, state) do
+  # Helper to standardize handler result processing
+  defp process_handler_result(result) do
+    case result do
       {:noreply, updated_state} -> {:noreply, updated_state}
       {:stop, reason, updated_state} -> {:stop, reason, updated_state}
+      {:noreply, {:reconnect, reconnect_state}} -> handle_reconnect_request(reconnect_state)
       other -> other
     end
+  end
+
+  # Helper to handle reconnection requests
+  defp handle_reconnect_request(state) do
+    reconnect_callback = fn delay, _attempt ->
+      Process.send_after(self(), {:reconnect, :timer}, delay)
+    end
+
+    final_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
+    {:noreply, final_state}
+  end
+
+  defp handle_gun_message({:gun_up, pid, protocol}, state) do
+    MessageHandlers.handle_connection_up(pid, protocol, state)
+    |> process_handler_result()
   end
 
   defp handle_gun_message(
@@ -702,43 +717,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
         # Delegate to MessageHandlers with state transition already done
-        # This matches the pattern in handle_info
-        result =
-          MessageHandlers.handle_connection_down(
-            pid,
-            protocol,
-            reason,
-            disconnected_state,
-            killed_streams,
-            unprocessed_streams
-          )
-
-        case result do
-          # Standard response
-          {:noreply, new_state} ->
-            # Default behavior - schedule reconnection
-            reconnect_callback = fn delay, _attempt ->
-              Process.send_after(self(), {:reconnect, :timer}, delay)
-            end
-
-            final_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
-            {:noreply, final_state}
-
-          # Handler explicitly requested reconnection
-          {:noreply, {:reconnect, reconnect_state}} ->
-            reconnect_callback = fn delay, _attempt ->
-              Process.send_after(self(), {:reconnect, :timer}, delay)
-            end
-
-            final_state =
-              ConnectionManager.schedule_reconnection(reconnect_state, reconnect_callback)
-
-            {:noreply, final_state}
-
-          # Handler requested stop
-          {:stop, stop_reason, final_state} ->
-            {:stop, stop_reason, final_state}
-        end
+        MessageHandlers.handle_connection_down(
+          pid,
+          protocol,
+          reason,
+          disconnected_state,
+          killed_streams,
+          unprocessed_streams
+        )
+        |> process_handler_result()
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
@@ -757,11 +744,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     case ConnectionManager.transition_to(state, :websocket_connected) do
       {:ok, new_state} ->
         # Now delegate to MessageHandlers
-        case MessageHandlers.handle_websocket_upgrade(pid, stream_ref, headers, new_state) do
-          {:noreply, updated_state} -> {:noreply, updated_state}
-          {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-          other -> other
-        end
+        MessageHandlers.handle_websocket_upgrade(pid, stream_ref, headers, new_state)
+        |> process_handler_result()
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
@@ -770,42 +754,29 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp handle_gun_message({:gun_ws, pid, stream_ref, frame}, state) do
-    # Properly handle return values
-    case MessageHandlers.handle_websocket_frame(pid, stream_ref, frame, state) do
-      {:noreply, updated_state} -> {:noreply, updated_state}
-      {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-      other -> other
-    end
+    MessageHandlers.handle_websocket_frame(pid, stream_ref, frame, state)
+    |> process_handler_result()
   end
 
   defp handle_gun_message({:gun_error, pid, stream_ref, reason}, state) do
     # Clean up the stream before delegating to MessageHandler
     state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
 
-    case MessageHandlers.handle_error(pid, stream_ref, reason, state_with_cleanup) do
-      {:noreply, updated_state} -> {:noreply, updated_state}
-      {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-      other -> other
-    end
+    MessageHandlers.handle_error(pid, stream_ref, reason, state_with_cleanup)
+    |> process_handler_result()
   end
 
   defp handle_gun_message(
          {:gun_response, pid, stream_ref, is_fin, status, headers},
          state
        ) do
-    case MessageHandlers.handle_http_response(pid, stream_ref, is_fin, status, headers, state) do
-      {:noreply, updated_state} -> {:noreply, updated_state}
-      {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-      other -> other
-    end
+    MessageHandlers.handle_http_response(pid, stream_ref, is_fin, status, headers, state)
+    |> process_handler_result()
   end
 
   defp handle_gun_message({:gun_data, pid, stream_ref, is_fin, data}, state) do
-    case MessageHandlers.handle_http_data(pid, stream_ref, is_fin, data, state) do
-      {:noreply, updated_state} -> {:noreply, updated_state}
-      {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-      other -> other
-    end
+    MessageHandlers.handle_http_data(pid, stream_ref, is_fin, data, state)
+    |> process_handler_result()
   end
 
   defp handle_gun_message(unknown_message, state) do

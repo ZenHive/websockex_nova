@@ -396,30 +396,22 @@ Tasks follow this format:
 
 **Sprint 3: Polish and Integration (Days 7-9)**
 
-7. **Telemetry Integration** [LOW]
-
-   - Add telemetry event points for key lifecycle events:
-     - Connection established/closed
-     - WebSocket upgrade
-     - Reconnection attempts
-     - Errors
-
-8. **Code Cleanup** [LOW]
+7. **Code Cleanup** [LOW]
 
    - Move test-only functionality to test support modules
    - Remove debug message handlers like `{:debug_check_mailbox, pid}`
    - Review and clean up commented code
 
-9. **Documentation Update** [LOW]
+8. **Documentation Update** [LOW]
 
    - Rewrite @moduledoc to describe thin adapter approach
    - Document the delegation pattern and ownership model
    - Add examples for common usage patterns
 
-10. **Testing** [CRITICAL]
-    - Ensure all existing tests pass with refactored code
-    - Add tests for new delegation patterns
-    - Add tests for error handling edge cases
+9. **Testing** [CRITICAL]
+   - Ensure all existing tests pass with refactored code
+   - Add tests for new delegation patterns
+   - Add tests for error handling edge cases
 
 ## Phase 3: Reconnection & Integration
 

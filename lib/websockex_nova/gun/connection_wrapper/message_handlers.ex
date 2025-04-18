@@ -39,7 +39,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   # * `message` - The message to send to the callback
   # """
   def notify(callback_pid, message) when is_pid(callback_pid) do
-    # Add logging to debug message handling
     Logger.debug("→ Sending message to callback #{inspect(callback_pid)}: #{inspect(message)}")
 
     if Process.alive?(callback_pid) do
@@ -73,15 +72,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           {:noreply, ConnectionState.t()}
   def handle_connection_up(gun_pid, protocol, state) do
     Logger.debug("Gun connection established with protocol: #{inspect(protocol)}")
-
-    # Log callback info for debugging
-    # if state.callback_pid do
-    #   Logger.debug(
-    #     "Callback PID exists: #{inspect(state.callback_pid)}, alive: #{Process.alive?(state.callback_pid)}"
-    #   )
-    # else
-    #   Logger.debug("No callback PID in state")
-    # end
 
     # Update state
     state =
@@ -149,7 +139,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
   ## Returns
 
-  `{:noreply, updated_state}`
+  * `{:noreply, updated_state}` - Standard response
+  * `{:noreply, {:reconnect, updated_state}}` - Request reconnection
+  * `{:stop, reason, updated_state}` - Request process termination
   """
   @spec handle_connection_down(
           pid(),
