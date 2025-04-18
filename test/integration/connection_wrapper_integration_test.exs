@@ -359,7 +359,8 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
   @tag :skip
   test "connects and exchanges frames over HTTP/2 (h2c)" do
-    # Skipped: WebSocket upgrades are not supported over HTTP/2 (h2c) with Cowboy/Plug.Cowboy and Gun in the current configuration.
+    # Skipped: WebSocket upgrades are not supported over HTTP/2 (h2c) with Cowboy/Plug.Cowboy and Gun
+    # in the current configuration.
     # See RFC 8441 for details. Gun and Cowboy do not support extended CONNECT for WebSocket over HTTP/2.
     # This test is left for documentation and future compatibility.
     alias WebsockexNova.Test.Support.MockWebSockServer
@@ -420,7 +421,8 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
   @tag :skip
   test "connects and exchanges frames over HTTP/2 with TLS (h2)" do
-    # Skipped: WebSocket upgrades are not supported over HTTP/2 with TLS (h2) with Cowboy/Plug.Cowboy and Gun in the current configuration.
+    # Skipped: WebSocket upgrades are not supported over HTTP/2 with TLS (h2) with Cowboy/Plug.Cowboy and Gun in the
+    # current configuration.
     # See RFC 8441 for details. Gun and Cowboy do not support extended CONNECT for WebSocket over HTTP/2.
     # This test is left for documentation and future compatibility.
     alias WebsockexNova.Test.Support.CertificateHelper

@@ -99,7 +99,15 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           | {:close, integer(), binary(), ConnectionState.t(), reference()}
   def call_handle_frame(%ConnectionState{} = state, frame_type, frame_data, stream_ref) do
     with {:ok, handler_module, handler_state} <- fetch_handler(state),
-         {:ok, result} <- call_handler_frame(handler_module, frame_type, frame_data, handler_state, state, stream_ref) do
+         {:ok, result} <-
+           call_handler_frame(
+             handler_module,
+             frame_type,
+             frame_data,
+             handler_state,
+             state,
+             stream_ref
+           ) do
       result
     else
       :no_handler ->

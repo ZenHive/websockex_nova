@@ -193,36 +193,41 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
   defp update_statistics(state, event) do
     update_in(state.trace_context, fn trace ->
       case {event.event_type, event.to_status} do
-        # Connection established
         {_, :connected} ->
-          trace
-          |> Map.update!(:connection_count, &(&1 + 1))
-          |> Map.put(:last_connected_at, event.timestamp)
+          increment_connection_count(trace, event.timestamp)
 
-        # Disconnection
         {_, :disconnected} ->
-          # Calculate uptime if we have a previous connected timestamp
-          trace =
-            if trace.last_connected_at do
-              # Calculate the time difference, ensuring at least 1ms of uptime
-              # This ensures tests pass when disconnection happens too quickly after connection
-              uptime = max(1, event.timestamp - trace.last_connected_at)
-              Map.update!(trace, :total_uptime_ms, &(&1 + uptime))
-            else
-              trace
-            end
+          update_disconnection(trace, event.timestamp)
 
-          Map.put(trace, :last_disconnected_at, event.timestamp)
-
-        # Reconnection attempt
         {_, :reconnecting} ->
-          Map.update!(trace, :reconnection_timestamps, &[event.timestamp | &1])
+          add_reconnection_timestamp(trace, event.timestamp)
 
-        # Other events
         _ ->
           trace
       end
     end)
+  end
+
+  defp increment_connection_count(trace, timestamp) do
+    trace
+    |> Map.update!(:connection_count, &(&1 + 1))
+    |> Map.put(:last_connected_at, timestamp)
+  end
+
+  defp update_disconnection(trace, timestamp) do
+    trace =
+      if trace.last_connected_at do
+        uptime = max(1, timestamp - trace.last_connected_at)
+        Map.update!(trace, :total_uptime_ms, &(&1 + uptime))
+      else
+        trace
+      end
+
+    Map.put(trace, :last_disconnected_at, timestamp)
+  end
+
+  defp add_reconnection_timestamp(trace, timestamp) do
+    Map.update!(trace, :reconnection_timestamps, &[timestamp | &1])
   end
 
   defp calculate_current_uptime(trace_context) do

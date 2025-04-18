@@ -204,8 +204,7 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   """
   @spec handle_ownership_transfer(ConnectionState.t(), map()) :: ConnectionState.t()
   def handle_ownership_transfer(state, info) do
-    # Validate that we have the minimum required information
-    if is_map(info) and is_pid(info.gun_pid) and is_atom(info.status) do
+    if valid_ownership_info?(info) do
       log_state_transition(
         state,
         info.status,
@@ -217,34 +216,39 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
         |> ConnectionState.update_gun_pid(info.gun_pid)
         |> ConnectionState.update_status(info.status)
 
-      # If we don't already have a monitor, create one
       updated_state_with_monitor =
-        if updated_state.gun_monitor_ref do
-          # If the gun_pid is different than what we had before, we should update the monitor
-          # But if state.gun_pid was already nil, we want to keep the existing monitor
-          if state.gun_pid != nil and updated_state.gun_pid != state.gun_pid do
-            Process.demonitor(updated_state.gun_monitor_ref, [:flush])
-            monitor_ref = Process.monitor(updated_state.gun_pid)
-            ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
-          else
-            # Keep existing monitor reference
-            updated_state
-          end
-        else
-          # No existing monitor, create a new one
-          monitor_ref = Process.monitor(updated_state.gun_pid)
-          ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
-        end
+        update_monitor_if_needed(state, updated_state)
 
-      # Update active streams if provided and not empty
-      if Map.has_key?(info, :active_streams) and map_size(info.active_streams) > 0 do
-        ConnectionState.update_active_streams(updated_state_with_monitor, info.active_streams)
-      else
-        updated_state_with_monitor
-      end
+      update_active_streams_if_needed(updated_state_with_monitor, info)
     else
       Logger.error("Invalid ownership transfer info: #{inspect(info)}")
-      # Return state unchanged if info is invalid
+      state
+    end
+  end
+
+  defp valid_ownership_info?(info) do
+    is_map(info) and Map.has_key?(info, :gun_pid) and Map.has_key?(info, :status)
+  end
+
+  defp update_monitor_if_needed(state, updated_state) do
+    if updated_state.gun_monitor_ref do
+      if state.gun_pid != nil and updated_state.gun_pid != state.gun_pid do
+        Process.demonitor(updated_state.gun_monitor_ref, [:flush])
+        monitor_ref = Process.monitor(updated_state.gun_pid)
+        ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+      else
+        updated_state
+      end
+    else
+      monitor_ref = Process.monitor(updated_state.gun_pid)
+      ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+    end
+  end
+
+  defp update_active_streams_if_needed(state, info) do
+    if Map.has_key?(info, :active_streams) and map_size(info.active_streams) > 0 do
+      ConnectionState.update_active_streams(state, info.active_streams)
+    else
       state
     end
   end
