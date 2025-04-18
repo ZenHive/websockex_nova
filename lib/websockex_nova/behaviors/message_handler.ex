@@ -2,10 +2,87 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   @moduledoc """
   Defines the behavior for handling WebSocket messages.
 
-  The MessageHandler behavior defines how a WebSocket client should process
-  incoming messages, validate them, determine their types, and encode outgoing
-  messages. Implementing modules can customize message parsing, validation,
-  and encoding based on platform-specific requirements.
+  The MessageHandler behavior is part of WebsockexNova's thin adapter architecture,
+  allowing client applications to customize message processing while maintaining a
+  clean separation from transport concerns.
+
+  ## Thin Adapter Pattern
+
+  As part of the thin adapter architecture:
+
+  1. This behavior focuses exclusively on message processing logic
+  2. The connection layer delegates message handling responsibilities to implementations
+  3. Your implementation can use domain-specific message types and validation rules
+  4. The adapter handles encoding/decoding between your domain types and the wire format
+
+  ## Delegation Flow
+
+  The message handling delegation flow works as follows:
+
+  1. Raw frames are received by the connection handler
+  2. Text/binary frames are passed to your `handle_message/2` callback
+  3. Your implementation processes the message according to your application's needs
+  4. If you need to send a response, the adapter handles the encoding back to wire format
+
+  ## Implementation Example
+
+  ```elixir
+  defmodule MyApp.ChatMessageHandler do
+    @behaviour WebsockexNova.Behaviors.MessageHandler
+
+    @impl true
+    def handle_message(%{"type" => "chat_message", "text" => text, "user" => user}, state) do
+      # Process a chat message
+      IO.puts("\#{user}: \#{text}")
+
+      # Send an acknowledgment
+      {:reply, {:ack, %{message_id: state.last_message_id}}, state}
+    end
+
+    @impl true
+    def handle_message(%{"type" => "presence_update", "user" => user, "status" => status}, state) do
+      # Process a presence update
+      new_state = update_in(state.users[user], fn _ -> status end)
+      {:ok, new_state}
+    end
+
+    @impl true
+    def validate_message(message) when is_map(message) and map_size(message) > 0 do
+      # Validate that message has a type field
+      case Map.has_key?(message, "type") do
+        true -> {:ok, message}
+        false -> {:error, :missing_type_field, message}
+      end
+    end
+
+    @impl true
+    def validate_message(message) do
+      {:error, :invalid_message_format, message}
+    end
+
+    @impl true
+    def message_type(%{"type" => type}) when is_binary(type) do
+      String.to_atom(type)
+    end
+
+    @impl true
+    def message_type(_message) do
+      :unknown
+    end
+
+    @impl true
+    def encode_message({:ack, %{message_id: id}}, _state) do
+      json = Jason.encode!(%{type: "ack", message_id: id})
+      {:ok, :text, json}
+    end
+
+    @impl true
+    def encode_message({:error, reason}, _state) do
+      json = Jason.encode!(%{type: "error", reason: reason})
+      {:ok, :text, json}
+    end
+  end
+  ```
 
   ## Callbacks
 

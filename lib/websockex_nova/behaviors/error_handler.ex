@@ -2,16 +2,117 @@ defmodule WebsockexNova.Behaviors.ErrorHandler do
   @moduledoc """
   Defines the behavior for handling WebSocket errors.
 
-  The ErrorHandler behavior defines how a WebSocket client should respond to
-  various types of errors, determine reconnection strategies, and handle
-  error logging. Implementing modules can customize error handling based on
-  error type, context, and state.
+  The ErrorHandler behavior is an essential part of WebsockexNova's thin adapter architecture,
+  separating error handling concerns from both application logic and transport implementation
+  details.
+
+  ## Thin Adapter Pattern
+
+  Within the thin adapter architecture:
+
+  1. This behavior focuses exclusively on error handling and recovery strategies
+  2. The connection wrapper delegates error handling decisions to implementations
+  3. Your implementation can define domain-specific retry policies and logging
+  4. The adapter handles the mechanical aspects of reconnection and cleanup
+
+  ## Delegation Pattern
+
+  The error handling delegation flow works as follows:
+
+  1. Transport or application errors are caught by the connection layer
+  2. The error is passed to your implementation for decision-making
+  3. Your implementation decides on the appropriate recovery strategy
+  4. The adapter executes the mechanical aspects of your decision
+
+  ## Implementation Example
+
+  ```elixir
+  defmodule MyApp.FinancialErrorHandler do
+    @behaviour WebsockexNova.Behaviors.ErrorHandler
+    require Logger
+
+    @impl true
+    def handle_error(:timeout, %{retry_count: retry_count, url: url}, state) do
+      # Special handling for timeout errors
+      if retry_count < 3 do
+        {:retry, exponential_backoff(retry_count), state}
+      else
+        Logger.error("Connection to \#{url} timed out after \#{retry_count} attempts")
+        {:stop, :too_many_timeouts, state}
+      end
+    end
+
+    @impl true
+    def handle_error(:connection_closed, context, state) do
+      # Auto-reconnect for connection closed errors
+      {:reconnect, state}
+    end
+
+    @impl true
+    def handle_error(error, context, state) do
+      # Default error handling
+      error_category = classify_error(error, context)
+
+      case error_category do
+        :critical -> {:stop, error, state}
+        :transient -> {:retry, 1000, state}
+        _ -> {:reconnect, state}
+      end
+    end
+
+    @impl true
+    def should_reconnect?(_error, attempt, _state) when attempt > 10 do
+      # Stop trying after 10 attempts
+      {false, nil}
+    end
+
+    @impl true
+    def should_reconnect?(:network_error, attempt, _state) do
+      # Use exponential backoff for network errors
+      delay = trunc(:math.pow(2, attempt) * 1000) + :rand.uniform(1000)
+      {true, delay}
+    end
+
+    @impl true
+    def should_reconnect?(_error, _attempt, _state) do
+      # Default reconnection strategy
+      {true, 1000}
+    end
+
+    @impl true
+    def log_error(:network_error, context, _state) do
+      Logger.warn("Network error: \#{inspect(context.reason)}")
+      :ok
+    end
+
+    @impl true
+    def log_error(error_type, context, _state) do
+      Logger.error("WebSocket error (\#{error_type}): \#{inspect(context)}")
+      :ok
+    end
+
+    @impl true
+    def classify_error(:timeout, _context), do: :transient
+    def classify_error(:connection_closed, _context), do: :transient
+    def classify_error(:authentication_failed, _context), do: :critical
+    def classify_error(_error, _context), do: :unknown
+
+    # Private helper function
+    defp exponential_backoff(retry_count) do
+      base_delay = 1000
+      max_delay = 30_000
+
+      delay = trunc(:math.pow(2, retry_count) * base_delay)
+      min(delay, max_delay)
+    end
+  end
 
   ## Callbacks
 
   * `handle_error/3` - Process an error and determine the appropriate action
   * `should_reconnect?/3` - Determine if reconnection should be attempted
   * `log_error/3` - Log an error with appropriate context
+  * `classify_error/2` - (Optional) Classify errors for different handling strategies
   """
 
   @typedoc """

@@ -1,61 +1,132 @@
 defmodule WebsockexNova.Gun.ConnectionWrapper do
   @moduledoc """
-  Wraps the Gun WebSocket connection functionality, providing a simplified interface.
+  A thin adapter over Gun's WebSocket implementation, providing a standardized API.
 
-  This module acts as a thin adapter over Gun, abstracting away the complexity of dealing
-  with Gun directly while providing a standardized API for WebSocket operations. It offers
-  functions for connecting, upgrading to WebSocket, sending frames, and processing messages.
+  ## Thin Adapter Pattern
+  This module implements the "thin adapter" architectural pattern by:
+
+  1. **Abstracting Gun's API**: Provides a simpler, more standardized interface over Gun's
+     lower-level functionality while maintaining full access to Gun's capabilities
+
+  2. **Minimizing Logic**: Acts primarily as a pass-through to the underlying Gun library,
+     with minimal logic in the adapter itself
+
+  3. **Delegating Business Logic**: Forwards most decisions to specialized modules like
+     ConnectionManager and behavior callbacks
+
+  4. **Standardizing Interfaces**: Exposes a consistent API regardless of underlying
+     transport implementation details
+
+  This pattern allows WebsockexNova to potentially support different transport layers
+  in the future while maintaining a consistent API for client applications.
 
   ## Architecture
 
-  ConnectionWrapper uses a structured state machine approach with the ConnectionManager to manage
-  connection lifecycle, reconnection strategies, and state transitions. The architecture follows
-  a clean separation of concerns through extensive delegation:
+  ConnectionWrapper uses a clean architecture with strict separation of concerns:
 
-  * **Core ConnectionWrapper**: Manages the GenServer lifecycle and implements the public API
-  * **ConnectionState**: Maintains structured state with consistent update patterns
-  * **ConnectionManager**: Handles transitions between connection states
-  * **MessageHandlers**: Processes different types of Gun messages
-  * **ErrorHandler**: Provides consistent error handling patterns
+  * **Core ConnectionWrapper**: Minimal GenServer implementation that routes messages
+  * **ConnectionState**: Immutable state management with structured updates
+  * **ConnectionManager**: Business logic for connection lifecycle and state transitions
+  * **MessageHandlers**: Specialized handlers for different Gun message types
+  * **BehaviorHelpers**: Consistent delegation to behavior callbacks
+  * **ErrorHandler**: Standardized error handling patterns
 
   ## Delegation Pattern
 
-  The module employs a standardized delegation pattern for message handling:
+  The module employs a standardized multi-level delegation pattern:
 
-  1. `handle_info/handle_cast` callbacks receive Gun messages
-  2. These messages are delegated to appropriate `MessageHandlers` functions
-  3. MessageHandlers processes the message and calls behavior callbacks through `BehaviorHelpers`
-  4. MessageHandlers returns a standardized result tuple
-  5. ConnectionWrapper processes the result through `process_handler_result/1`
-  6. Error conditions are handled by `ErrorHandler`
+  1. **Layer 1**: GenServer callbacks receive Gun messages
+     ```elixir
+     def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid} = state) do
+       MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
+     end
+     ```
 
-  This delegation pattern provides several benefits:
+  2. **Layer 2**: Messages are delegated to specialized MessageHandlers
+     ```elixir
+     # In MessageHandlers module
+     def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
+       # Process frame, then call behavior callbacks through BehaviorHelpers
+       BehaviorHelpers.call_handle_frame(state, frame_type, frame_data, stream_ref)
+     end
+     ```
 
-  * Clear responsibility boundaries
-  * Easier testing and maintenance
-  * Consistent error handling
-  * Support for custom behaviors through callback modules
+  3. **Layer 3**: MessageHandlers call behavior callbacks through BehaviorHelpers
+     ```elixir
+     # In BehaviorHelpers module
+     def call_handle_frame(state, frame_type, frame_data, stream_ref) do
+       handler_module = Map.get(state.handlers, :connection_handler)
+       handler_state = Map.get(state.handlers, :connection_handler_state)
+       handler_module.handle_frame(frame_type, frame_data, handler_state)
+     end
+     ```
+
+  4. **Layer 4**: Results are processed through a consistent handler
+     ```elixir
+     # Back in ConnectionWrapper
+     def process_handler_result({:reply, frame_type, data, state, stream_ref}) do
+       :gun.ws_send(state.gun_pid, stream_ref, {frame_type, data})
+       {:noreply, state}
+     end
+     ```
 
   ## Ownership Model
 
-  Gun processes have a specific ownership model that this module manages through
-  transfer and receive operations:
+  Gun connections have a specific ownership model where only one process receives
+  messages from a Gun connection. This module provides a complete ownership
+  transfer protocol:
 
-  * Each Gun connection is owned by a single Erlang process
-  * Only the owner process receives Gun messages
-  * The `transfer_ownership/2` function transfers control to another process
-  * The `receive_ownership/2` function accepts ownership from another process
+  ```elixir
+  # Process A - Current owner of Gun connection
+  WebsockexNova.Gun.ConnectionWrapper.transfer_ownership(wrapper_pid, target_pid)
 
-  The ownership transfer protocol involves:
+  # Process B - Receiving ownership
+  WebsockexNova.Gun.ConnectionWrapper.receive_ownership(wrapper_pid, gun_pid)
+  ```
 
-  1. Validating both Gun and target processes
-  2. Demonitoring the current Gun process
-  3. Using `:gun.set_owner/2` to transfer message routing
-  4. Creating a new monitor in the new owner
-  5. Sending state information via the `:gun_info` message
+  The transfer protocol carefully manages process monitors, message routing, and state
+  synchronization to ensure reliable handoff between processes.
 
-  This ownership model is critical for maintaining proper process lifecycle
-  and message routing between processes.
+  ## Usage Examples
+
+  ### Basic Connection
+
+  ```elixir
+  # Open a connection
+  {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("example.com", 443, %{
+    transport: :tls,
+    callback_handler: MyApp.WebSocketHandler
+  })
+
+  # Upgrade to WebSocket
+  {:ok, stream_ref} = WebsockexNova.Gun.ConnectionWrapper.upgrade_to_websocket(conn, "/ws")
+
+  # Send a frame
+  WebsockexNova.Gun.ConnectionWrapper.send_frame(conn, stream_ref, {:text, ~s({"type": "ping"})})
+  ```
+
+  ### With Custom Handlers
+
+  ```elixir
+  # Configure with custom handlers
+  {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("example.com", 443, %{
+    transport: :tls,
+    callback_handler: MyApp.ConnectionHandler,
+    message_handler: MyApp.MessageHandler,
+    error_handler: MyApp.ErrorHandler
+  })
+  ```
+
+  ### Process Transfer
+
+  ```elixir
+  # In process A (current owner)
+  {:ok, conn} = WebsockexNova.Gun.ConnectionWrapper.open("example.com", 443)
+  WebsockexNova.Gun.ConnectionWrapper.transfer_ownership(conn, process_b_pid)
+
+  # In process B (new owner)
+  WebsockexNova.Gun.ConnectionWrapper.receive_ownership(my_wrapper_pid, gun_pid)
+  ```
   """
 
   use GenServer

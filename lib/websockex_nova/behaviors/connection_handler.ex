@@ -2,9 +2,71 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   @moduledoc """
   Defines the behavior for handling WebSocket connection lifecycle events.
 
-  The ConnectionHandler behavior defines how a WebSocket client should respond to
-  connection events like connecting, disconnecting, and receiving frames. Implementing
-  modules can customize behaviors like reconnection logic and frame processing.
+  The ConnectionHandler behavior is a key component of WebsockexNova's thin adapter architecture,
+  allowing client applications to customize connection handling logic while the underlying
+  transport details are abstracted away.
+
+  ## Thin Adapter Pattern
+
+  As part of WebsockexNova's thin adapter pattern:
+
+  1. This behavior defines a standardized interface that client applications implement
+  2. The underlying connection implementation delegates lifecycle events to implementations
+  3. The adapter handles the complexities of the transport layer (Gun) for you
+  4. Your implementation focuses purely on business logic
+
+  ## Delegation Flow
+
+  When connection events occur:
+
+  1. The Gun adapter receives the raw message
+  2. The message is processed by specialized handler modules
+  3. Your callback implementation is invoked with normalized parameters
+  4. Your return value is processed by the adapter to update the connection state
+
+  ## Common Implementation Patterns
+
+  ```elixir
+  defmodule MyApp.ConnectionHandler do
+    @behaviour WebsockexNova.Behaviors.ConnectionHandler
+
+    @impl true
+    def init(opts) do
+      initial_state = %{
+        user_id: opts[:user_id],
+        last_ping: nil,
+        message_count: 0
+      }
+      {:ok, initial_state}
+    end
+
+    @impl true
+    def handle_connect(conn_info, state) do
+      # Log connection details and send initial handshake
+      IO.puts("Connected to \#{conn_info.host}:\#{conn_info.port}")
+      {:reply, :text, "{\"type\":\"hello\"}", state}
+    end
+
+    @impl true
+    def handle_disconnect({:remote, code, reason}, state) do
+      # Server closed the connection, attempt to reconnect
+      {:reconnect, state}
+    end
+
+    @impl true
+    def handle_frame(:text, data, state) do
+      # Process incoming text frame
+      new_state = update_in(state.message_count, &(&1 + 1))
+      {:ok, new_state}
+    end
+
+    @impl true
+    def handle_frame(:ping, _data, state) do
+      # Respond to ping with pong (though adapter handles this automatically)
+      {:reply, :pong, "", state}
+    end
+  end
+  ```
 
   ## Callbacks
 
@@ -12,6 +74,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   * `handle_connect/2` - Process a successful connection
   * `handle_disconnect/2` - Handle disconnection events
   * `handle_frame/3` - Process received WebSocket frames
+  * `handle_timeout/1` - (Optional) Handle connection timeouts
   """
 
   @typedoc """
