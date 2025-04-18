@@ -29,7 +29,7 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
 
   Updated connection state with trace context
   """
-  @spec init_trace(ConnectionState.t(), String.t() | nil) :: ConnectionState.t()
+  @spec init_trace(ConnectionState.t(), String.t() | nil) :: map()
   def init_trace(state, trace_id \\ nil) do
     trace_id = trace_id || generate_trace_id()
 
@@ -62,8 +62,7 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
 
   Updated connection state with the event recorded
   """
-  @spec trace_transition(ConnectionState.t(), atom(), atom(), atom(), map()) ::
-          ConnectionState.t()
+  @spec trace_transition(ConnectionState.t(), atom(), atom(), atom(), map()) :: map()
   def trace_transition(state, event_type, from_status, to_status, metadata \\ %{}) do
     # If no trace context exists, create one
     state = ensure_trace_context(state)

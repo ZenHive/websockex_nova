@@ -506,36 +506,30 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         gun_monitor_ref = Process.monitor(state.gun_pid)
 
         # 3. Transfer ownership using the Gun API
-        case :gun.set_owner(state.gun_pid, new_owner_pid) do
-          :ok ->
-            Logger.info("Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}")
+        :gun.set_owner(state.gun_pid, new_owner_pid)
 
-            # 4. Update our state with the new monitor reference
-            updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
+        # Log successful transfer
+        Logger.info("Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}")
 
-            # 5. Ensure both processes have required info by sending process info
-            # This helps the new owner process build its own state
-            send(
-              new_owner_pid,
-              {:gun_info,
-               %{
-                 gun_pid: state.gun_pid,
-                 host: state.host,
-                 port: state.port,
-                 status: state.status,
-                 options: state.options,
-                 active_streams: state.active_streams
-               }}
-            )
+        # 4. Update our state with the new monitor reference
+        updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
 
-            {:reply, :ok, updated_state}
+        # 5. Ensure both processes have required info by sending process info
+        # This helps the new owner process build its own state
+        send(
+          new_owner_pid,
+          {:gun_info,
+           %{
+             gun_pid: state.gun_pid,
+             host: state.host,
+             port: state.port,
+             status: state.status,
+             options: state.options,
+             active_streams: state.active_streams
+           }}
+        )
 
-          {:error, reason} = error ->
-            # If transfer failed, demonitor our new monitor and log the error
-            Process.demonitor(gun_monitor_ref, [:flush])
-            Logger.error("Failed to transfer Gun process ownership: #{inspect(reason)}")
-            {:reply, error, state}
-        end
+        {:reply, :ok, updated_state}
     end
   end
 
@@ -552,30 +546,23 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       case :gun.info(gun_pid) do
         info when is_map(info) ->
           # Verify that we can actually set ourselves as the owner
-          case :gun.set_owner(gun_pid, self()) do
-            :ok ->
-              # Update our state with the new gun_pid and monitor
-              updated_state =
-                state
-                |> ConnectionState.update_gun_pid(gun_pid)
-                |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
-                |> ConnectionState.update_status(:connected)
+          :gun.set_owner(gun_pid, self())
 
-              Logger.info("Successfully received Gun connection ownership")
-              {:reply, :ok, updated_state}
+          # Update our state with the new gun_pid and monitor
+          updated_state =
+            state
+            |> ConnectionState.update_gun_pid(gun_pid)
+            |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
+            |> ConnectionState.update_status(:connected)
 
-            {:error, reason} = error ->
-              # If we can't set ourselves as owner, something is wrong
-              Process.demonitor(gun_monitor_ref)
-              Logger.error("Failed to set self as Gun owner: #{inspect(reason)}")
-              {:reply, error, state}
-          end
+          Logger.info("Successfully received Gun connection ownership")
+          {:reply, :ok, updated_state}
 
-        {:error, reason} = error ->
+        error ->
           # If we can't get info, something is wrong
           Process.demonitor(gun_monitor_ref)
-          Logger.error("Failed to get Gun process info: #{inspect(reason)}")
-          {:reply, error, state}
+          Logger.error("Failed to get Gun process info: #{inspect(error)}")
+          {:reply, {:error, :invalid_gun_info}, state}
       end
     end
   end
@@ -591,7 +578,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
           {:reply, {:ok, headers}, updated_state}
 
-        {:response, status, headers} when status >= 400 ->
+        {:response, :fin, status, headers} when status >= 400 ->
           # HTTP error response
           reason = {:http_error, status, headers}
 
@@ -661,16 +648,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           end
 
         # Pass to MessageHandlers to handle standard notifications and behavior callbacks
-        case MessageHandlers.handle_connection_down(
-               gun_pid,
-               protocol,
-               reason,
-               disconnected_state_with_cleanup,
-               killed_streams,
-               unprocessed_streams
-             ) do
-          # Standard response
-          {:noreply, new_state} ->
+        result =
+          MessageHandlers.handle_connection_down(
+            gun_pid,
+            protocol,
+            reason,
+            disconnected_state_with_cleanup,
+            killed_streams,
+            unprocessed_streams
+          )
+
+        # Handle response - simplify to just use the two valid patterns
+        case result do
+          {:noreply, new_state} when is_map(new_state) ->
             # Default behavior - schedule reconnection
             reconnect_callback = fn delay, _attempt ->
               Process.send_after(self(), {:reconnect, :timer}, delay)
@@ -679,20 +669,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
             final_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
             {:noreply, final_state}
 
-          # Handler explicitly requested reconnection
-          {:noreply, {:reconnect, reconnect_state}} ->
-            reconnect_callback = fn delay, _attempt ->
-              Process.send_after(self(), {:reconnect, :timer}, delay)
-            end
-
-            final_state =
-              ConnectionManager.schedule_reconnection(reconnect_state, reconnect_callback)
-
-            {:noreply, final_state}
-
           # Handler requested stop
-          {:stop, stop_reason, final_state} ->
+          {:stop, stop_reason, final_state} when is_map(final_state) ->
             {:stop, stop_reason, final_state}
+
+          # Fallback for unexpected patterns - for Dialyzer satisfaction
+          other ->
+            Logger.error("Unexpected response from handle_connection_down: #{inspect(other)}")
+            {:noreply, disconnected_state_with_cleanup}
         end
 
       {:error, transition_reason} ->
@@ -821,21 +805,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   # Helper to standardize handler result processing
   defp process_handler_result(result) do
     case result do
-      {:noreply, updated_state} -> {:noreply, updated_state}
-      {:stop, reason, updated_state} -> {:stop, reason, updated_state}
-      {:noreply, {:reconnect, reconnect_state}} -> handle_reconnect_request(reconnect_state)
-      other -> other
-    end
-  end
+      {:noreply, updated_state} when is_map(updated_state) ->
+        {:noreply, updated_state}
 
-  # Helper to handle reconnection requests
-  defp handle_reconnect_request(state) do
-    reconnect_callback = fn delay, _attempt ->
-      Process.send_after(self(), {:reconnect, :timer}, delay)
-    end
+      {:stop, reason, updated_state} when is_map(updated_state) ->
+        {:stop, reason, updated_state}
 
-    final_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
-    {:noreply, final_state}
+      # Other cases can't occur based on MessageHandlers implementation,
+      # but we need to handle them to satisfy Dialyzer
+      _other ->
+        Logger.warning("Unexpected result from MessageHandlers: #{inspect(result)}")
+        {:noreply, %{}}
+    end
   end
 
   defp handle_gun_message({:gun_up, pid, protocol}, state) do

@@ -448,11 +448,12 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
                 # Get owner info to verify it's set correctly
                 case :gun.info(pid) do
-                  %{owner: owner} ->
-                    Logger.debug("Gun connection owner is: #{inspect(owner)}")
+                  %{owner: owner} when owner == self() ->
+                    Logger.debug("Gun connection owner is correctly set to: #{inspect(owner)}")
 
+                  # Use debug level for any other case
                   _ ->
-                    Logger.debug("Could not retrieve Gun connection owner info")
+                    Logger.debug("Gun connection owner info not available or not matching self()")
                 end
 
                 # Note: gun:await_up already consumed the gun_up message,
@@ -461,11 +462,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
                 {:ok, pid, gun_monitor_ref}
 
-              {:error, reason} ->
+              other ->
                 Process.demonitor(gun_monitor_ref)
                 :gun.close(pid)
-                Logger.error("Failed to set Gun connection owner: #{inspect(reason)}")
-                {:error, reason}
+                Logger.error("Failed to set Gun connection owner: #{inspect(other)}")
+                {:error, :owner_set_failed}
             end
 
           {:error, reason} ->

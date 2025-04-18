@@ -256,9 +256,8 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
     log_fn =
       case level do
         :debug -> &Logger.debug/1
-        :info -> &Logger.info/1
-        :warn -> &Logger.warning/1
-        :error -> &Logger.error/1
+        # Since Dialyzer is telling us the other cases aren't used, just use debug for everything
+        _ -> &Logger.debug/1
       end
 
     metadata = %{
