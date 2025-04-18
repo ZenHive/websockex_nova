@@ -27,7 +27,11 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   `{:ok, updated_state}` or error tuple
   """
   @spec call_handle_connect(ConnectionState.t(), map()) ::
-          {:ok, ConnectionState.t()} | {:error, term()}
+          {:ok, ConnectionState.t()}
+          | {:reply, atom(), binary(), ConnectionState.t()}
+          | {:close, integer(), binary(), ConnectionState.t()}
+          | {:stop, term(), ConnectionState.t()}
+          | {:error, term()}
   def call_handle_connect(state, extra_info \\ %{}) do
     handler_module = Map.get(state.handlers, :connection_handler)
     handler_state = Map.get(state.handlers, :connection_handler_state)
@@ -176,9 +180,9 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   ## Parameters
 
   * `state` - The current connection state
-  * `frame_type` - The type of frame
-  * `frame_data` - The frame data
-  * `stream_ref` - The stream reference
+  * `frame_type` - Type of the frame (:text, :binary, etc.)
+  * `frame_data` - Data contained in the frame
+  * `stream_ref` - Reference to the stream that received the frame
 
   ## Returns
 
@@ -186,8 +190,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   """
   @spec call_handle_frame(ConnectionState.t(), atom(), binary(), reference()) ::
           {:ok, ConnectionState.t()}
-          | {:reply, atom(), binary(), ConnectionState.t()}
-          | {:close, integer(), binary(), ConnectionState.t()}
+          | {:reply, atom(), binary(), ConnectionState.t(), reference()}
+          | {:close, integer(), binary(), ConnectionState.t(), reference()}
   def call_handle_frame(state, frame_type, frame_data, stream_ref) do
     handler_module = Map.get(state.handlers, :connection_handler)
     handler_state = Map.get(state.handlers, :connection_handler_state)
