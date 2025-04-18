@@ -136,6 +136,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
+  alias WebsockexNova.Gun.Helpers.StateHelpers
 
   require Logger
 
@@ -576,7 +577,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           # HTTP error response
           reason = {:http_error, status, headers}
 
-          WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_upgrade_error(
+          ErrorHandler.handle_upgrade_error(
             stream_ref,
             reason,
             state
@@ -584,14 +585,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
         {:error, reason} ->
           # Connection or timeout error
-          WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_upgrade_error(
+          ErrorHandler.handle_upgrade_error(
             stream_ref,
             reason,
             state
           )
       end
     else
-      WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_connection_error(
+      ErrorHandler.handle_connection_error(
         :not_connected,
         state
       )
@@ -738,7 +739,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   def handle_info({:gun_info, info}, state) do
     # Use StateHelpers to handle the ownership transfer
-    final_state = WebsockexNova.Gun.Helpers.StateHelpers.handle_ownership_transfer(state, info)
+    final_state = StateHelpers.handle_ownership_transfer(state, info)
     {:noreply, final_state}
   end
 
