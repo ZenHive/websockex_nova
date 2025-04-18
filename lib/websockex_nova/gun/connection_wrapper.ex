@@ -2,23 +2,60 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @moduledoc """
   Wraps the Gun WebSocket connection functionality, providing a simplified interface.
 
-  This module abstracts away the complexity of dealing with Gun directly, offering
+  This module acts as a thin adapter over Gun, abstracting away the complexity of dealing
+  with Gun directly while providing a standardized API for WebSocket operations. It offers
   functions for connecting, upgrading to WebSocket, sending frames, and processing messages.
 
-  It uses a structured state machine approach with the ConnectionManager to manage
-  connection lifecycle, reconnection strategies, and state transitions.
+  ## Architecture
 
-  ## Message Handling Architecture
+  ConnectionWrapper uses a structured state machine approach with the ConnectionManager to manage
+  connection lifecycle, reconnection strategies, and state transitions. The architecture follows
+  a clean separation of concerns through extensive delegation:
 
-  The module employs a consistent message handling delegation pattern:
+  * **Core ConnectionWrapper**: Manages the GenServer lifecycle and implements the public API
+  * **ConnectionState**: Maintains structured state with consistent update patterns
+  * **ConnectionManager**: Handles transitions between connection states
+  * **MessageHandlers**: Processes different types of Gun messages
+  * **ErrorHandler**: Provides consistent error handling patterns
 
-  1. `handle_info` callbacks receive Gun messages and delegate them to the MessageHandlers module
-  2. MessageHandlers provides specialized handlers for each message type
-  3. MessageHandlers calls appropriate behavior callbacks through BehaviorHelpers
-  4. Error handling is delegated to the ErrorHandler module
+  ## Delegation Pattern
 
-  This separation of concerns improves maintainability and allows for custom behaviors
-  to be easily plugged into the system.
+  The module employs a standardized delegation pattern for message handling:
+
+  1. `handle_info/handle_cast` callbacks receive Gun messages
+  2. These messages are delegated to appropriate `MessageHandlers` functions
+  3. MessageHandlers processes the message and calls behavior callbacks through `BehaviorHelpers`
+  4. MessageHandlers returns a standardized result tuple
+  5. ConnectionWrapper processes the result through `process_handler_result/1`
+  6. Error conditions are handled by `ErrorHandler`
+
+  This delegation pattern provides several benefits:
+
+  * Clear responsibility boundaries
+  * Easier testing and maintenance
+  * Consistent error handling
+  * Support for custom behaviors through callback modules
+
+  ## Ownership Model
+
+  Gun processes have a specific ownership model that this module manages through
+  transfer and receive operations:
+
+  * Each Gun connection is owned by a single Erlang process
+  * Only the owner process receives Gun messages
+  * The `transfer_ownership/2` function transfers control to another process
+  * The `receive_ownership/2` function accepts ownership from another process
+
+  The ownership transfer protocol involves:
+
+  1. Validating both Gun and target processes
+  2. Demonitoring the current Gun process
+  3. Using `:gun.set_owner/2` to transfer message routing
+  4. Creating a new monitor in the new owner
+  5. Sending state information via the `:gun_info` message
+
+  This ownership model is critical for maintaining proper process lifecycle
+  and message routing between processes.
   """
 
   use GenServer
@@ -203,9 +240,26 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @doc """
   Transfers ownership of the Gun connection to another process.
 
-  After transferring ownership, the target process will receive all Gun messages.
-  This function also updates the monitor reference to track the connection
-  in its new location.
+  Gun connections have a specific ownership model where only one process receives messages
+  from a Gun connection. This function implements a safe transfer protocol that ensures
+  proper message routing after ownership changes.
+
+  The transfer protocol:
+  1. Validates that the Gun process exists and is alive
+  2. Validates that the target process exists and is alive
+  3. Demonitors the current Gun process monitor
+  4. Creates a new monitor for the Gun process
+  5. Uses `:gun.set_owner/2` to redirect Gun messages to the new owner
+  6. Sends a `:gun_info` message with connection state to the new owner
+  7. Updates the local state with the new monitor reference
+
+  After the transfer completes:
+  - The target process will receive all Gun messages
+  - The original process maintains its ConnectionWrapper state
+  - The ConnectionWrapper maintains its monitor of the Gun process
+
+  This function is useful for load balancing, process migration, or implementing
+  more complex ownership strategies.
 
   ## Parameters
 
@@ -215,7 +269,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   ## Returns
 
   * `:ok` on success
-  * `{:error, reason}` on failure
+  * `{:error, :no_gun_pid}` if no Gun process exists
+  * `{:error, :invalid_target_process}` if the target process is invalid or dead
+  * `{:error, :gun_process_not_alive}` if the Gun process died
+  * `{:error, reason}` for other Gun-specific errors
   """
   @spec transfer_ownership(pid(), pid()) :: :ok | {:error, term()}
   def transfer_ownership(pid, new_owner_pid) do
@@ -225,6 +282,21 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @doc """
   Receives ownership of a Gun connection from another process.
 
+  This function implements the receiving side of the ownership transfer protocol.
+  It's designed to be used in conjunction with `transfer_ownership/2` but can also
+  be used independently to take ownership of any Gun process.
+
+  The receive protocol:
+  1. Validates that the provided Gun PID exists and is alive
+  2. Creates a monitor for the Gun process
+  3. Retrieves information about the Gun connection using `:gun.info/1`
+  4. Sets the current process as the Gun process owner with `:gun.set_owner/2`
+  5. Updates the ConnectionWrapper state with the Gun PID, monitor reference, and status
+
+  This function is particularly useful when implementing systems where connections
+  need to be dynamically reassigned between processes, such as in worker pools or
+  during process handoffs.
+
   ## Parameters
 
   * `pid` - The connection wrapper PID
@@ -233,7 +305,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   ## Returns
 
   * `:ok` on success
-  * `{:error, reason}` on failure
+  * `{:error, :invalid_gun_pid}` if the Gun process is invalid or dead
+  * `{:error, reason}` for Gun-specific errors
   """
   @spec receive_ownership(pid(), pid()) :: :ok | {:error, term()}
   def receive_ownership(pid, gun_pid) do
