@@ -295,7 +295,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1
 - **Dependencies**: T2.8
-- **Status**: IN_PROGRESS
+- **Status**: DONE
 - **Code Review Rating** Rating: 4/5,
   The implementation provides solid coverage of the core functionality and demonstrates a well-designed test infrastructure. The mock server is particularly well-implemented, with support for different scenarios and network conditions.
   However, the integration tests don't fully cover all the acceptance criteria, particularly the "Tests for various network scenarios" which could be more comprehensive. Additionally, the task is still marked as "IN_PROGRESS" which aligns with these missing elements.
@@ -314,7 +314,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 0.5
 - **Dependencies**: T2.11
-- **Status**: TODO
+- **Status**: DONE
 - **Code Review Rating** Rating: 4.5/5
   Why not a 5?
   The only minor deductions are for some non-deterministic test outcomes (due to the realities of process death and async messaging), and the use of direct state mutation in tests. These are pragmatic choices, but with a bit more abstraction or deterministic error handling, it could be a perfect 5.
@@ -506,7 +506,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 0.5
 - **Dependencies**: T1.5
-- **Status**: TODO
+- **Status**: DONE
 
 ### T4.2
 
@@ -520,7 +520,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1
 - **Dependencies**: T4.1
-- **Status**: TODO
+- **Status**: DONE
 
 ### T4.3
 
