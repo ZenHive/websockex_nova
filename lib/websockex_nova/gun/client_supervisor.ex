@@ -19,154 +19,95 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
 
   use Supervisor
 
+  alias WebsockexNova.Gun.ConnectionOptions
+
   require Logger
 
-  # Default values for supervisor configuration
   @default_config [
     max_restarts: 3,
     max_seconds: 5,
     strategy: :one_for_one
   ]
 
+  @type option :: [
+          {:name, atom},
+          {:strategy, Supervisor.strategy()},
+          {:max_restarts, non_neg_integer},
+          {:max_seconds, non_neg_integer}
+        ]
+  @type client_option :: [
+          {:name, atom},
+          {:host, String.t()},
+          {:port, pos_integer},
+          {:transport, :tcp | :tls},
+          {:transport_opts, keyword},
+          {:protocols, [atom]},
+          {:retry, non_neg_integer},
+          {:websocket_path, String.t()}
+        ]
+
   @doc """
   Starts the Gun client supervisor.
-
-  ## Options
-
-  * `:name` - Name to register the supervisor process as
-  * `:strategy` - Supervisor restart strategy
-  * `:max_restarts` - Maximum number of restarts allowed in a timeframe
-  * `:max_seconds` - Timeframe for restart limit in seconds
-
-  ## Examples
-
-      {:ok, pid} = WebsockexNova.Gun.ClientSupervisor.start_link()
-
-      {:ok, pid} = WebsockexNova.Gun.ClientSupervisor.start_link(
-        name: :my_gun_supervisor,
-        strategy: :one_for_one,
-        max_restarts: 5,
-        max_seconds: 10
-      )
   """
+  @spec start_link(option) :: Supervisor.on_start()
   def start_link(opts \\ []) do
-    # Merge provided options with application config and defaults
-    app_config = Application.get_env(:websockex_nova, :gun_client_supervisor, [])
+    merged_opts = merge_supervisor_opts(opts)
 
-    # Start the supervisor with merged options
     Supervisor.start_link(
       __MODULE__,
-      Keyword.merge(@default_config, Keyword.merge(app_config, opts)),
-      name: opts[:name]
+      merged_opts,
+      name: Keyword.get(merged_opts, :name)
     )
   end
 
   @impl true
+  @spec init(keyword) :: :ignore | {:ok, {Supervisor.sup_flags(), [Supervisor.child_spec()]}}
   def init(opts) do
-    # Extract supervisor options from the merged config
-    supervisor_flags = [
-      strategy: opts[:strategy] || :one_for_one,
-      max_restarts: opts[:max_restarts] || 3,
-      max_seconds: opts[:max_seconds] || 5
-    ]
-
-    # Start with an empty list of children
+    supervisor_flags = build_supervisor_flags(opts)
     children = []
-
-    # Initialize the supervisor with the extracted flags and children
     Supervisor.init(children, supervisor_flags)
   end
 
   @doc """
   Starts a new Gun client under this supervisor.
-
-  ## Options
-
-  * `:name` - Optional name to register the client process
-  * `:host` - The hostname to connect to (required)
-  * `:port` - The port to connect to (required)
-  * `:transport` - Transport protocol (`:tcp` or `:tls`, default: `:tcp`)
-  * `:transport_opts` - Options for the transport protocol
-  * `:protocols` - Protocols to negotiate (`[http | http2 | socks | ws]`)
-  * `:retry` - Retry configuration for failed connections
-  * `:websocket_path` - Path for WebSocket upgrade (default: `"/"`)
-
-  ## Examples
-
-      {:ok, client} = WebsockexNova.Gun.ClientSupervisor.start_client(
-        supervisor_pid,
-        host: "echo.websocket.org",
-        port: 443,
-        transport: :tls,
-        websocket_path: "/echo"
-      )
   """
-  def start_client(supervisor, opts) do
-    # Validate required options
-    if !(Keyword.has_key?(opts, :host) and Keyword.has_key?(opts, :port)) do
-      raise ArgumentError, "Both :host and :port are required options"
-    end
-
-    # Parse and validate client options
-    client_opts = %{
-      host: opts[:host],
-      port: opts[:port],
-      transport: opts[:transport] || :tcp,
-      transport_opts: opts[:transport_opts] || [],
-      protocols: opts[:protocols] || [:http],
-      retry: opts[:retry] || 5,
-      websocket_path: opts[:websocket_path] || "/"
-    }
-
-    case WebsockexNova.Gun.ConnectionOptions.parse_and_validate(client_opts) do
-      {:ok, validated_opts} ->
-        client_spec = generate_client_spec(validated_opts, opts[:name])
-        Supervisor.start_child(supervisor, client_spec)
-
-      {:error, msg} ->
-        raise ArgumentError, "Invalid Gun client options: #{msg}"
-    end
+  @spec start_client(pid, client_option) :: Supervisor.on_start_child()
+  def start_client(supervisor, opts) when is_pid(supervisor) and is_list(opts) do
+    validated_opts = validate_and_parse_client_opts(opts)
+    client_spec = generate_client_spec(validated_opts, Keyword.get(opts, :name))
+    Supervisor.start_child(supervisor, client_spec)
   end
 
   @doc """
   Terminates a Gun client that was previously started by this supervisor.
-
-  ## Examples
-
-      :ok = WebsockexNova.Gun.ClientSupervisor.terminate_client(supervisor_pid, client_pid)
   """
+  @spec terminate_client(pid, pid | atom) :: :ok | {:error, :not_found}
   def terminate_client(supervisor, client_pid) when is_pid(client_pid) do
     Supervisor.terminate_child(supervisor, client_pid)
   end
 
   def terminate_client(supervisor, client_name) when is_atom(client_name) do
-    if pid = Process.whereis(client_name) do
-      terminate_client(supervisor, pid)
-    else
-      {:error, :not_found}
+    case Process.whereis(client_name) do
+      nil -> {:error, :not_found}
+      pid -> terminate_client(supervisor, pid)
     end
   end
 
   @doc """
   Lists all Gun clients currently supervised by this supervisor.
-
-  ## Examples
-
-      clients = WebsockexNova.Gun.ClientSupervisor.list_clients(supervisor_pid)
   """
+  @spec list_clients(pid()) :: [
+          {id :: term, child :: pid | :restarting | :undefined, type :: :worker | :supervisor,
+           modules :: [module] | :dynamic}
+        ]
   def list_clients(supervisor) do
     Supervisor.which_children(supervisor)
   end
 
   @doc """
   Returns a child specification for starting this supervisor under another supervisor.
-
-  ## Examples
-
-      children = [
-        WebsockexNova.Gun.ClientSupervisor.child_spec([])
-      ]
   """
+  @spec child_spec(option) :: Supervisor.child_spec()
   def child_spec(opts) do
     %{
       id: __MODULE__,
@@ -177,13 +118,51 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
     }
   end
 
-  # Private function to generate a child spec for a Gun client
-  defp generate_client_spec(client_opts, name) do
-    # This function would generate a child spec for a Gun connection process
-    # In the actual implementation, we'll manage the Gun connection process lifecycle
-    # For now, we'll create a dummy GenServer to simulate the Gun client
-    # In the T2.3 and T2.4 tasks, we'll implement the actual Gun connection wrapper
+  # Private helpers
 
+  defp merge_supervisor_opts(opts) do
+    app_config = Application.get_env(:websockex_nova, :gun_client_supervisor, [])
+    Keyword.merge(@default_config, Keyword.merge(app_config, opts))
+  end
+
+  defp build_supervisor_flags(opts) do
+    [
+      strategy: Keyword.get(opts, :strategy, :one_for_one),
+      max_restarts: Keyword.get(opts, :max_restarts, 3),
+      max_seconds: Keyword.get(opts, :max_seconds, 5)
+    ]
+  end
+
+  defp validate_and_parse_client_opts(opts) do
+    with {:ok, host} <- fetch_required_opt(opts, :host),
+         {:ok, port} <- fetch_required_opt(opts, :port) do
+      client_opts = %{
+        host: host,
+        port: port,
+        transport: Keyword.get(opts, :transport, :tcp),
+        transport_opts: Keyword.get(opts, :transport_opts, []),
+        protocols: Keyword.get(opts, :protocols, [:http]),
+        retry: Keyword.get(opts, :retry, 5),
+        websocket_path: Keyword.get(opts, :websocket_path, "/")
+      }
+
+      case ConnectionOptions.parse_and_validate(client_opts) do
+        {:ok, validated_opts} -> validated_opts
+        {:error, msg} -> raise ArgumentError, "Invalid Gun client options: #{msg}"
+      end
+    else
+      {:error, key} -> raise ArgumentError, ":#{key} is a required option"
+    end
+  end
+
+  defp fetch_required_opt(opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, key}
+    end
+  end
+
+  defp generate_client_spec(client_opts, name) do
     %{
       id: make_ref(),
       start: {WebsockexNova.Gun.DummyClient, :start_link, [client_opts, name]},

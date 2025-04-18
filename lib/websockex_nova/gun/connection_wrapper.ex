@@ -133,6 +133,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   use GenServer
 
   alias WebsockexNova.Gun.ConnectionManager
+  alias WebsockexNova.Gun.ConnectionOptions
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
@@ -401,10 +402,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   # Server callbacks
-
   @impl true
   def init({host, port, options, _supervisor}) do
-    case WebsockexNova.Gun.ConnectionOptions.parse_and_validate(options) do
+    case ConnectionOptions.parse_and_validate(options) do
       {:ok, validated_options} ->
         state = ConnectionState.new(host, port, validated_options)
 
