@@ -13,7 +13,7 @@ defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
       assert traced_state.trace_context.connection_count == 0
       assert traced_state.trace_context.total_uptime_ms == 0
       assert is_list(traced_state.trace_context.events)
-      assert length(traced_state.trace_context.events) == 0
+      assert Enum.empty?(traced_state.trace_context.events)
       assert traced_state.trace_context.trace_id != nil
     end
 
