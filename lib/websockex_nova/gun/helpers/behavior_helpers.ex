@@ -7,8 +7,9 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   proper error handling and consistent behavior throughout the application.
   """
 
-  require Logger
   alias WebsockexNova.Gun.ConnectionState
+
+  require Logger
 
   @doc """
   Calls the connection handler's handle_connect callback.
@@ -31,9 +32,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
     handler_module = Map.get(state.handlers, :connection_handler)
     handler_state = Map.get(state.handlers, :connection_handler_state)
 
-    Logger.debug(
-      "BehaviorHelpers - call_handle_connect called with handler_module: #{inspect(handler_module)}"
-    )
+    Logger.debug("BehaviorHelpers - call_handle_connect called with handler_module: #{inspect(handler_module)}")
 
     if handler_module && handler_state do
       # Build connection info for the handler
@@ -45,9 +44,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         transport: Map.get(state.options, :transport, :tcp)
       }
 
-      Logger.debug(
-        "BehaviorHelpers - Calling handle_connect with conn_info: #{inspect(conn_info)}"
-      )
+      Logger.debug("BehaviorHelpers - Calling handle_connect with conn_info: #{inspect(conn_info)}")
 
       # Call the handler and process response
       case handler_module.handle_connect(conn_info, handler_state) do
@@ -80,9 +77,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:error, :invalid_handler_return}
       end
     else
-      Logger.debug(
-        "BehaviorHelpers - Skipping call_handle_connect, no handler_module or handler_state"
-      )
+      Logger.debug("BehaviorHelpers - Skipping call_handle_connect, no handler_module or handler_state")
 
       {:ok, state}
     end
@@ -132,9 +127,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
       # Call the handler
       try do
-        Logger.debug(
-          "BehaviorHelpers - Calling handle_disconnect with reason: #{inspect(formatted_reason)}"
-        )
+        Logger.debug("BehaviorHelpers - Calling handle_disconnect with reason: #{inspect(formatted_reason)}")
 
         case handler_module.handle_disconnect(formatted_reason, handler_state) do
           {:ok, new_handler_state} ->
@@ -171,9 +164,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:ok, state}
       end
     else
-      Logger.debug(
-        "BehaviorHelpers - Skipping call_handle_disconnect, no handler_module or handler_state"
-      )
+      Logger.debug("BehaviorHelpers - Skipping call_handle_disconnect, no handler_module or handler_state")
 
       {:ok, state}
     end
@@ -251,16 +242,12 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         end
       rescue
         e ->
-          Logger.error(
-            "Error in call_handle_frame: #{inspect(e)}, #{Exception.format_stacktrace()}"
-          )
+          Logger.error("Error in call_handle_frame: #{inspect(e)}, #{Exception.format_stacktrace()}")
 
           {:ok, state}
       end
     else
-      Logger.debug(
-        "BehaviorHelpers - Skipping call_handle_frame, no handler_module or handler_state"
-      )
+      Logger.debug("BehaviorHelpers - Skipping call_handle_frame, no handler_module or handler_state")
 
       {:ok, state}
     end

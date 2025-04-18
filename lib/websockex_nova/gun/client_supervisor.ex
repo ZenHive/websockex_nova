@@ -18,6 +18,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   """
 
   use Supervisor
+
   require Logger
 
   # Default values for supervisor configuration
@@ -102,7 +103,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   """
   def start_client(supervisor, opts) do
     # Validate required options
-    unless Keyword.has_key?(opts, :host) and Keyword.has_key?(opts, :port) do
+    if !(Keyword.has_key?(opts, :host) and Keyword.has_key?(opts, :port)) do
       raise ArgumentError, "Both :host and :port are required options"
     end
 

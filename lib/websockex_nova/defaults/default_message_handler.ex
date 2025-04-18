@@ -35,7 +35,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   @behaviour WebsockexNova.Behaviors.MessageHandler
 
   @impl true
-  def handle_message(message = %{"type" => "error"}, state) do
+  def handle_message(%{"type" => "error"} = message, state) do
     # Handle error messages
     error_message = Map.get(message, "message", "Unknown error")
     state = Map.put(state, :last_error, message)
@@ -43,10 +43,10 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     {:error, error_message, state}
   end
 
-  def handle_message(message = %{"type" => "subscription"}, state) do
+  def handle_message(%{"type" => "subscription"} = message, state) do
     # Track subscription status
     channel = Map.get(message, "channel")
-    status = Map.get(message, "status", "unknown") |> String.to_atom()
+    status = message |> Map.get("status", "unknown") |> String.to_atom()
 
     subscriptions = Map.get(state, :subscriptions, %{})
     subscriptions = Map.put(subscriptions, channel, status)
@@ -148,13 +148,11 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     {:ok, :text, Jason.encode!(%{type: "ping"})}
   end
 
+  # Attempt to encode any other term
   def encode_message(message, _state) do
-    # Attempt to encode any other term
-    try do
-      encoded = Jason.encode!(%{type: to_string(message)})
-      {:ok, :text, encoded}
-    rescue
-      e -> {:error, {:encode_failed, e}}
-    end
+    encoded = Jason.encode!(%{type: to_string(message)})
+    {:ok, :text, encoded}
+  rescue
+    e -> {:error, {:encode_failed, e}}
   end
 end

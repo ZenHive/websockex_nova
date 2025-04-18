@@ -3,6 +3,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
 
   # Define a mock module that implements the ConnectionHandler behavior
   defmodule MockConnectionHandler do
+    @moduledoc false
     @behaviour WebsockexNova.Behaviors.ConnectionHandler
 
     def init(opts) do

@@ -29,7 +29,8 @@ defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
   describe "event tracing" do
     setup do
       state =
-        ConnectionState.new("example.com", 443, %{transport: :tls})
+        "example.com"
+        |> ConnectionState.new(443, %{transport: :tls})
         |> StateTracer.init_trace()
 
       %{state: state}
@@ -93,7 +94,8 @@ defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
       assert length(events) == length(transitions)
 
       # Verify each event in order
-      Enum.zip(events, transitions)
+      events
+      |> Enum.zip(transitions)
       |> Enum.each(fn {event, {expected_type, expected_from, expected_to}} ->
         assert event.event_type == expected_type
         assert event.from_status == expected_from
@@ -105,7 +107,8 @@ defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
   describe "statistics and exports" do
     setup do
       state =
-        ConnectionState.new("example.com", 443, %{transport: :tls})
+        "example.com"
+        |> ConnectionState.new(443, %{transport: :tls})
         |> StateTracer.init_trace()
         |> StateTracer.trace_transition(:init, :initialized, :connecting)
         |> StateTracer.trace_transition(:connect, :connecting, :connected)

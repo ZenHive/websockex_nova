@@ -1,9 +1,10 @@
 defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   use ExUnit.Case, async: false
-  require Logger
 
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
+
+  require Logger
 
   @moduletag :integration
 
@@ -67,16 +68,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
         # Test text frame
         :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "Text message"})
 
-        assert_receive {:websockex_nova,
-                        {:websocket_frame, ^stream_ref, {:text, "Text message"}}},
+        assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "Text message"}}},
                        500
 
         # Test binary frame
         binary_data = <<1, 2, 3, 4, 5>>
         :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:binary, binary_data})
 
-        assert_receive {:websockex_nova,
-                        {:websocket_frame, ^stream_ref, {:binary, ^binary_data}}},
+        assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:binary, ^binary_data}}},
                        500
 
         # Test ping frame
@@ -516,8 +515,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     assert_status_with_timeout(conn_pid, expected_status, timeout, 0)
   end
 
-  defp assert_status_with_timeout(conn_pid, expected_status, timeout, elapsed)
-       when elapsed >= timeout do
+  defp assert_status_with_timeout(conn_pid, expected_status, timeout, elapsed) when elapsed >= timeout do
     state = ConnectionWrapper.get_state(conn_pid)
     flunk("Connection status timeout: expected #{expected_status}, got #{state.status}")
   end

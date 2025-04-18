@@ -13,8 +13,9 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
   - Supports optional correlation IDs for distributed tracing
   """
 
-  require Logger
   alias WebsockexNova.Gun.ConnectionState
+
+  require Logger
 
   @doc """
   Initializes a new trace context in the connection state.
@@ -181,7 +182,8 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
   end
 
   defp generate_trace_id do
-    :crypto.strong_rand_bytes(16)
+    16
+    |> :crypto.strong_rand_bytes()
     |> Base.encode16(case: :lower)
   end
 

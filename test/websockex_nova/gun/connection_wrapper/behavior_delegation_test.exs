@@ -1,10 +1,11 @@
 defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
   use ExUnit.Case, async: false
-  require Logger
 
+  alias WebsockexNova.Behaviors.ConnectionHandler
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
-  alias WebsockexNova.Behaviors.ConnectionHandler
+
+  require Logger
 
   @moduletag :integration
 
@@ -13,6 +14,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
   # Test implementation of ConnectionHandler
   defmodule TestConnectionHandler do
+    @moduledoc false
     @behaviour ConnectionHandler
 
     def init(opts) do
@@ -21,7 +23,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         send(test_pid, {:handler_init, opts})
       end
 
-      {:ok, Map.new(opts) |> Map.put(:test_handler_initialized, true)}
+      {:ok, opts |> Map.new() |> Map.put(:test_handler_initialized, true)}
     end
 
     def handle_connect(conn_info, state) do
@@ -49,9 +51,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
       # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
         # Debugging logs
-        Logger.debug(
-          "TestConnectionHandler - Sending handler_disconnect message to #{inspect(test_pid)}"
-        )
+        Logger.debug("TestConnectionHandler - Sending handler_disconnect message to #{inspect(test_pid)}")
 
         send(test_pid, {:handler_disconnect, reason, state})
       else
@@ -72,16 +72,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       # Update state to track frame handling
       updated_state =
-        state
-        |> Map.update(:frames_received, [{frame_type, frame_data}], fn frames ->
+        Map.update(state, :frames_received, [{frame_type, frame_data}], fn frames ->
           [{frame_type, frame_data} | frames]
         end)
 
       # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
-        Logger.debug(
-          "TestConnectionHandler - Sending handler_frame message to #{inspect(test_pid)}"
-        )
+        Logger.debug("TestConnectionHandler - Sending handler_frame message to #{inspect(test_pid)}")
 
         send(test_pid, {:handler_frame, frame_type, frame_data, state})
       else

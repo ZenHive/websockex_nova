@@ -2,10 +2,10 @@
 defmodule WebsockexNova.Test.Support.MockWebSockServer.Router do
   use Plug.Router
 
-  # Special case to make the router definable inline in this module
-  @server_parent Process.get(:server_parent)
   require Logger
 
+  # Special case to make the router definable inline in this module
+  @server_parent Process.get(:server_parent)
   plug(:match)
   plug(:dispatch)
 

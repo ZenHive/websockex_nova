@@ -8,8 +8,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   """
 
   use GenServer
-  require Logger
+
   alias WebsockexNova.Test.Support.MockWebSockServer.Router
+
+  require Logger
+
   # Public API
 
   @doc """
@@ -75,7 +78,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   Gets the number of clients currently connected to the server.
   """
   def client_count(server_pid) do
-    GenServer.call(server_pid, :get_clients) |> length()
+    server_pid |> GenServer.call(:get_clients) |> length()
   end
 
   @doc """
@@ -250,8 +253,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   @impl true
-  def handle_call({:set_response_delay, delay_ms}, _from, state)
-      when is_integer(delay_ms) and delay_ms >= 0 do
+  def handle_call({:set_response_delay, delay_ms}, _from, state) when is_integer(delay_ms) and delay_ms >= 0 do
     {:reply, :ok, %{state | response_delay: delay_ms}}
   end
 
@@ -360,9 +362,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
         :delayed_response ->
           # Delay then echo
           if state.response_delay > 0 do
-            Logger.debug(
-              "Scenario: delayed_response - delaying echo by #{state.response_delay}ms"
-            )
+            Logger.debug("Scenario: delayed_response - delaying echo by #{state.response_delay}ms")
 
             Process.send_after(
               self(),
@@ -459,9 +459,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   defp send_binary(client_pid, data, _state) do
     if Process.alive?(client_pid) do
-      Logger.debug(
-        "Sending BINARY frame to client #{inspect(client_pid)}: #{byte_size(data)} bytes"
-      )
+      Logger.debug("Sending BINARY frame to client #{inspect(client_pid)}: #{byte_size(data)} bytes")
 
       send(client_pid, {:send_binary, data})
     else

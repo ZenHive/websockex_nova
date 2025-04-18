@@ -3,6 +3,7 @@ defmodule WebsockexNova.Behaviors.ErrorHandlerTest do
 
   # Define a mock module that implements the ErrorHandler behavior
   defmodule MockErrorHandler do
+    @moduledoc false
     @behaviour WebsockexNova.Behaviors.ErrorHandler
 
     def handle_error(:connection_closed, _context, state) do

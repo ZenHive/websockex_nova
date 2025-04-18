@@ -101,17 +101,13 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
     case classify_error(error, context) do
       :critical ->
-        Logger.warning(
-          "CRITICAL WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}"
-        )
+        Logger.warning("CRITICAL WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}")
 
       :normal ->
         Logger.info("WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}")
 
       :transient ->
-        Logger.info(
-          "Transient WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}"
-        )
+        Logger.info("Transient WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}")
     end
 
     :ok
@@ -134,9 +130,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   defp extract_error_type(_), do: :unknown_error
 
   defp format_context(context) when is_map(context) do
-    context
-    |> Enum.map(fn {k, v} -> "#{k}: #{inspect(v)}" end)
-    |> Enum.join(", ")
+    Enum.map_join(context, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
   end
 
   defp format_context(_), do: ""

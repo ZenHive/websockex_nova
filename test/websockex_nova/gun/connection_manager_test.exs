@@ -1,8 +1,8 @@
 defmodule WebsockexNova.Gun.ConnectionManagerTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionManager
+  alias WebsockexNova.Gun.ConnectionState
 
   describe "state transitions" do
     test "allows transition from :initialized to :connecting" do
@@ -271,7 +271,8 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
 
       # Create initial state with a terminal error
       state =
-        ConnectionState.new("example.com", 80, %{retry: 3})
+        "example.com"
+        |> ConnectionState.new(80, %{retry: 3})
         |> ConnectionState.record_error(:econnrefused)
 
       {:ok, state} = ConnectionManager.transition_to(state, :connecting)

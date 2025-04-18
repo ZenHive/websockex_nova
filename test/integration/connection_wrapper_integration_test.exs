@@ -1,13 +1,17 @@
 defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
   use ExUnit.Case, async: false
+
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer, as: MockServer
+
   require Logger
 
   @timeout 5000
 
   defmodule CallbackHandler do
+    @moduledoc false
     use GenServer
+
     require Logger
 
     def start_link do

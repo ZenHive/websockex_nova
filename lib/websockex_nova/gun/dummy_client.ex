@@ -7,6 +7,7 @@ defmodule WebsockexNova.Gun.DummyClient do
   """
 
   use GenServer
+
   require Logger
 
   @doc """
@@ -83,8 +84,7 @@ defmodule WebsockexNova.Gun.DummyClient do
 
   Returns `:ok` if successful.
   """
-  def send_frame(client, frame_type, data)
-      when frame_type in [:text, :binary, :ping, :pong, :close] do
+  def send_frame(client, frame_type, data) when frame_type in [:text, :binary, :ping, :pong, :close] do
     GenServer.call(client, {:send_frame, frame_type, data})
   end
 

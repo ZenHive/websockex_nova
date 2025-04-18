@@ -12,9 +12,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.ErrorHandler do
   5. Proper return values are maintained
   """
 
-  require Logger
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
+
+  require Logger
 
   @doc """
   Handles Gun-related connection errors.
@@ -168,9 +169,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.ErrorHandler do
   @spec handle_transition_error(atom(), atom(), term(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_transition_error(current_state, target_state, reason, state) do
-    Logger.error(
-      "Failed to transition from #{current_state} to #{target_state}: #{inspect(reason)}"
-    )
+    Logger.error("Failed to transition from #{current_state} to #{target_state}: #{inspect(reason)}")
 
     # Record the error
     updated_state =

@@ -5,6 +5,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
 
   defmodule MockCallbacks do
+    @moduledoc false
     use GenServer
 
     def start_link do
@@ -175,7 +176,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
       gun_pid = self()
       stream_ref = make_ref()
       is_fin = :fin
-      data = "{\"message\":\"Hello\"}"
+      data = ~s({"message":"Hello"})
 
       result = MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
 

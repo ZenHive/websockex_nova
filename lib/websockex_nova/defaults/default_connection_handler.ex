@@ -58,7 +58,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   end
 
   @impl true
-  def handle_disconnect(reason = {:local, _code, _message}, state) do
+  def handle_disconnect({:local, _code, _message} = reason, state) do
     # No reconnection for local disconnects (client initiated)
     {:ok, Map.put(state, :last_disconnect_reason, reason)}
   end
@@ -86,9 +86,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   def handle_frame(:pong, _frame_data, state) do
     # Track pong responses
-    state =
-      state
-      |> Map.put(:last_pong_received, System.monotonic_time(:millisecond))
+    state = Map.put(state, :last_pong_received, System.monotonic_time(:millisecond))
 
     # Delete last_ping_sent if it exists, otherwise leave state unchanged
     state =

@@ -1,5 +1,6 @@
 defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
   use ExUnit.Case, async: true
+
   alias WebsockexNova.Defaults.DefaultMessageHandler
 
   describe "DefaultMessageHandler.handle_message/2" do

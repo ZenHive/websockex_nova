@@ -39,8 +39,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   ```
   """
 
-  require Logger
+  alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionState
+
+  require Logger
 
   # Define all possible connection states for reference
   # @connection_states [
@@ -88,9 +90,9 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   # Map of state transitions to effect functions
   @transition_effects %{
-    connected: &WebsockexNova.Gun.ConnectionManager.apply_connected_effects/2,
-    disconnected: &WebsockexNova.Gun.ConnectionManager.apply_disconnected_effects/2,
-    error: &WebsockexNova.Gun.ConnectionManager.apply_error_effects/2
+    connected: &ConnectionManager.apply_connected_effects/2,
+    disconnected: &ConnectionManager.apply_disconnected_effects/2,
+    error: &ConnectionManager.apply_error_effects/2
   }
 
   @doc """
@@ -173,9 +175,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, non_neg_integer(), ConnectionState.t()}
           | {:error, atom(), ConnectionState.t()}
   def handle_reconnection(state) do
-    Logger.debug(
-      "Handling reconnection - current state: #{state.status}, last error: #{inspect(state.last_error)}"
-    )
+    Logger.debug("Handling reconnection - current state: #{state.status}, last error: #{inspect(state.last_error)}")
 
     cond do
       # Don't reconnect if in error state
@@ -191,9 +191,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       # Don't reconnect if max attempts reached
       max_attempts_reached?(state) ->
-        Logger.debug(
-          "Not reconnecting: max attempts reached (#{state.reconnect_attempts}/#{state.options.retry})"
-        )
+        Logger.debug("Not reconnecting: max attempts reached (#{state.reconnect_attempts}/#{state.options.retry})")
 
         error_state = ConnectionState.update_status(state, :error)
         {:error, :max_attempts_reached, error_state}
@@ -203,9 +201,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         # Calculate backoff delay
         reconnect_after = calculate_backoff_delay(state)
 
-        Logger.debug(
-          "Reconnecting in #{reconnect_after}ms, attempt #{state.reconnect_attempts + 1}"
-        )
+        Logger.debug("Reconnecting in #{reconnect_after}ms, attempt #{state.reconnect_attempts + 1}")
 
         # Increment reconnect attempts and set state to reconnecting
         updated_state =
@@ -389,9 +385,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   def apply_disconnected_effects(state, params) do
     # Record the disconnect reason if provided
     if Map.has_key?(params, :reason) do
-      Logger.debug(
-        "Applying disconnected effects: Recording error reason - #{inspect(params.reason)}"
-      )
+      Logger.debug("Applying disconnected effects: Recording error reason - #{inspect(params.reason)}")
 
       ConnectionState.record_error(state, params.reason)
     else

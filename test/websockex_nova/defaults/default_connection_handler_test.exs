@@ -1,5 +1,6 @@
 defmodule WebsockexNova.Defaults.DefaultConnectionHandlerTest do
   use ExUnit.Case, async: true
+
   alias WebsockexNova.Defaults.DefaultConnectionHandler
 
   describe "DefaultConnectionHandler.init/1" do

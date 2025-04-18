@@ -9,8 +9,9 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   consistent log messages and log levels across the application.
   """
 
-  require Logger
   alias WebsockexNova.Gun.ConnectionState
+
+  require Logger
 
   @doc """
   Updates state for a successful connection.
@@ -204,11 +205,7 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   @spec handle_ownership_transfer(ConnectionState.t(), map()) :: ConnectionState.t()
   def handle_ownership_transfer(state, info) do
     # Validate that we have the minimum required information
-    unless is_map(info) and is_pid(info.gun_pid) and is_atom(info.status) do
-      Logger.error("Invalid ownership transfer info: #{inspect(info)}")
-      # Return state unchanged if info is invalid
-      state
-    else
+    if is_map(info) and is_pid(info.gun_pid) and is_atom(info.status) do
       log_state_transition(
         state,
         info.status,
@@ -245,6 +242,10 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
       else
         updated_state_with_monitor
       end
+    else
+      Logger.error("Invalid ownership transfer info: #{inspect(info)}")
+      # Return state unchanged if info is invalid
+      state
     end
   end
 

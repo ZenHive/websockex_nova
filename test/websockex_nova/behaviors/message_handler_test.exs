@@ -3,6 +3,7 @@ defmodule WebsockexNova.Behaviors.MessageHandlerTest do
 
   # Define a mock module that implements the MessageHandler behavior
   defmodule MockMessageHandler do
+    @moduledoc false
     @behaviour WebsockexNova.Behaviors.MessageHandler
 
     def handle_message(%{"type" => type} = message, state) do

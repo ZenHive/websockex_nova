@@ -31,9 +31,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:text, message, opts}, state) do
-    Logger.debug(
-      "MockWebSockHandler received TEXT frame: #{inspect(message)}, opts: #{inspect(opts)}"
-    )
+    Logger.debug("MockWebSockHandler received TEXT frame: #{inspect(message)}, opts: #{inspect(opts)}")
 
     # Forward message to parent
     if state.parent do
@@ -48,9 +46,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   # Additional handler to match the format actually being sent by WebSockAdapter
   def handle_in({text_message, [opcode: :text]}, state) when is_binary(text_message) do
-    Logger.debug(
-      "MockWebSockHandler received TEXT frame in alternate format: #{inspect(text_message)}"
-    )
+    Logger.debug("MockWebSockHandler received TEXT frame in alternate format: #{inspect(text_message)}")
 
     # Forward message to parent if configured
     if state.parent do
@@ -64,9 +60,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:binary, message, opts}, state) do
-    Logger.debug(
-      "MockWebSockHandler received BINARY frame: #{byte_size(message)} bytes, opts: #{inspect(opts)}"
-    )
+    Logger.debug("MockWebSockHandler received BINARY frame: #{byte_size(message)} bytes, opts: #{inspect(opts)}")
 
     # Forward message to parent
     if state.parent do
@@ -81,9 +75,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   # Additional handler for binary frames in the alternate format
   def handle_in({binary_message, [opcode: :binary]}, state) when is_binary(binary_message) do
-    Logger.debug(
-      "MockWebSockHandler received BINARY frame in alternate format: #{byte_size(binary_message)} bytes"
-    )
+    Logger.debug("MockWebSockHandler received BINARY frame in alternate format: #{byte_size(binary_message)} bytes")
 
     # Forward message to parent if configured
     if state.parent do
@@ -111,9 +103,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:close, code, reason, _opts}, state) do
-    Logger.debug(
-      "MockWebSockHandler received CLOSE frame: code=#{inspect(code)}, reason=#{inspect(reason)}"
-    )
+    Logger.debug("MockWebSockHandler received CLOSE frame: code=#{inspect(code)}, reason=#{inspect(reason)}")
 
     # Client requested close
     {:stop, :normal, state}
@@ -142,9 +132,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_info({:disconnect, code, reason}, state) do
-    Logger.debug(
-      "MockWebSockHandler disconnecting: code=#{inspect(code)}, reason=#{inspect(reason)}"
-    )
+    Logger.debug("MockWebSockHandler disconnecting: code=#{inspect(code)}, reason=#{inspect(reason)}")
 
     # Close the WebSocket connection
     {:push, {:close, code, reason}, state}

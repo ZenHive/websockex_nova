@@ -292,8 +292,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_connection_handler(t(), module(), map()) :: t()
-  def setup_connection_handler(state, handler_module, handler_options)
-      when is_atom(handler_module) do
+  def setup_connection_handler(state, handler_module, handler_options) when is_atom(handler_module) do
     case handler_module.init(handler_options) do
       {:ok, handler_state} ->
         %{
@@ -349,8 +348,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_message_handler(t(), module(), map()) :: t()
-  def setup_message_handler(state, handler_module, handler_options)
-      when is_atom(handler_module) do
+  def setup_message_handler(state, handler_module, handler_options) when is_atom(handler_module) do
     case handler_module.init(handler_options) do
       {:ok, handler_state} ->
         %{

@@ -7,6 +7,7 @@ defmodule WebsockexNova.Test.Support.GunMonitor do
   """
 
   use GenServer
+
   require Logger
 
   def start_link(target_pid) do

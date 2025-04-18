@@ -1,5 +1,6 @@
 defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
   use ExUnit.Case, async: true
+
   alias WebsockexNova.Defaults.DefaultErrorHandler
 
   require Logger

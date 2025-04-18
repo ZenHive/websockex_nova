@@ -18,6 +18,8 @@ defmodule WebsockexNova.Gun.FrameCodec do
   - `:close` or `{:close, code()}` or `{:close, code(), binary()}` - Close frames
   """
 
+  alias WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
+
   @type frame ::
           {:text, binary()}
           | {:binary, binary()}
@@ -36,9 +38,9 @@ defmodule WebsockexNova.Gun.FrameCodec do
   @frame_handlers %{
     text: WebsockexNova.Gun.FrameHandlers.TextFrameHandler,
     binary: WebsockexNova.Gun.FrameHandlers.BinaryFrameHandler,
-    ping: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler,
-    pong: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler,
-    close: WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
+    ping: ControlFrameHandler,
+    pong: ControlFrameHandler,
+    close: ControlFrameHandler
   }
 
   # Table name for handler registry
@@ -89,13 +91,13 @@ defmodule WebsockexNova.Gun.FrameCodec do
             Map.get(
               @frame_handlers,
               frame_type,
-              WebsockexNova.Gun.FrameHandlers.ControlFrameHandler
+              ControlFrameHandler
             )
         end
 
       {:error, _reason} ->
         # Fallback to module attribute if table doesn't exist
-        Map.get(@frame_handlers, frame_type, WebsockexNova.Gun.FrameHandlers.ControlFrameHandler)
+        Map.get(@frame_handlers, frame_type, ControlFrameHandler)
     end
   end
 
@@ -212,7 +214,7 @@ defmodule WebsockexNova.Gun.FrameCodec do
   """
   @spec validate_control_frame_size(binary()) :: validate_result()
   def validate_control_frame_size(data) when is_binary(data) do
-    WebsockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_control_frame_size(data)
+    ControlFrameHandler.validate_control_frame_size(data)
   end
 
   @doc """
@@ -231,7 +233,7 @@ defmodule WebsockexNova.Gun.FrameCodec do
   """
   @spec validate_close_code(non_neg_integer()) :: validate_result()
   def validate_close_code(code) do
-    WebsockexNova.Gun.FrameHandlers.ControlFrameHandler.validate_close_code(code)
+    ControlFrameHandler.validate_close_code(code)
   end
 
   @doc """
