@@ -308,76 +308,111 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do
-    if state.gun_pid do
-      # When we transfer ownership, we need to:
-      # 1. Demonitor the old monitor reference if it exists
-      if state.gun_monitor_ref do
-        Process.demonitor(state.gun_monitor_ref)
-      end
+    cond do
+      # Make sure we have a valid Gun PID
+      is_nil(state.gun_pid) ->
+        Logger.error("Cannot transfer ownership: no Gun process available")
+        {:reply, {:error, :no_gun_pid}, state}
 
-      # 2. Create a new monitor for the gun process
-      gun_monitor_ref = Process.monitor(state.gun_pid)
+      # Make sure the target process is valid
+      not is_pid(new_owner_pid) or not Process.alive?(new_owner_pid) ->
+        Logger.error(
+          "Cannot transfer ownership: invalid target process #{inspect(new_owner_pid)}"
+        )
 
-      # 3. Transfer ownership using the Gun API
-      case :gun.set_owner(state.gun_pid, new_owner_pid) do
-        :ok ->
-          Logger.info(
-            "Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}"
-          )
+        {:reply, {:error, :invalid_target_process}, state}
 
-          # 4. Update our state with the new monitor reference
-          updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
+      # Make sure the Gun process is still alive
+      not Process.alive?(state.gun_pid) ->
+        # Our monitor should have caught this, but let's be defensive
+        Logger.error("Cannot transfer ownership: Gun process is no longer alive")
+        {:reply, {:error, :gun_process_not_alive}, state}
 
-          # 5. Ensure both processes have required info by sending process info
-          # This helps the new owner process build its own state
-          send(
-            new_owner_pid,
-            {:gun_info,
-             %{
-               gun_pid: state.gun_pid,
-               host: state.host,
-               port: state.port,
-               status: state.status,
-               options: state.options,
-               active_streams: state.active_streams
-             }}
-          )
+      # All checks passed, proceed with transfer
+      true ->
+        # When we transfer ownership, we need to:
+        # 1. Demonitor the old monitor reference if it exists
+        if state.gun_monitor_ref do
+          Process.demonitor(state.gun_monitor_ref, [:flush])
+        end
 
-          {:reply, :ok, updated_state}
+        # 2. Create a new monitor for the gun process
+        gun_monitor_ref = Process.monitor(state.gun_pid)
 
-        {:error, reason} = error ->
-          # If transfer failed, demonitor our new monitor and log the error
-          Process.demonitor(gun_monitor_ref)
-          Logger.error("Failed to transfer Gun process ownership: #{inspect(reason)}")
-          {:reply, error, state}
-      end
-    else
-      {:reply, {:error, :no_gun_pid}, state}
+        # 3. Transfer ownership using the Gun API
+        case :gun.set_owner(state.gun_pid, new_owner_pid) do
+          :ok ->
+            Logger.info(
+              "Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}"
+            )
+
+            # 4. Update our state with the new monitor reference
+            updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
+
+            # 5. Ensure both processes have required info by sending process info
+            # This helps the new owner process build its own state
+            send(
+              new_owner_pid,
+              {:gun_info,
+               %{
+                 gun_pid: state.gun_pid,
+                 host: state.host,
+                 port: state.port,
+                 status: state.status,
+                 options: state.options,
+                 active_streams: state.active_streams
+               }}
+            )
+
+            {:reply, :ok, updated_state}
+
+          {:error, reason} = error ->
+            # If transfer failed, demonitor our new monitor and log the error
+            Process.demonitor(gun_monitor_ref, [:flush])
+            Logger.error("Failed to transfer Gun process ownership: #{inspect(reason)}")
+            {:reply, error, state}
+        end
     end
   end
 
   def handle_call({:receive_ownership, gun_pid}, _from, state) do
-    # Create a monitor for the gun process
-    gun_monitor_ref = Process.monitor(gun_pid)
+    # Validate parameters first
+    if is_nil(gun_pid) or not is_pid(gun_pid) or not Process.alive?(gun_pid) do
+      Logger.error("Invalid Gun PID or process not alive: #{inspect(gun_pid)}")
+      {:reply, {:error, :invalid_gun_pid}, state}
+    else
+      # Create a monitor for the gun process
+      gun_monitor_ref = Process.monitor(gun_pid)
 
-    # Get information about the connection
-    case :gun.info(gun_pid) do
-      info when is_map(info) ->
-        # Update our state with the new gun_pid and monitor
-        updated_state =
-          state
-          |> ConnectionState.update_gun_pid(gun_pid)
-          |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
-          |> ConnectionState.update_status(:connected)
+      # Get information about the connection
+      case :gun.info(gun_pid) do
+        info when is_map(info) ->
+          # Verify that we can actually set ourselves as the owner
+          case :gun.set_owner(gun_pid, self()) do
+            :ok ->
+              # Update our state with the new gun_pid and monitor
+              updated_state =
+                state
+                |> ConnectionState.update_gun_pid(gun_pid)
+                |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
+                |> ConnectionState.update_status(:connected)
 
-        Logger.info("Successfully received Gun connection ownership")
-        {:reply, :ok, updated_state}
+              Logger.info("Successfully received Gun connection ownership")
+              {:reply, :ok, updated_state}
 
-      {:error, reason} = error ->
-        # If we can't get info, something is wrong
-        Process.demonitor(gun_monitor_ref)
-        Logger.error("Failed to receive Gun process ownership: #{inspect(reason)}")
-        {:reply, error, state}
+            {:error, reason} = error ->
+              # If we can't set ourselves as owner, something is wrong
+              Process.demonitor(gun_monitor_ref)
+              Logger.error("Failed to set self as Gun owner: #{inspect(reason)}")
+              {:reply, error, state}
+          end
+
+        {:error, reason} = error ->
+          # If we can't get info, something is wrong
+          Process.demonitor(gun_monitor_ref)
+          Logger.error("Failed to get Gun process info: #{inspect(reason)}")
+          {:reply, error, state}
+      end
     end
   end
 

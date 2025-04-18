@@ -364,9 +364,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   end
 
   describe "error handling" do
-    # Temporarily removing this failing test
-    # test "handles invalid receive_ownership gracefully" do
-    # end
+    test "handles invalid receive_ownership gracefully" do
+      # Create an invalid Gun PID (non-existent process)
+      invalid_gun_pid = spawn(fn -> :ok end)
+      Process.exit(invalid_gun_pid, :kill)
+      # Ensure process is dead
+      Process.sleep(50)
+
+      # Create a connection wrapper (use a dummy host/port since we won't actually connect)
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", 9999, %{retry: 0})
+
+      # Attempt to receive ownership of an invalid Gun process
+      result = ConnectionWrapper.receive_ownership(conn_pid, invalid_gun_pid)
+
+      # Should return error tuple
+      assert match?({:error, _}, result)
+
+      # Clean up
+      ConnectionWrapper.close(conn_pid)
+    end
 
     test "monitors are cleaned up during ownership transfer" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()

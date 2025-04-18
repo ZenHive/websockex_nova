@@ -170,49 +170,81 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   @doc """
   Updates state when receiving connection ownership info from another process.
 
-  Performs standard updates for Gun connection ownership transfer:
-  - Updates Gun PID
-  - Updates connection status
-  - Creates a monitor if needed
-  - Updates active streams if provided
-  - Logs the ownership transfer
+  This function is critical for proper Gun process ownership transfer between
+  processes. When a process transfers Gun ownership, it sends a `:gun_info`
+  message containing state details to help rebuild the state in the new owner.
+
+  The function:
+  1. Validates that required information is present in the info map
+  2. Updates the connection state with Gun PID and connection status
+  3. Ensures a proper process monitor is established
+  4. Migrates active streams information if available
 
   ## Parameters
 
   * `state` - The current connection state
-  * `info` - Connection info map from previous owner
+  * `info` - Connection info map from previous owner with the following keys:
+    * `:gun_pid` - (required) The Gun process PID
+    * `:status` - (required) Current connection status
+    * `:host` - Hostname of connection
+    * `:port` - Port of connection
+    * `:options` - Connection options
+    * `:active_streams` - Map of active stream references
 
   ## Returns
 
   Updated connection state
+
+  ## Examples
+
+      iex> handle_ownership_transfer(state, %{gun_pid: pid, status: :connected})
+      %ConnectionState{gun_pid: pid, status: :connected, ...}
+
   """
   @spec handle_ownership_transfer(ConnectionState.t(), map()) :: ConnectionState.t()
   def handle_ownership_transfer(state, info) do
-    log_state_transition(
-      state,
-      info.status,
-      "Received Gun connection ownership from another process"
-    )
-
-    updated_state =
+    # Validate that we have the minimum required information
+    unless is_map(info) and is_pid(info.gun_pid) and is_atom(info.status) do
+      Logger.error("Invalid ownership transfer info: #{inspect(info)}")
+      # Return state unchanged if info is invalid
       state
-      |> ConnectionState.update_gun_pid(info.gun_pid)
-      |> ConnectionState.update_status(info.status)
-
-    # If we don't already have a monitor, create one
-    updated_state_with_monitor =
-      if updated_state.gun_monitor_ref do
-        updated_state
-      else
-        monitor_ref = Process.monitor(info.gun_pid)
-        ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
-      end
-
-    # Update active streams if needed
-    if map_size(info.active_streams) > 0 do
-      ConnectionState.update_active_streams(updated_state_with_monitor, info.active_streams)
     else
-      updated_state_with_monitor
+      log_state_transition(
+        state,
+        info.status,
+        "Received Gun connection ownership from another process"
+      )
+
+      updated_state =
+        state
+        |> ConnectionState.update_gun_pid(info.gun_pid)
+        |> ConnectionState.update_status(info.status)
+
+      # If we don't already have a monitor, create one
+      updated_state_with_monitor =
+        if updated_state.gun_monitor_ref do
+          # If the gun_pid is different than what we had before, we should update the monitor
+          # But if state.gun_pid was already nil, we want to keep the existing monitor
+          if state.gun_pid != nil and updated_state.gun_pid != state.gun_pid do
+            Process.demonitor(updated_state.gun_monitor_ref, [:flush])
+            monitor_ref = Process.monitor(updated_state.gun_pid)
+            ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+          else
+            # Keep existing monitor reference
+            updated_state
+          end
+        else
+          # No existing monitor, create a new one
+          monitor_ref = Process.monitor(updated_state.gun_pid)
+          ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+        end
+
+      # Update active streams if provided and not empty
+      if Map.has_key?(info, :active_streams) and map_size(info.active_streams) > 0 do
+        ConnectionState.update_active_streams(updated_state_with_monitor, info.active_streams)
+      else
+        updated_state_with_monitor
+      end
     end
   end
 
