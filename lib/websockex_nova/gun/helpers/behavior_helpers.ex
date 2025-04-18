@@ -9,7 +9,6 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
   require Logger
   alias WebsockexNova.Gun.ConnectionState
-  alias WebsockexNova.Behaviors.ConnectionHandler
 
   @doc """
   Calls the connection handler's handle_connect callback.

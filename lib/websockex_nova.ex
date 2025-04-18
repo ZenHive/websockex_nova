@@ -79,17 +79,4 @@ defmodule WebsockexNova do
   WebsockexNova.Connection.receive_ownership(wrapper_pid, gun_pid)
   ```
   """
-
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> WebsockexNova.hello()
-      :world
-
-  """
-  def hello do
-    :world
-  end
 end
