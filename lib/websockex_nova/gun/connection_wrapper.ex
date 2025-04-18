@@ -557,12 +557,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
           Logger.info("Successfully received Gun connection ownership")
           {:reply, :ok, updated_state}
-
-        error ->
-          # If we can't get info, something is wrong
-          Process.demonitor(gun_monitor_ref)
-          Logger.error("Failed to get Gun process info: #{inspect(error)}")
-          {:reply, {:error, :invalid_gun_info}, state}
       end
     end
   end

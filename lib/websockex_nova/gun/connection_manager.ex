@@ -462,11 +462,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
                 {:ok, pid, gun_monitor_ref}
 
-              other ->
-                Process.demonitor(gun_monitor_ref)
-                :gun.close(pid)
-                Logger.error("Failed to set Gun connection owner: #{inspect(other)}")
-                {:error, :owner_set_failed}
+                # Intentionally removed unreachable pattern match
             end
 
           {:error, reason} ->
