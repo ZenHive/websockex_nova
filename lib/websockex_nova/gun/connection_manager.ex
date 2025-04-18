@@ -488,32 +488,48 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   # Calculate backoff delay based on reconnection attempts
   #
-  # This function implements three backoff strategies:
-  # - `:linear` - Fixed delay regardless of attempt number (fastest recovery, no penalty for repeated failures)
-  # - `:exponential` - Delay grows as 2^n with a random jitter (standard backoff with retry penalty)
-  # - `:jittered` - Linear increase with random jitter (balanced approach)
+  # This function uses the WebsockexNova.Transport.Reconnection module to implement
+  # different backoff strategies:
+  # - `:linear` - Fixed delay regardless of attempt number
+  # - `:exponential` - Delay grows as 2^n with a random jitter
+  # - `:jittered` - Linear increase with random jitter
   #
   # The jitter is added to prevent the "thundering herd" problem where multiple clients
   # attempt to reconnect at exactly the same time following a server outage.
   defp calculate_backoff_delay(state) do
-    base_backoff = Map.get(state.options, :base_backoff, 1000)
+    alias WebsockexNova.Transport.Reconnection
+
+    # Get backoff configuration from options
     backoff_type = Map.get(state.options, :backoff_type, :linear)
 
-    case backoff_type do
-      :linear ->
-        base_backoff
+    # Map the connection options to reconnection strategy options
+    strategy_opts =
+      case backoff_type do
+        :linear ->
+          [
+            delay: Map.get(state.options, :base_backoff, 1000),
+            max_retries: Map.get(state.options, :retry, 5)
+          ]
 
-      :exponential ->
-        # Use a 2^n exponential backoff with a bit of jitter
-        delay = base_backoff * :math.pow(2, state.reconnect_attempts)
-        jitter = delay * 0.1 * :rand.uniform()
-        trunc(delay + jitter)
+        :exponential ->
+          [
+            initial_delay: Map.get(state.options, :base_backoff, 1000),
+            max_delay: Map.get(state.options, :max_backoff, 30_000),
+            jitter_factor: Map.get(state.options, :jitter_factor, 0.1),
+            max_retries: Map.get(state.options, :retry, 5)
+          ]
 
-      :jittered ->
-        # Linear delay with jitter
-        jitter = base_backoff * 0.2 * :rand.uniform()
-        trunc(base_backoff * state.reconnect_attempts + jitter)
-    end
+        :jittered ->
+          [
+            base_delay: Map.get(state.options, :base_backoff, 1000),
+            jitter_factor: Map.get(state.options, :jitter_factor, 0.2),
+            max_retries: Map.get(state.options, :retry, 5)
+          ]
+      end
+
+    # Get the appropriate strategy and calculate delay
+    strategy = Reconnection.get_strategy(backoff_type, strategy_opts)
+    Reconnection.calculate_delay(strategy, state.reconnect_attempts + 1)
   end
 
   # Check if max reconnection attempts have been reached
