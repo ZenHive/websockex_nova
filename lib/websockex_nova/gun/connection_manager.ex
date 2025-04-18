@@ -266,10 +266,15 @@ defmodule WebsockexNova.Gun.ConnectionManager do
       {:ok, connecting_state} ->
         # Then actually open the connection
         case open_connection(connecting_state) do
-          {:ok, gun_pid} ->
+          {:ok, gun_pid, monitor_ref} ->
             Logger.debug("Connection successfully established with Gun pid: #{inspect(gun_pid)}")
-            # Update the state with the new gun_pid
-            {:ok, ConnectionState.update_gun_pid(connecting_state, gun_pid)}
+            # Update the state with the new gun_pid and monitor reference
+            updated_state =
+              connecting_state
+              |> ConnectionState.update_gun_pid(gun_pid)
+              |> update_gun_monitor_ref(monitor_ref)
+
+            {:ok, updated_state}
 
           {:error, reason} ->
             Logger.error("Connection failed: #{inspect(reason)}")
@@ -398,6 +403,9 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         case :gun.set_owner(pid, self()) do
           :ok ->
             Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
+            # Add process monitoring for the gun connection
+            gun_monitor_ref = Process.monitor(pid)
+            Logger.debug("Created monitor for Gun process: #{inspect(gun_monitor_ref)}")
 
           {:error, reason} ->
             Logger.error("Failed to set Gun connection owner: #{inspect(reason)}")
@@ -416,12 +424,18 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         # Instead, return the pid immediately and let the handle_info callback
         # in ConnectionWrapper process the gun_up message naturally
         Logger.info("Gun connection process started, waiting for gun_up message")
-        {:ok, pid}
+        gun_monitor_ref = Process.monitor(pid)
+        {:ok, pid, gun_monitor_ref}
 
       {:error, reason} ->
         Logger.error("Gun open failed: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+
+  # Helper to update the gun monitor reference in the connection state
+  defp update_gun_monitor_ref(state, monitor_ref) do
+    ConnectionState.update_gun_monitor_ref(state, monitor_ref)
   end
 
   # Calculate backoff delay based on reconnection attempts

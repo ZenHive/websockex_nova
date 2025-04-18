@@ -11,6 +11,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @typedoc "Connection state structure"
   @type t :: %__MODULE__{
           gun_pid: pid() | nil,
+          gun_monitor_ref: reference() | nil,
           host: String.t(),
           port: non_neg_integer(),
           status: ConnectionWrapper.status(),
@@ -24,6 +25,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   defstruct [
     :gun_pid,
+    :gun_monitor_ref,
     :host,
     :port,
     :status,
@@ -92,6 +94,23 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec update_gun_pid(t(), pid() | nil) :: t()
   def update_gun_pid(state, gun_pid) do
     %{state | gun_pid: gun_pid}
+  end
+
+  @doc """
+  Updates the Gun connection monitor reference in the state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `monitor_ref` - Monitor reference for the Gun process
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_gun_monitor_ref(t(), reference() | nil) :: t()
+  def update_gun_monitor_ref(state, monitor_ref) do
+    %{state | gun_monitor_ref: monitor_ref}
   end
 
   @doc """

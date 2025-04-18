@@ -42,13 +42,13 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
       {:reply, Enum.reverse(state.messages), state}
     end
 
-    def clear(pid) do
-      GenServer.call(pid, :clear)
-    end
-
     def handle_call(:clear, _from, state) do
       Logger.debug("CallbackHandler clearing messages")
       {:reply, :ok, %{state | messages: []}}
+    end
+
+    def clear(pid) do
+      GenServer.call(pid, :clear)
     end
 
     def wait_for(pid, match_fun, _timeout \\ 5000) do

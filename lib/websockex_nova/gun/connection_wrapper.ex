@@ -43,7 +43,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           optional(:retry) => non_neg_integer() | :infinity,
           optional(:callback_pid) => pid(),
           optional(:ws_opts) => map(),
-          optional(:test_mode) => boolean(),
           optional(:backoff_type) => :linear | :exponential | :jittered,
           optional(:base_backoff) => non_neg_integer()
         }
@@ -54,7 +53,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     protocols: [:http],
     retry: 5,
     ws_opts: %{},
-    test_mode: false,
     backoff_type: :exponential,
     base_backoff: 1000
   }
@@ -70,18 +68,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `port` - Port number of the server (default: 80, or 443 for TLS)
   * `options` - Connection options (see `t:options/0`)
   * `supervisor` - Optional Gun client supervisor PID
-
-  ## Options
-
-  * `:transport` - Transport protocol (`:tcp` or `:tls`, default: `:tcp`)
-  * `:transport_opts` - Options for the transport protocol
-  * `:protocols` - Protocols to negotiate (`[:http | :http2 | :socks | :ws]`)
-  * `:retry` - Number of times to retry connection (default: 5)
-  * `:callback_pid` - Process to send WebSocket messages to
-  * `:ws_opts` - WebSocket-specific options
-  * `:test_mode` - Whether to operate in test mode (default: false)
-  * `:backoff_type` - Reconnection backoff strategy (`:linear`, `:exponential`, or `:jittered`)
-  * `:base_backoff` - Base backoff time in milliseconds (default: 1000)
 
   ## Returns
 
@@ -198,6 +184,28 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     GenServer.cast(pid, {:set_status, status})
   end
 
+  @doc """
+  Transfers ownership of the Gun connection to another process.
+
+  After transferring ownership, the target process will receive all Gun messages.
+  This function also updates the monitor reference to track the connection
+  in its new location.
+
+  ## Parameters
+
+  * `pid` - The connection wrapper PID
+  * `new_owner_pid` - PID of the process that should become the new owner
+
+  ## Returns
+
+  * `:ok` on success
+  * `{:error, reason}` on failure
+  """
+  @spec transfer_ownership(pid(), pid()) :: :ok | {:error, term()}
+  def transfer_ownership(pid, new_owner_pid) do
+    GenServer.call(pid, {:transfer_ownership, new_owner_pid})
+  end
+
   # Server callbacks
 
   @impl true
@@ -205,78 +213,29 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     merged_options = Map.merge(@default_options, options)
     state = ConnectionState.new(host, port, merged_options)
 
-    if state.options.test_mode do
-      Logger.info("Starting connection in test mode")
+    case initiate_connection(state) do
+      {:ok, updated_state} ->
+        {:ok, updated_state}
 
-      case open_test_connection(state) do
-        {:ok, gun_pid, monitor_pid} ->
-          updated_state = ConnectionState.update_gun_pid(state, gun_pid)
-          {:ok, Map.put(updated_state, :monitor_pid, monitor_pid)}
-
-        {:error, reason} ->
-          Logger.error("Failed to open connection in test mode: #{inspect(reason)}")
-          {:ok, ConnectionState.update_status(state, :error)}
-      end
-    else
-      case initiate_connection(state) do
-        {:ok, updated_state} ->
-          {:ok, updated_state}
-
-        {:error, reason, error_state} ->
-          Logger.error("Failed to open connection: #{inspect(reason)}")
-          {:ok, error_state}
-      end
+      {:error, reason, error_state} ->
+        Logger.error("Failed to open connection: #{inspect(reason)}")
+        {:ok, error_state}
     end
   end
 
   @impl true
   def handle_call({:upgrade_to_websocket, path, headers}, _from, state) do
-    if state.options.test_mode || (state.gun_pid && state.status == :connected) do
+    if state.gun_pid && state.status == :connected do
       stream_ref =
-        if state.options.test_mode do
-          stream_ref = make_ref()
-
-          # Always update the state with the stream reference in test mode
-          # Make sure we're using :upgrading status initially for streams
-          state = ConnectionState.update_stream(state, stream_ref, :upgrading)
-
-          if state.options[:callback_pid] do
-            fake_headers = [
-              {"connection", "upgrade"},
-              {"upgrade", "websocket"},
-              {"sec-websocket-accept", "dummy-accept-token"}
-            ]
-
-            send(
-              state.options.callback_pid,
-              {:websockex_nova, {:websocket_upgrade, stream_ref, fake_headers}}
-            )
-          end
-
-          stream_ref
-        else
-          :gun.ws_upgrade(
-            state.gun_pid,
-            path,
-            headers_to_gun_format(headers),
-            state.options.ws_opts
-          )
-        end
-
-      # Update state with stream reference (only for non-test mode as we already did it for test mode)
-      updated_state =
-        if !state.options.test_mode do
-          ConnectionState.update_stream(state, stream_ref, :upgrading)
-        else
-          state
-        end
-
-      # For debugging
-      if state.options.test_mode do
-        Logger.debug(
-          "Stream #{inspect(stream_ref)} added to active_streams: #{inspect(updated_state.active_streams)}"
+        :gun.ws_upgrade(
+          state.gun_pid,
+          path,
+          headers_to_gun_format(headers),
+          state.options.ws_opts
         )
-      end
+
+      # Update state with stream reference
+      updated_state = ConnectionState.update_stream(state, stream_ref, :upgrading)
 
       {:reply, {:ok, stream_ref}, updated_state}
     else
@@ -285,48 +244,17 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_call({:send_frame, stream_ref, frame}, _from, state) do
-    if state.options.test_mode || state.gun_pid do
-      if state.options.test_mode do
-        if state.options[:callback_pid] do
-          cb_pid = state.options.callback_pid
+    if state.gun_pid do
+      case Map.get(state.active_streams, stream_ref) do
+        :websocket ->
+          result = :gun.ws_send(state.gun_pid, stream_ref, frame)
+          {:reply, result, state}
 
-          case frame do
-            {:text, text} ->
-              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, {:text, text}}})
+        nil ->
+          {:reply, {:error, :stream_not_found}, state}
 
-            {:binary, data} ->
-              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, {:binary, data}}})
-
-            {:close, code, reason} ->
-              send(
-                cb_pid,
-                {:websockex_nova, {:websocket_frame, stream_ref, {:close, code, reason}}}
-              )
-
-            :close ->
-              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, :close}})
-
-            :ping ->
-              send(cb_pid, {:websockex_nova, {:websocket_frame, stream_ref, :pong}})
-
-            _other ->
-              nil
-          end
-        end
-
-        {:reply, :ok, state}
-      else
-        case Map.get(state.active_streams, stream_ref) do
-          :websocket ->
-            result = :gun.ws_send(state.gun_pid, stream_ref, frame)
-            {:reply, result, state}
-
-          nil ->
-            {:reply, {:error, :stream_not_found}, state}
-
-          status ->
-            {:reply, {:error, {:invalid_stream_status, status}}, state}
-        end
+        status ->
+          {:reply, {:error, {:invalid_stream_status, status}}, state}
       end
     else
       {:reply, {:error, :not_connected}, state}
@@ -335,6 +263,31 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   def handle_call(:get_state, _from, state) do
     {:reply, state, state}
+  end
+
+  def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do
+    if state.gun_pid do
+      case :gun.set_owner(state.gun_pid, new_owner_pid) do
+        :ok ->
+          # When we transfer ownership, we need to:
+          # 1. Demonitor the old monitor reference if it exists
+          # 2. Create a new monitor for the gun process
+          if state.gun_monitor_ref do
+            Process.demonitor(state.gun_monitor_ref)
+          end
+
+          # Create new monitor
+          gun_monitor_ref = Process.monitor(state.gun_pid)
+          updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
+          {:reply, :ok, updated_state}
+
+        {:error, reason} = error ->
+          Logger.error("Failed to transfer Gun process ownership: #{inspect(reason)}")
+          {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :no_gun_pid}, state}
+    end
   end
 
   @impl true
@@ -346,11 +299,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     cleaned_state = ConnectionState.clear_all_streams(state)
 
     if state.gun_pid do
-      if state.options.test_mode do
-        Process.exit(state.gun_pid, :kill)
-      else
-        :gun.shutdown(state.gun_pid)
-      end
+      :gun.shutdown(state.gun_pid)
     end
 
     final_state = ConnectionState.prepare_for_termination(cleaned_state)
@@ -447,6 +396,43 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     {:noreply, state}
   end
 
+  @impl true
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    cond do
+      # If it's our monitored Gun process that died
+      state.gun_monitor_ref == ref and state.gun_pid == pid ->
+        Logger.error("Gun process terminated: #{inspect(reason)}")
+
+        # Try to transition to disconnected state first
+        case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
+          {:ok, disconnected_state} ->
+            # Handle possible reconnection if needed
+            new_state = handle_possible_reconnection(disconnected_state, reason)
+
+            # Notify the callback about connection down if available
+            if new_state.callback_pid do
+              send(new_state.callback_pid, {:websockex_nova, {:connection_down, :http, reason}})
+            end
+
+            # If the reason is a crash, we might want to terminate this process as well
+            # since Gun process was terminated unexpectedly
+            if reason in [:crash, :killed, :shutdown] do
+              {:stop, :gun_terminated, new_state}
+            else
+              {:noreply, new_state}
+            end
+
+          {:error, _transition_error} ->
+            # Failed to transition, terminate this process as well
+            {:stop, :gun_terminated, state}
+        end
+
+      # Other DOWN messages that aren't for our gun process
+      true ->
+        {:noreply, state}
+    end
+  end
+
   def handle_info(other, state) do
     Logger.warning("Unhandled message in ConnectionWrapper: #{inspect(other)}")
     {:noreply, state}
@@ -535,51 +521,5 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       {key, value} when is_atom(key) -> {to_string(key), to_string(value)}
       other -> other
     end)
-  end
-
-  # Special helper for test mode to ensure messages are delivered properly
-  defp open_test_connection(state) do
-    # Try to open Gun connection directly
-    host_charlist = String.to_charlist(state.host)
-
-    gun_opts = %{
-      transport: state.options.transport,
-      protocols: state.options.protocols,
-      retry: state.options.retry
-    }
-
-    Logger.info("Opening test mode Gun connection to #{state.host}:#{state.port}")
-
-    case :gun.open(host_charlist, state.port, gun_opts) do
-      {:ok, gun_pid} ->
-        # Create a monitor process to intercept messages
-        {:ok, monitor_pid} = WebsockexNova.Test.Support.GunMonitor.start_link(self())
-
-        # Change ownership to our monitor
-        :ok = :gun.set_owner(gun_pid, monitor_pid)
-
-        # Wait for connection
-        case :gun.await_up(gun_pid, 5000) do
-          {:ok, protocol} ->
-            Logger.info("Test mode Gun connection established with protocol: #{protocol}")
-
-            # Force an explicit connection_up event
-            if state.options[:callback_pid] do
-              cb_pid = state.options.callback_pid
-              send(cb_pid, {:websockex_nova, {:connection_up, protocol}})
-            end
-
-            {:ok, gun_pid, monitor_pid}
-
-          {:error, reason} ->
-            Logger.error("Gun await_up failed in test mode: #{inspect(reason)}")
-            :gun.close(gun_pid)
-            {:error, reason}
-        end
-
-      {:error, reason} ->
-        Logger.error("Gun open failed in test mode: #{inspect(reason)}")
-        {:error, reason}
-    end
   end
 end

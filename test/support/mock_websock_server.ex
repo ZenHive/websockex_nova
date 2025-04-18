@@ -9,7 +9,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   use GenServer
   require Logger
-
+  alias WebsockexNova.Test.Support.MockWebSockServer.Router
   # Public API
 
   @doc """
@@ -190,38 +190,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
     # Create a unique name for this server instance to avoid conflicts
     server_name = :"mock_websocket_server_#{System.unique_integer([:positive])}"
-
-    # Create a plug router for handling HTTP and WebSocket requests
-    defmodule Router do
-      use Plug.Router
-
-      # Special case to make the router definable inline in this module
-      @server_parent Process.get(:server_parent)
-      require Logger
-
-      plug(:match)
-      plug(:dispatch)
-
-      get "/ws" do
-        Logger.debug("Router received WebSocket upgrade request")
-
-        conn =
-          WebSockAdapter.upgrade(
-            conn,
-            WebsockexNova.Test.Support.MockWebSockHandler,
-            [parent: @server_parent],
-            []
-          )
-
-        # WebSockAdapter will take over the connection from here
-        conn
-      end
-
-      match _ do
-        Logger.debug("Router received non-WebSocket request: #{conn.request_path}")
-        send_resp(conn, 404, "Not Found")
-      end
-    end
 
     # Set the parent process for the router to reference
     Process.put(:server_parent, self())
