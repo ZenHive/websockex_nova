@@ -18,7 +18,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
           options: map(),
           callback_pid: pid() | nil,
           last_error: term() | nil,
-          active_streams: %{reference() => atom()},
+          active_streams: %{reference() => map()},
           reconnect_attempts: non_neg_integer(),
           handlers: %{
             optional(:connection_handler) => module(),
@@ -444,5 +444,40 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec update_error_handler_state(t(), term()) :: t()
   def update_error_handler_state(state, handler_state) do
     %{state | handlers: Map.put(state.handlers, :error_handler_state, handler_state)}
+  end
+
+  @doc """
+  Updates the entire handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handlers` - New handlers map to replace or merge with the existing one
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec update_handlers(t(), map()) :: t()
+  def update_handlers(state, handlers) when is_map(handlers) do
+    %{state | handlers: handlers}
+  end
+
+  @doc """
+  Adds a stream to the active streams map with metadata.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `stream_ref` - Stream reference
+  * `metadata` - Map of metadata about the stream
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec add_active_stream(t(), reference(), map()) :: t()
+  def add_active_stream(state, stream_ref, metadata) when is_map(metadata) do
+    %{state | active_streams: Map.put(state.active_streams, stream_ref, metadata)}
   end
 end
