@@ -206,6 +206,47 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     GenServer.call(pid, {:transfer_ownership, new_owner_pid})
   end
 
+  @doc """
+  Receives ownership of a Gun connection from another process.
+
+  ## Parameters
+
+  * `pid` - The connection wrapper PID
+  * `gun_pid` - PID of the Gun process being transferred
+
+  ## Returns
+
+  * `:ok` on success
+  * `{:error, reason}` on failure
+  """
+  @spec receive_ownership(pid(), pid()) :: :ok | {:error, term()}
+  def receive_ownership(pid, gun_pid) do
+    GenServer.call(pid, {:receive_ownership, gun_pid})
+  end
+
+  @doc """
+  Waits for the WebSocket upgrade to complete.
+
+  This function uses gun:await/3 with an explicit monitor reference
+  to avoid potential deadlocks during ownership transfers.
+
+  ## Parameters
+
+  * `pid` - The connection wrapper PID
+  * `stream_ref` - Stream reference from the upgrade
+  * `timeout` - Timeout in milliseconds (default: 5000)
+
+  ## Returns
+
+  * `{:ok, headers}` on successful upgrade
+  * `{:error, reason}` on failure
+  """
+  @spec wait_for_websocket_upgrade(pid(), reference(), non_neg_integer()) ::
+          {:ok, list()} | {:error, term()}
+  def wait_for_websocket_upgrade(pid, stream_ref, timeout \\ 5000) do
+    GenServer.call(pid, {:wait_for_websocket_upgrade, stream_ref, timeout})
+  end
+
   # Server callbacks
 
   @impl true
@@ -267,26 +308,99 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do
     if state.gun_pid do
+      # When we transfer ownership, we need to:
+      # 1. Demonitor the old monitor reference if it exists
+      if state.gun_monitor_ref do
+        Process.demonitor(state.gun_monitor_ref)
+      end
+
+      # 2. Create a new monitor for the gun process
+      gun_monitor_ref = Process.monitor(state.gun_pid)
+
+      # 3. Transfer ownership using the Gun API
       case :gun.set_owner(state.gun_pid, new_owner_pid) do
         :ok ->
-          # When we transfer ownership, we need to:
-          # 1. Demonitor the old monitor reference if it exists
-          # 2. Create a new monitor for the gun process
-          if state.gun_monitor_ref do
-            Process.demonitor(state.gun_monitor_ref)
-          end
+          Logger.info(
+            "Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}"
+          )
 
-          # Create new monitor
-          gun_monitor_ref = Process.monitor(state.gun_pid)
+          # 4. Update our state with the new monitor reference
           updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
+
+          # 5. Ensure both processes have required info by sending process info
+          # This helps the new owner process build its own state
+          send(
+            new_owner_pid,
+            {:gun_info,
+             %{
+               gun_pid: state.gun_pid,
+               host: state.host,
+               port: state.port,
+               status: state.status,
+               options: state.options,
+               active_streams: state.active_streams
+             }}
+          )
+
           {:reply, :ok, updated_state}
 
         {:error, reason} = error ->
+          # If transfer failed, demonitor our new monitor and log the error
+          Process.demonitor(gun_monitor_ref)
           Logger.error("Failed to transfer Gun process ownership: #{inspect(reason)}")
           {:reply, error, state}
       end
     else
       {:reply, {:error, :no_gun_pid}, state}
+    end
+  end
+
+  def handle_call({:receive_ownership, gun_pid}, _from, state) do
+    # Create a monitor for the gun process
+    gun_monitor_ref = Process.monitor(gun_pid)
+
+    # Get information about the connection
+    case :gun.info(gun_pid) do
+      info when is_map(info) ->
+        # Update our state with the new gun_pid and monitor
+        updated_state =
+          state
+          |> ConnectionState.update_gun_pid(gun_pid)
+          |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
+          |> ConnectionState.update_status(:connected)
+
+        Logger.info("Successfully received Gun connection ownership")
+        {:reply, :ok, updated_state}
+
+      {:error, reason} = error ->
+        # If we can't get info, something is wrong
+        Process.demonitor(gun_monitor_ref)
+        Logger.error("Failed to receive Gun process ownership: #{inspect(reason)}")
+        {:reply, error, state}
+    end
+  end
+
+  def handle_call({:wait_for_websocket_upgrade, stream_ref, timeout}, _from, state) do
+    if state.gun_pid do
+      # Using the existing monitor for reliability
+      monitor_ref = state.gun_monitor_ref
+
+      case :gun.await(state.gun_pid, stream_ref, timeout, monitor_ref) do
+        {:upgrade, ["websocket"], headers} ->
+          # Update the stream status to indicate it's a websocket
+          updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
+          {:reply, {:ok, headers}, updated_state}
+
+        {:response, status, headers} when status >= 400 ->
+          # HTTP error response
+          {:reply, {:error, {:http_error, status, headers}}, state}
+
+        {:error, _reason} = error ->
+          # Connection or timeout error
+          {:reply, error, state}
+      end
+    else
+      {:reply, {:error, :not_connected}, state}
     end
   end
 
@@ -387,6 +501,36 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       {:ok, new_state} -> {:noreply, new_state}
       {:error, _reason, error_state} -> {:noreply, error_state}
     end
+  end
+
+  def handle_info({:gun_info, info}, state) do
+    # This message is received when we become the new owner after a transfer
+    # Update our state with the information from the previous owner
+    updated_state =
+      state
+      |> ConnectionState.update_gun_pid(info.gun_pid)
+      |> ConnectionState.update_status(info.status)
+
+    Logger.info("Received Gun connection info after ownership transfer")
+
+    # If we don't already have a monitor, create one
+    updated_state_with_monitor =
+      if updated_state.gun_monitor_ref do
+        updated_state
+      else
+        monitor_ref = Process.monitor(info.gun_pid)
+        ConnectionState.update_gun_monitor_ref(updated_state, monitor_ref)
+      end
+
+    # Update active streams if needed
+    final_state =
+      if map_size(info.active_streams) > 0 do
+        %{updated_state_with_monitor | active_streams: info.active_streams}
+      else
+        updated_state_with_monitor
+      end
+
+    {:noreply, final_state}
   end
 
   def handle_info({:debug_check_mailbox, pid}, state) do

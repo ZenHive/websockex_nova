@@ -398,34 +398,49 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
     case :gun.open(host_charlist, state.port, gun_opts) do
       {:ok, pid} ->
-        # IMPORTANT: Explicitly set the current process (ConnectionWrapper GenServer)
-        # as the owner of the Gun connection to ensure proper message routing
-        case :gun.set_owner(pid, self()) do
-          :ok ->
-            Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
-            # Add process monitoring for the gun connection
-            gun_monitor_ref = Process.monitor(pid)
-            Logger.debug("Created monitor for Gun process: #{inspect(gun_monitor_ref)}")
+        # Create a monitor for the gun process
+        gun_monitor_ref = Process.monitor(pid)
+        Logger.debug("Created monitor for Gun process: #{inspect(gun_monitor_ref)}")
+
+        # Use gun:await_up with the monitor reference to avoid blocking indefinitely
+        case :gun.await_up(pid, 5000, gun_monitor_ref) do
+          {:ok, protocol} ->
+            Logger.info("Gun connection established with protocol: #{protocol}")
+
+            # IMPORTANT: Explicitly set the current process (ConnectionWrapper GenServer)
+            # as the owner of the Gun connection to ensure proper message routing
+            case :gun.set_owner(pid, self()) do
+              :ok ->
+                Logger.debug("Successfully set Gun connection owner to: #{inspect(self())}")
+
+                # Get owner info to verify it's set correctly
+                case :gun.info(pid) do
+                  %{owner: owner} ->
+                    Logger.debug("Gun connection owner is: #{inspect(owner)}")
+
+                  _ ->
+                    Logger.debug("Could not retrieve Gun connection owner info")
+                end
+
+                # Note: gun:await_up already consumed the gun_up message,
+                # so we'll manually trigger a gun_up message to maintain consistent behavior
+                send(self(), {:gun_up, pid, protocol})
+
+                {:ok, pid, gun_monitor_ref}
+
+              {:error, reason} ->
+                Process.demonitor(gun_monitor_ref)
+                :gun.close(pid)
+                Logger.error("Failed to set Gun connection owner: #{inspect(reason)}")
+                {:error, reason}
+            end
 
           {:error, reason} ->
-            Logger.error("Failed to set Gun connection owner: #{inspect(reason)}")
+            Process.demonitor(gun_monitor_ref)
+            :gun.close(pid)
+            Logger.error("Gun connection failed to come up: #{inspect(reason)}")
+            {:error, reason}
         end
-
-        # Get owner info to verify it's set correctly
-        case :gun.info(pid) do
-          %{owner: owner} ->
-            Logger.debug("Gun connection owner is: #{inspect(owner)}")
-
-          _ ->
-            Logger.debug("Could not retrieve Gun connection owner info")
-        end
-
-        # DON'T use gun.await_up here - it consumes the gun_up message!
-        # Instead, return the pid immediately and let the handle_info callback
-        # in ConnectionWrapper process the gun_up message naturally
-        Logger.info("Gun connection process started, waiting for gun_up message")
-        gun_monitor_ref = Process.monitor(pid)
-        {:ok, pid, gun_monitor_ref}
 
       {:error, reason} ->
         Logger.error("Gun open failed: #{inspect(reason)}")

@@ -22,12 +22,14 @@ WebsockexNova wraps Gun with a thin adapter layer that translates between the Gu
 A critical aspect of Gun's design is its process-based message routing:
 
 1. **Owner Process**: When a process calls `:gun.open/3`, it becomes the "owner" of the Gun connection
+
    - Only the owner process receives Gun messages (`:gun_up`, `:gun_down`, `:gun_ws`, etc.)
    - If the owner process terminates, Gun will automatically close the connection
 
 2. **Explicit Ownership Transfer**: Ownership can be transferred to another process using `:gun.set_owner/2`
+
    - This is crucial for applications that separate connection establishment from message handling
-   - WebsockexNova's ConnectionWrapper ensures proper ownership setup
+   - WebsockexNova's ConnectionWrapper ensures proper ownership setup and transfer
 
 3. **Message Handling Flow**: Gun messages follow this flow:
    - Gun process establishes network connection
@@ -35,8 +37,32 @@ A critical aspect of Gun's design is its process-based message routing:
    - Owner process must implement `handle_info/2` callbacks to receive these messages
    - Messages can be forwarded to other processes if needed
 
+### Process Monitoring and Connection Reliability
+
+WebsockexNova uses Erlang process monitors rather than links for tracking Gun processes:
+
+1. **Monitor-Based Tracking**: Each Gun connection is monitored using `Process.monitor/1`
+
+   - Monitors provide notification when a process terminates without killing the monitoring process
+   - This allows for more graceful recovery when Gun processes fail
+
+2. **Explicit Monitor References**: When using Gun's await functions, WebsockexNova passes explicit monitor references:
+
+   - `gun:await_up/3` with a monitor reference prevents deadlocks during connection establishment
+   - `gun:await/3` with a monitor reference ensures reliable message waiting
+   - This approach prevents processes from hanging indefinitely when waiting for responses
+
+3. **Ownership Transfer with State Preservation**: When transferring ownership of a Gun connection:
+   - The current monitor is properly cleaned up using `Process.demonitor/1`
+   - A new monitor is established for the connection
+   - Essential state information is transferred to the new owner
+   - Both processes coordinate to ensure no messages are lost during transfer
+
 > **Implementation Note**: When working with Gun connections, always ensure that:
+>
 > - The process intended to handle Gun messages is set as the owner
+> - Appropriate monitors are created and managed
+> - Gun's await functions are used with explicit monitor references
 > - All necessary `handle_info/2` callbacks are implemented in the owner process
 > - Or a proper message forwarding mechanism is in place
 
@@ -45,6 +71,7 @@ A critical aspect of Gun's design is its process-based message routing:
 ### 1. Behavior Separation
 
 - **Transport Core** (`websockex_nova/transport/`)
+
   - Protocol-agnostic WebSocket behaviors
   - Connection management (`ConnectionHandler` behavior)
   - Rate limiting (`RateLimitHandler` behavior)
@@ -52,6 +79,7 @@ A critical aspect of Gun's design is its process-based message routing:
   - Common utilities
 
 - **Message Core** (`websockex_nova/message/`)
+
   - Message processing (`MessageHandler` behavior)
   - Subscription management (`SubscriptionHandler` behavior)
   - Authentication flows (`AuthHandler` behavior)
@@ -122,6 +150,7 @@ WebsockexNova defines a set of behaviors that establish contracts for different 
 #### 2.1 ConnectionHandler Behavior
 
 Manages WebSocket connection lifecycles. Key callbacks include:
+
 - `init/1`: Initialize connection state
 - `handle_connect/2`: Handle successful connections
 - `handle_disconnect/2`: Handle disconnection events
@@ -130,6 +159,7 @@ Manages WebSocket connection lifecycles. Key callbacks include:
 #### 2.2 MessageHandler Behavior
 
 Handles message parsing, validation, and routing with callbacks:
+
 - `handle_message/2`: Process incoming messages
 - `validate_message/1`: Validate message formats
 - `message_type/1`: Determine message type/category
@@ -138,6 +168,7 @@ Handles message parsing, validation, and routing with callbacks:
 #### 2.3 SubscriptionHandler Behavior
 
 Manages channel/topic subscriptions with callbacks:
+
 - `subscribe/3`: Subscribe to channels/topics
 - `unsubscribe/2`: Unsubscribe from channels/topics
 - `handle_subscription_response/2`: Process subscription responses
@@ -145,6 +176,7 @@ Manages channel/topic subscriptions with callbacks:
 #### 2.4 ErrorHandler Behavior
 
 Manages error handling and recovery with callbacks:
+
 - `handle_error/3`: Process errors during message handling
 - `should_reconnect?/3`: Determine reconnection strategy
 - `log_error/3`: Log errors with appropriate context
@@ -152,6 +184,7 @@ Manages error handling and recovery with callbacks:
 #### 2.5 AuthHandler Behavior
 
 Handles authentication flows with callbacks:
+
 - `generate_auth_data/1`: Generate authentication data
 - `handle_auth_response/2`: Process authentication responses
 - `needs_reauthentication?/1`: Check if reauthentication is needed
@@ -170,20 +203,23 @@ Handles authentication flows with callbacks:
 The connection state management system provides robust tracking and management of WebSocket connection lifecycle:
 
 **ConnectionManager**: Core module that implements the state machine for connection transitions
-  - State transitions with validation
-  - Reconnection logic with configurable strategies
-  - Terminal error detection and handling
+
+- State transitions with validation
+- Reconnection logic with configurable strategies
+- Terminal error detection and handling
 
 **StateHelpers**: Provides consistent state operations and logging across the codebase
-  - Standardized state update operations (`handle_connection_established`, `handle_disconnection`, etc.)
-  - Consistent logging for state transitions
-  - Centralized error handling
+
+- Standardized state update operations (`handle_connection_established`, `handle_disconnection`, etc.)
+- Consistent logging for state transitions
+- Centralized error handling
 
 **StateTracer**: Advanced tracing for connection state with detailed history and statistics
-  - Records all state transitions with timestamps
-  - Tracks connection statistics (uptime, reconnection frequency)
-  - Provides searchable history of connection events
-  - Can export trace events to a file or monitoring system
+
+- Records all state transitions with timestamps
+- Tracks connection statistics (uptime, reconnection frequency)
+- Provides searchable history of connection events
+- Can export trace events to a file or monitoring system
 
 > **Note:** The specific implementations of these behaviors depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
 
@@ -198,11 +234,13 @@ While the core behaviors provide a solid foundation for most WebSocket interacti
 The current behavior set may benefit from these additional capabilities:
 
 1. **Advanced Error Recovery**
+
    - **Transient vs. Persistent Error Distinction**: Add specialized callbacks to handle different error types
    - **Circuit Breaker Pattern**: Add support for temporarily disabling connections after repeated failures
    - **Custom Recovery Strategies**: Allow platform-specific recovery procedures
 
 2. **Clustering-Aware Callbacks**
+
    - **Distributed State Synchronization**: Add callbacks to react to state changes from other nodes
    - `handle_cluster_update/2`: Process state updates from other cluster nodes
    - `handle_node_transition/3`: React to node joins/leaves in the cluster
@@ -216,6 +254,7 @@ The current behavior set may benefit from these additional capabilities:
 As the library evolves, new behaviors and callbacks will be added judiciously:
 
 1. **Versioning Approach**:
+
    - Optional callbacks will be added with default implementations
    - Breaking changes will be clearly documented and follow semantic versioning
 
@@ -315,6 +354,7 @@ config :websockex_nova,
 ```
 
 **Key Characteristics:**
+
 - Aggressive reconnection strategies
 - Comprehensive error tracking and automatic recovery
 - High-resolution telemetry
@@ -353,6 +393,7 @@ config :websockex_nova,
 ```
 
 **Key Characteristics:**
+
 - Reasonable reconnection attempts with escalation
 - Standard error recovery for common failures
 - Balanced telemetry with focus on critical events
@@ -390,6 +431,7 @@ config :websockex_nova,
 ```
 
 **Key Characteristics:**
+
 - Simple reconnection strategy with limited attempts
 - Basic error handling with fail-fast approach
 - Minimal telemetry focused on critical events
@@ -428,6 +470,7 @@ config :websockex_nova,
 ```
 
 **Key Characteristics:**
+
 - Moderate reconnection strategy with reasonable persistence
 - User presence tracking capabilities
 - Message delivery guarantees with acknowledgments
@@ -468,6 +511,7 @@ end
 ```
 
 Available strategies include:
+
 - `:always_reconnect` - Persistent connection with exponential backoff
 - `:fail_fast` - Limited reconnection attempts
 - `:log_and_continue` - Logs errors but continues reconnection attempts
@@ -549,6 +593,7 @@ end
 For applications requiring extremely low latency and high reliability:
 
 1. **Connection Optimization**:
+
    - Multiple redundant connections
    - Geo-optimized routing
    - Aggressive heartbeat monitoring
@@ -563,6 +608,7 @@ For applications requiring extremely low latency and high reliability:
 For applications with simpler requirements:
 
 1. **Connection Management**:
+
    - Basic reconnection
    - Standard ping/pong handling
    - Simplified authentication
@@ -579,11 +625,13 @@ For applications with simpler requirements:
 When implementing WebsockexNova for your application:
 
 1. **Assess Your Requirements**:
+
    - Is your application financial or time-critical? → Financial Profile
    - Is it a general messaging or notification system? → Standard Profile
    - Is it a simple integration with minimal requirements? → Lightweight Profile
 
 2. **Consider Customization Points**:
+
    - Connection management (reconnection strategies, authentication)
    - Message processing (encoding/decoding, validation)
    - Error handling (recovery strategies, logging)
@@ -597,10 +645,12 @@ When implementing WebsockexNova for your application:
 ### Implementation Approach
 
 1. **Start with Existing Adapters**:
+
    - Use built-in platform adapters when available
    - Copy and modify similar adapters for new platforms
 
 2. **Test Thoroughly**:
+
    - Simulate connection failures and recovery
    - Test subscription persistence across reconnects
    - Verify authentication refresh flows

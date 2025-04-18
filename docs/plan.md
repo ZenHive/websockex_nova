@@ -11,6 +11,8 @@ This document outlines a comprehensive implementation plan for WebsockexNova to 
 3. **Connection Management**: Sophisticated connection management
 4. **Automatic Reconnection**: Built-in reconnection capabilities
 5. **TLS Support**: Modern TLS options
+6. **Flexible Message Handling**: Support for both synchronous and asynchronous message processing
+7. **Monitor-Based Error Handling**: Ability to use process monitors instead of links for more robust error handling
 
 Using Gun allows us to focus on the application-specific aspects of WebsockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
 
@@ -90,16 +92,40 @@ end
 
 #### 0.2 Create Gun Client Adapter
 
+Implement a robust Gun client adapter with the following features:
+
+1. **Process Monitoring**: Use Process.monitor/1 instead of links for more reliable tracking
+
+   - Create monitors for Gun processes to detect termination
+   - Clean up monitors appropriately during ownership transfers
+   - Use explicit monitor references with Gun's await functions
+
+2. **Ownership Transfer**: Support reliable ownership transfer between processes
+
+   - Implement transfer_ownership/2 and receive_ownership/2 functions
+   - Ensure proper state transfer during ownership changes
+   - Coordinate message handling during the transfer process
+
+3. **Connection Lifecycle Management**: Implement a state machine for connection status
+
+   - Track connection status with well-defined states
+   - Handle reconnection with configurable strategies
+   - Use gun:await_up/3 with monitor references for reliable connection establishment
+
+4. **WebSocket Handling**: Provide simplified interface for WebSocket operations
+   - Support for upgrading HTTP connections to WebSocket
+   - Frame sending and receiving with proper error handling
+   - Use gun:await/3 with monitor references for waiting on WebSocket upgrades
+
 ### Phase 1: Core Behaviors (2 weeks)
 
 #### 1.1 Define Behavior Interfaces
 
 Start by defining behavior interfaces with TDD:
 
-
 # test/websockex_nova/behaviors/connection_handler_test.exs
-# lib/websockex_nova/behaviors/connection_handler.ex
 
+# lib/websockex_nova/behaviors/connection_handler.ex
 
 #### 1.2 Add Strategy Macros
 
@@ -107,17 +133,13 @@ Start by defining behavior interfaces with TDD:
 - should_reconnect
 - backoff
 
-
 ### Phase 2: Core Infrastructure (2 weeks)
 
 #### 2.1 Implement WebsockexNova Main Module
 
-
 # lib/websockex_nova.ex
 
-
 #### 2.2 Message Processing
-
 
 # lib/websockex_nova/message/processor.ex
 
@@ -131,20 +153,15 @@ Start by defining behavior interfaces with TDD:
 
 # lib/websockex_nova/platform/deribit/adapter.ex
 
-
 ### Phase 4: Observability and Testing (2 weeks)
 
 #### 4.1 Enhanced Telemetry
 
-
 # lib/websockex_nova/telemetry.ex
-
 
 #### 4.2 Integration Tests
 
-
 # test/integration/deribit_test.exs
-
 
 ## Benefits of Using Gun
 
