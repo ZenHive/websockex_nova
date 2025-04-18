@@ -406,6 +406,94 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  describe "comprehensive error handling" do
+    test "handles gun response errors consistently" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+
+      try do
+        # Start connection with self as callback
+        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{callback_pid: self()})
+        assert_connection_status(conn_pid, :connected)
+
+        # Get Gun PID for sending simulated messages
+        state = ConnectionWrapper.get_state(conn_pid)
+        gun_pid = state.gun_pid
+
+        # Create a stream reference
+        stream_ref = make_ref()
+
+        # Simulate an error response being received
+        error_reason = :timeout
+        send(conn_pid, {:gun_error, gun_pid, stream_ref, error_reason})
+
+        # Should receive error message in callback
+        assert_receive {:websockex_nova, {:error, ^stream_ref, ^error_reason}}, 500
+
+        # Close connection
+        ConnectionWrapper.close(conn_pid)
+      after
+        Process.sleep(@default_delay)
+        MockWebSockServer.stop(server_pid)
+      end
+    end
+
+    test "handles connection errors consistently" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+
+      try do
+        # Start connection with self as callback
+        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{callback_pid: self()})
+        assert_connection_status(conn_pid, :connected)
+
+        # Get Gun PID for sending simulated messages
+        state = ConnectionWrapper.get_state(conn_pid)
+        gun_pid = state.gun_pid
+
+        # Simulate a connection error
+        error_reason = :closed
+        send(conn_pid, {:gun_down, gun_pid, :http, error_reason, [], []})
+
+        # Should receive connection down message in callback
+        assert_receive {:websockex_nova, {:connection_down, :http, ^error_reason}}, 500
+
+        # Close connection
+        ConnectionWrapper.close(conn_pid)
+      after
+        Process.sleep(@default_delay)
+        MockWebSockServer.stop(server_pid)
+      end
+    end
+
+    test "handles wait_for_websocket_upgrade errors consistently" do
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+
+      try do
+        # Start connection wrapper
+        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+        assert_connection_status(conn_pid, :connected)
+
+        # Create an intentionally invalid stream reference for testing error handling
+        invalid_stream_ref = make_ref()
+
+        # Attempt to wait for upgrade with invalid stream_ref
+        result = ConnectionWrapper.wait_for_websocket_upgrade(conn_pid, invalid_stream_ref, 100)
+
+        # Should return error tuple with consistent format
+        assert match?({:error, _}, result)
+
+        # Error should contain useful information
+        {:error, reason} = result
+        assert is_atom(reason) or is_tuple(reason)
+
+        # Close connection
+        ConnectionWrapper.close(conn_pid)
+      after
+        Process.sleep(@default_delay)
+        MockWebSockServer.stop(server_pid)
+      end
+    end
+  end
+
   # Helper function to assert connection status with a timeout
   defp assert_connection_status(conn_pid, expected_status, timeout \\ 500) do
     # Use recursion with a timeout to check the status

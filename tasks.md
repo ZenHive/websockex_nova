@@ -316,6 +316,98 @@ Tasks follow this format:
 - **Dependencies**: T2.4
 - **Status**: IN_PROGRESS
 
+### T2.14
+
+- **Name**: Refactor ConnectionWrapper for clean architecture
+- **Description**: Refactor the ConnectionWrapper module to better align with the planned behavior-based architecture
+- **Acceptance Criteria**:
+  - Move business logic to ConnectionManager
+  - Standardize error handling patterns
+  - Support configurable behavior module callbacks
+  - Consistent state management through helpers
+  - Improve message handling delegation
+  - Clean up ownership transfer code
+  - Add telemetry integration
+  - Remove test-only and debugging code from production
+  - Update documentation to reflect new architecture
+  - All tests continue to pass
+- **Priority**: P0
+- **Effort**: 3
+- **Dependencies**: T2.13, T2.8
+- **Status**: TODO
+
+### T2.14.1 Detailed ConnectionWrapper Refactor Plan
+
+**Sprint 1: Foundation Work (Days 1-3)**
+
+1. **Error Handling Standardization** [HIGH] ✅
+
+   - Fix the incomplete error handling at line 398 (`{:error, _reason} = error ->`)
+   - Create consistent error pattern for all error cases
+   - Add helpers for common error scenarios
+
+2. **Business Logic Migration** [HIGH]
+
+   - Identify and move reconnection logic to ConnectionManager
+   - Extract state transition decisions from handle_info callbacks
+   - Use ConnectionManager for all connection lifecycle decisions
+
+3. **State Management Improvements** [HIGH]
+   - Audit current state updates for consistency
+   - Ensure all state changes go through ConnectionState helpers
+   - Remove any direct map updates in ConnectionWrapper
+
+**Sprint 2: Architecture Alignment (Days 4-6)**
+
+4. **Behavior Delegation Implementation** [MEDIUM]
+
+   - Add configuration option for callback module in init/1
+   - Store callback module in state
+   - Call appropriate callbacks for connection events:
+     - On connection established
+     - On websocket connection
+     - On disconnection
+     - On frame received
+     - On error
+
+5. **Message Handling Delegation** [MEDIUM]
+
+   - Review all handle_info callbacks ensuring they delegate to MessageHandlers
+   - Use pattern matching to route messages to appropriate handler functions
+   - Remove inline message handling logic
+
+6. **Ownership Transfer Refinement** [MEDIUM]
+   - Implement proper monitor cleanup during transfers
+   - Add improved error handling for edge cases
+   - Test and document the transfer protocol
+
+**Sprint 3: Polish and Integration (Days 7-9)**
+
+7. **Telemetry Integration** [LOW]
+
+   - Add telemetry event points for key lifecycle events:
+     - Connection established/closed
+     - WebSocket upgrade
+     - Reconnection attempts
+     - Errors
+
+8. **Code Cleanup** [LOW]
+
+   - Move test-only functionality to test support modules
+   - Remove debug message handlers like `{:debug_check_mailbox, pid}`
+   - Review and clean up commented code
+
+9. **Documentation Update** [LOW]
+
+   - Rewrite @moduledoc to describe thin adapter approach
+   - Document the delegation pattern and ownership model
+   - Add examples for common usage patterns
+
+10. **Testing** [CRITICAL]
+    - Ensure all existing tests pass with refactored code
+    - Add tests for new delegation patterns
+    - Add tests for error handling edge cases
+
 ## Phase 3: Reconnection & Integration
 
 ### T3.1

@@ -15,6 +15,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
+  alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
 
   @typedoc "Connection status"
   @type status ::
@@ -292,13 +293,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           {:reply, result, state}
 
         nil ->
-          {:reply, {:error, :stream_not_found}, state}
+          ErrorHandler.handle_stream_error(stream_ref, :stream_not_found, state)
 
         status ->
-          {:reply, {:error, {:invalid_stream_status, status}}, state}
+          ErrorHandler.handle_stream_error(stream_ref, {:invalid_stream_status, status}, state)
       end
     else
-      {:reply, {:error, :not_connected}, state}
+      ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end
 
@@ -393,14 +394,27 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
         {:response, status, headers} when status >= 400 ->
           # HTTP error response
-          {:reply, {:error, {:http_error, status, headers}}, state}
+          reason = {:http_error, status, headers}
 
-        {:error, _reason} = error ->
+          WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_upgrade_error(
+            stream_ref,
+            reason,
+            state
+          )
+
+        {:error, reason} ->
           # Connection or timeout error
-          {:reply, error, state}
+          WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_upgrade_error(
+            stream_ref,
+            reason,
+            state
+          )
       end
     else
-      {:reply, {:error, :not_connected}, state}
+      WebsockexNova.Gun.ConnectionWrapper.ErrorHandler.handle_connection_error(
+        :not_connected,
+        state
+      )
     end
   end
 
@@ -472,7 +486,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
-        {:noreply, state}
+        ErrorHandler.handle_transition_error(state.status, :websocket_connected, reason, state)
     end
   end
 
@@ -498,8 +512,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   def handle_info({:reconnect, _attempt}, state) do
     case initiate_connection(state) do
-      {:ok, new_state} -> {:noreply, new_state}
-      {:error, _reason, error_state} -> {:noreply, error_state}
+      {:ok, new_state} ->
+        {:noreply, new_state}
+
+      {:error, reason, error_state} ->
+        Logger.error("Failed to reconnect: #{inspect(reason)}")
+        ErrorHandler.handle_async_error(nil, {:reconnect_failed, reason}, error_state)
     end
   end
 
@@ -555,7 +573,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
             # Notify the callback about connection down if available
             if new_state.callback_pid do
-              send(new_state.callback_pid, {:websockex_nova, {:connection_down, :http, reason}})
+              MessageHandlers.notify(new_state.callback_pid, {:connection_down, :http, reason})
             end
 
             # If the reason is a crash, we might want to terminate this process as well
@@ -566,8 +584,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
               {:noreply, new_state}
             end
 
-          {:error, _transition_error} ->
+          {:error, transition_reason} ->
             # Failed to transition, terminate this process as well
+            ErrorHandler.handle_transition_error(
+              state.status,
+              :disconnected,
+              transition_reason,
+              state
+            )
+
             {:stop, :gun_terminated, state}
         end
 
