@@ -136,6 +136,7 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   @doc """
   Exports the trace history to a file.
 
@@ -150,24 +151,39 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
   """
   @spec export_trace(ConnectionState.t(), Path.t()) :: :ok | {:error, term()}
   def export_trace(state, path) do
-    history = get_trace_history(state)
-    stats = get_statistics(state)
+    if safe_export_path?(path) do
+      history = get_trace_history(state)
+      stats = get_statistics(state)
 
-    export_data = %{
-      host: state.host,
-      port: state.port,
-      statistics: stats,
-      events: history
-    }
+      export_data = %{
+        host: state.host,
+        port: state.port,
+        statistics: stats,
+        events: history
+      }
 
-    case Jason.encode(export_data, pretty: true) do
-      {:ok, json} ->
-        File.write(path, json)
+      case Jason.encode(export_data, pretty: true) do
+        {:ok, json} ->
+          File.write(path, json)
 
-      {:error, reason} ->
-        Logger.error("Failed to export trace: #{inspect(reason)}")
-        {:error, reason}
+        {:error, reason} ->
+          Logger.error("Failed to export trace: #{inspect(reason)}")
+          {:error, reason}
+      end
+    else
+      Logger.error("Unsafe export path: #{inspect(path)}")
+      {:error, :unsafe_path}
     end
+  end
+
+  defp safe_export_path?(path) when is_binary(path) do
+    export_dir = Application.get_env(:websockex_nova, :export_dir, "exports/")
+    abs_path = Path.expand(path)
+    abs_export_dir = Path.expand(export_dir)
+    valid_dir = String.starts_with?(abs_path, abs_export_dir)
+    no_traversal = not String.contains?(path, "..")
+    valid_ext = String.ends_with?(path, ".json")
+    valid_dir and no_traversal and valid_ext
   end
 
   # Private helper functions
