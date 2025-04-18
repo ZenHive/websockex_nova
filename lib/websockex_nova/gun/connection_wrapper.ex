@@ -3,6 +3,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   A thin adapter over Gun's WebSocket implementation, providing a standardized API.
 
   ## Thin Adapter Pattern
+
   This module implements the "thin adapter" architectural pattern by:
 
   1. **Abstracting Gun's API**: Provides a simpler, more standardized interface over Gun's

@@ -55,6 +55,43 @@ end
 MyApp.SimpleClient.send_frame(client, {:text, "Hello WebSocket!"})
 ```
 
+## Development
+
+This project uses several code quality tools to maintain high standards:
+
+### Static Analysis
+
+- **Dialyzer**: Detects type inconsistencies and potential bugs
+
+  ```
+  mix dialyzer
+  ```
+
+- **Credo**: Enforces code style and best practices
+
+  ```
+  mix credo
+  ```
+
+- **Sobelow**: Identifies security vulnerabilities
+  ```
+  mix sobelow
+  ```
+
+### Documentation
+
+- **ExDoc**: Generates documentation from code comments
+  ```
+  mix docs
+  ```
+
+PLT files for Dialyzer are stored in `priv/plts` and are gitignored. When setting up the project for the first time, you'll need to generate them:
+
+```
+mkdir -p priv/plts
+mix dialyzer
+```
+
 ## Architecture
 
 WebsockexNova uses a behavior-based architecture for flexibility:

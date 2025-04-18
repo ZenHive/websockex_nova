@@ -8,7 +8,12 @@ defmodule WebsockexNova.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
-      deps: deps()
+      deps: deps(),
+      dialyzer: dialyzer(),
+      preferred_cli_env: [
+        dialyzer: :dev,
+        credo: :dev
+      ]
     ]
   end
 
@@ -29,6 +34,17 @@ defmodule WebsockexNova.MixProject do
     [
       {:gun, "~> 2.2"},
       {:jason, "~> 1.4"},
+
+      # Static code analysis
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+
+      # Documentation
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+
+      # Security scanning
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+
       # Used for mock WebSocket server in tests
       {:cowboy, "~> 2.10", only: :test},
       # WebSock for standardized WebSocket handling
@@ -38,6 +54,14 @@ defmodule WebsockexNova.MixProject do
       {:plug_cowboy, "~> 2.6", only: :test}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+    ]
+  end
+
+  defp dialyzer do
+    [
+      plt_core_path: "priv/plts",
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+      plt_add_apps: [:mix, :ex_unit]
     ]
   end
 end
