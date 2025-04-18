@@ -114,7 +114,7 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     Logger.debug("Connection options: #{inspect(opts)}")
 
-    {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, opts)
+    {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, Map.put(opts, :transport, :tcp))
 
     Logger.debug("Connection opened, pid: #{inspect(pid)}")
     # Give some time for the connection to establish
@@ -172,7 +172,8 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     {:ok, pid} =
       ConnectionWrapper.open("127.0.0.1", port, %{
         callback_pid: cb,
-        protocols: [:http]
+        protocols: [:http],
+        transport: :tcp
       })
 
     # Added debug info
@@ -242,7 +243,8 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     {:ok, pid} =
       ConnectionWrapper.open("127.0.0.1", port, %{
         callback_pid: cb,
-        protocols: [:http]
+        protocols: [:http],
+        transport: :tcp
       })
 
     # Added debug info
@@ -311,10 +313,11 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     opts = %{
       callback_pid: cb,
       transport: :tls,
-      transport_opts: [verify: :verify_none]
+      transport_opts: [verify: :verify_none],
+      transport: :tcp
     }
 
-    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, Map.put(opts, :transport, :tcp))
     Process.sleep(200)
 
     assert {:ok, _} =
@@ -371,10 +374,11 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     opts = %{
       callback_pid: cb,
-      protocols: [:http2]
+      protocols: [:http2],
+      transport: :tcp
     }
 
-    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, Map.put(opts, :transport, :tcp))
     Process.sleep(200)
 
     assert {:ok, _} =
@@ -442,10 +446,11 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
       callback_pid: cb,
       transport: :tls,
       protocols: [:http2],
-      transport_opts: [verify: :verify_none]
+      transport_opts: [verify: :verify_none],
+      transport: :tcp
     }
 
-    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, Map.put(opts, :transport, :tcp))
     Process.sleep(200)
 
     assert {:ok, _} =

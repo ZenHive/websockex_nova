@@ -174,16 +174,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           optional(:error_handler) => module()
         }
 
-  @default_options %{
-    transport: :tcp,
-    transport_opts: [],
-    protocols: [:http],
-    retry: 5,
-    ws_opts: %{},
-    backoff_type: :exponential,
-    base_backoff: 1000
-  }
-
   # Client API
 
   @doc """

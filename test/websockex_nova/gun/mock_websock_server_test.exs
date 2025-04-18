@@ -13,7 +13,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
 
       try do
         # Verify we can connect with default options
-        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
+        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
 
         # Verify the connection works
         assert Process.alive?(conn_pid)
@@ -30,7 +30,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
 
       try do
         # Connect with HTTP/2 protocol
-        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{protocols: [:http2]})
+        {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{protocols: [:http2], transport: :tcp})
 
         # Verify connection
         assert Process.alive?(conn_pid)

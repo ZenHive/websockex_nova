@@ -115,7 +115,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
           ConnectionWrapper.open("localhost", port, %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
-            custom_option: "test_value"
+            custom_option: "test_value",
+            transport: :tcp
           })
 
         # Verify we received an init message
@@ -144,7 +145,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         {:ok, conn_pid} =
           ConnectionWrapper.open("localhost", port, %{
             callback_handler: TestConnectionHandler,
-            test_pid: self()
+            test_pid: self(),
+            transport: :tcp
           })
 
         # Verify we received an init message
@@ -186,7 +188,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         {:ok, conn_pid} =
           ConnectionWrapper.open("localhost", port, %{
             callback_handler: TestConnectionHandler,
-            test_pid: self()
+            test_pid: self(),
+            transport: :tcp
           })
 
         # Verify we received an init message
@@ -224,7 +227,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
           ConnectionWrapper.open("localhost", port, %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
-            should_reconnect: true
+            should_reconnect: true,
+            transport: :tcp
           })
 
         # Verify we received an init message
