@@ -51,7 +51,9 @@ defmodule WebsockexNova.MixProject do
       {:websock, "~> 0.5", only: :test},
       {:websock_adapter, "~> 0.5", only: :test},
       # Required for Plug.Cowboy.http/3
-      {:plug_cowboy, "~> 2.6", only: :test}
+      {:plug_cowboy, "~> 2.6", only: :test},
+      {:styler, "~> 1.4", only: [:dev, :test], runtime: false}
+
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
     ]
