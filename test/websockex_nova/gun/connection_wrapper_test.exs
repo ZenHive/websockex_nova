@@ -1,3 +1,9 @@
+@moduledoc """
+Integration and edge case tests for WebsockexNova.Gun.ConnectionWrapper.
+Covers connection lifecycle, frame handling, error handling, ownership transfer, and edge cases.
+Ensures robust error handling, consistent error returns, and correct state transitions.
+"""
+
 defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   use ExUnit.Case, async: false
 
@@ -13,6 +19,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   @websocket_path "/ws"
   @default_delay 100
 
+  @doc """
+  Tests the connection lifecycle, including open, upgrade, and close.
+  Ensures state transitions are correct and resources are cleaned up.
+  """
   describe "connection lifecycle" do
     test "basic connection and WebSocket functionality" do
       # Start a mock WebSock server
@@ -54,6 +64,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end
     end
 
+    @doc """
+    Tests handling of different WebSocket frame types (text, binary, ping, pong).
+    Ensures all frame types are processed and delivered to the callback process.
+    """
     test "handles different frame types" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -96,6 +110,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end
     end
 
+    @doc """
+    Tests manual connection status transitions.
+    Ensures that the connection wrapper can move between :connected, :disconnected, and :reconnecting states,
+    and prevents invalid transitions.
+    """
     test "handles connection status transitions" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -125,6 +144,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests frame handling edge cases, including invalid stream references and close frame behavior.
+  Ensures consistent error returns and graceful handling of closed or missing streams.
+  """
   describe "frame handling" do
     test "handles invalid stream references gracefully" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -149,6 +172,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end
     end
 
+    # This test ensures that sending a close frame is handled correctly, even if the stream is already closed.
+    # It expects either :ok or {:error, :stream_not_found}, documenting the possible outcomes for callers.
     test "handles websocket close frames correctly" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -180,6 +205,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end
     end
 
+    @doc """
+    Tests sending multiple frames in sequence to the same stream.
+    Ensures that the connection wrapper can handle rapid frame delivery without losing or misordering frames.
+    """
     test "handles multiple frame sends in sequence" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -215,6 +244,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests callback notification behavior. Ensures that when a callback process is provided, all connection and frame events
+  are sent to the callback in the expected format.
+  """
   describe "callback notification" do
     test "sends messages to callback process when provided" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -252,6 +285,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests ownership transfer scenarios, including successful transfer, receiving ownership, and error cases
+  (such as missing Gun pid). Ensures monitor references are updated and errors are returned consistently.
+  """
   describe "ownership transfer" do
     test "transfers ownership of Gun process" do
       # Start a mock WebSock server
@@ -337,10 +374,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end
     end
 
+    # This test ensures that transferring ownership with no Gun pid returns {:error, :no_gun_pid}.
+    # This prevents silent failures and makes error handling predictable for callers.
     test "fails gracefully when trying to transfer ownership with no Gun pid" do
-      # A special test that directly creates a GenServer call to simulate
-      # a call to transfer_ownership when there's no Gun pid in the state
-
       # First, create a real process for testing transfer functionality
       {:ok, server_pid, port} = MockWebSockServer.start_link()
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{retry: 0, transport: :tcp})
@@ -364,7 +400,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests error handling for invalid ownership, monitor cleanup, and Gun process errors.
+  Ensures that all error returns are consistent and that resources are cleaned up properly.
+  """
   describe "error handling" do
+    # This test ensures that attempting to receive ownership of a dead Gun process returns an error tuple {:error, _}.
+    # This documents the expected error format for callers in this edge case.
     test "handles invalid receive_ownership gracefully" do
       # Create an invalid Gun PID (non-existent process)
       invalid_gun_pid = spawn(fn -> :ok end)
@@ -423,7 +465,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests comprehensive error handling for Gun protocol errors, connection errors, and upgrade errors.
+  Ensures all error returns are consistent and contain useful diagnostic information.
+  """
   describe "comprehensive error handling" do
+    # This test ensures that wait_for_websocket_upgrade returns a consistent error tuple {:error, reason}
+    # when called with an invalid stream reference, and that the reason is an atom or tuple for diagnostics.
     test "handles gun response errors consistently" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -511,6 +559,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests reconnection and backoff logic. Ensures that the connection wrapper attempts to reconnect after a drop,
+  respects the retry limit, and transitions to the correct state.
+  """
   describe "reconnection and backoff" do
     test "reconnects after connection drop and respects retry limit" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -531,6 +583,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests edge cases in ownership transfer, including transferring while a stream is active and rapid repeated transfers.
+  Ensures that the connection wrapper handles these scenarios without crashing or leaking resources.
+  """
   describe "ownership transfer edge cases" do
     test "transfers ownership while stream is active" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -566,6 +622,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests invocation of a custom callback handler module. Ensures that custom handlers are called as expected
+  and can interact with the connection wrapper state.
+  """
   describe "custom handler invocation" do
     defmodule CustomHandler do
       @moduledoc false
@@ -594,6 +654,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests logging behavior on error cases, such as invalid ownership transfer. Ensures that errors are logged
+  with clear diagnostic messages for troubleshooting.
+  """
   describe "logging on error" do
     test "logs error on invalid ownership transfer" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -616,6 +680,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     end
   end
 
+  @doc """
+  Tests miscellaneous edge cases, including double websocket upgrade, sending after close, and unhandled messages.
+  Ensures that the connection wrapper fails gracefully and does not crash in these scenarios.
+  """
   describe "edge cases" do
     test "double websocket upgrade fails gracefully" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
@@ -631,6 +699,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       MockWebSockServer.stop(server_pid)
     end
 
+    # This test ensures that sending after close returns a consistent error or exit, and documents all accepted outcomes.
     test "send after close returns error" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
