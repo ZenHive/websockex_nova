@@ -475,7 +475,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     "echo"
   end
 
-  defp handle_scenario(:delayed_response, client_pid, type, message, %{response_delay: delay} = state) when delay > 0 do
+  defp handle_scenario(:delayed_response, client_pid, type, message, %{response_delay: delay} = _state) when delay > 0 do
     Logger.debug("Scenario: delayed_response - delaying echo by #{delay}ms")
     Process.send_after(self(), {:delayed_echo, client_pid, type, message}, delay)
     "delayed echo"

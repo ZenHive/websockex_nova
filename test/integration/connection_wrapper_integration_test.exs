@@ -2,6 +2,7 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
   use ExUnit.Case, async: false
 
   alias WebsockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Test.Support.CertificateHelper
   alias WebsockexNova.Test.Support.MockWebSockServer, as: MockServer
 
   require Logger
@@ -287,6 +288,200 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
              )
 
     Logger.debug("Received disconnect notification: #{inspect(msg)}")
+
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  test "connects and exchanges frames over TLS (wss)" do
+    {:ok, certfile, keyfile} =
+      case CertificateHelper.generate_self_signed_certificate() do
+        {c, k} -> {:ok, c, k}
+        other -> {:error, other}
+      end
+
+    {:ok, server, port} =
+      MockServer.start_link(protocol: :tls, certfile: certfile, keyfile: keyfile)
+
+    {:ok, cb} = CallbackHandler.start_link()
+
+    on_exit(fn ->
+      if Process.alive?(server), do: MockServer.stop(server)
+    end)
+
+    opts = %{
+      callback_pid: cb,
+      transport: :tls,
+      transport_opts: [verify: :verify_none]
+    }
+
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    Process.sleep(200)
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:connection_up, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_upgrade, ^stream, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    CallbackHandler.clear(cb)
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, "TLS test"})
+
+    assert {:ok, {:websocket_frame, ^stream, {:text, "TLS test"}}} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_frame, ^stream, {:text, "TLS test"}} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  @tag :skip
+  test "connects and exchanges frames over HTTP/2 (h2c)" do
+    # Skipped: WebSocket upgrades are not supported over HTTP/2 (h2c) with Cowboy/Plug.Cowboy and Gun in the current configuration.
+    # See RFC 8441 for details. Gun and Cowboy do not support extended CONNECT for WebSocket over HTTP/2.
+    # This test is left for documentation and future compatibility.
+    alias WebsockexNova.Test.Support.MockWebSockServer
+
+    {:ok, server, port} = MockWebSockServer.start_link(protocol: :http2)
+    {:ok, cb} = CallbackHandler.start_link()
+
+    on_exit(fn ->
+      if Process.alive?(server), do: MockWebSockServer.stop(server)
+    end)
+
+    opts = %{
+      callback_pid: cb,
+      protocols: [:http2]
+    }
+
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    Process.sleep(200)
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:connection_up, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_upgrade, ^stream, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    CallbackHandler.clear(cb)
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, "HTTP2 test"})
+
+    assert {:ok, {:websocket_frame, ^stream, {:text, "HTTP2 test"}}} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_frame, ^stream, {:text, "HTTP2 test"}} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  @tag :skip
+  test "connects and exchanges frames over HTTP/2 with TLS (h2)" do
+    # Skipped: WebSocket upgrades are not supported over HTTP/2 with TLS (h2) with Cowboy/Plug.Cowboy and Gun in the current configuration.
+    # See RFC 8441 for details. Gun and Cowboy do not support extended CONNECT for WebSocket over HTTP/2.
+    # This test is left for documentation and future compatibility.
+    alias WebsockexNova.Test.Support.CertificateHelper
+    alias WebsockexNova.Test.Support.MockWebSockServer
+
+    {:ok, certfile, keyfile} =
+      case CertificateHelper.generate_self_signed_certificate() do
+        {c, k} -> {:ok, c, k}
+        other -> {:error, other}
+      end
+
+    {:ok, server, port} =
+      MockWebSockServer.start_link(protocol: :https2, certfile: certfile, keyfile: keyfile)
+
+    {:ok, cb} = CallbackHandler.start_link()
+
+    on_exit(fn ->
+      if Process.alive?(server), do: MockWebSockServer.stop(server)
+    end)
+
+    opts = %{
+      callback_pid: cb,
+      transport: :tls,
+      protocols: [:http2],
+      transport_opts: [verify: :verify_none]
+    }
+
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
+    Process.sleep(200)
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:connection_up, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+
+    assert {:ok, _} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_upgrade, ^stream, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    CallbackHandler.clear(cb)
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, "H2 TLS test"})
+
+    assert {:ok, {:websocket_frame, ^stream, {:text, "H2 TLS test"}}} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_frame, ^stream, {:text, "H2 TLS test"}} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
 
     :ok = ConnectionWrapper.close(pid)
   end

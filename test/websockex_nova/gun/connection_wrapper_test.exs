@@ -618,7 +618,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port)
       assert_connection_status(conn_pid, :connected)
-      {:ok, stream_ref1} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      {:ok, _stream_ref1} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
       assert_connection_status(conn_pid, :websocket_connected)
       # Try to upgrade again
       result = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)

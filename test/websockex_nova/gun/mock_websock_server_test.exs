@@ -133,7 +133,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
             transport_opts: [
               verify: :verify_peer,
               cacertfile: certfile,
-              server_name_indication: 'foo.example.com'
+              server_name_indication: ~c"foo.example.com"
             ]
           })
 

@@ -59,18 +59,6 @@ defmodule WebsockexNova.Test.Support.CertificateHelper do
     {cert_file, key_file}
   end
 
-  # Calculate validity period for certificate
-  defp validity_period(now, days) do
-    {now, add_days(now, days)}
-  end
-
-  # Add specified number of days to a datetime
-  defp add_days(datetime, days) do
-    now_secs = :calendar.datetime_to_gregorian_seconds(datetime)
-    later_secs = now_secs + days * 24 * 60 * 60
-    :calendar.gregorian_seconds_to_datetime(later_secs)
-  end
-
   # Write content to a temporary file
   defp write_temp_file(prefix, suffix, content) do
     {:ok, path} = Temp.path(%{prefix: prefix, suffix: suffix})

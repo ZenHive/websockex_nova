@@ -234,7 +234,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         Process.sleep(@default_delay)
 
         # Get initial connection state
-        initial_state = ConnectionWrapper.get_state(conn_pid)
+        # _initial_state = ConnectionWrapper.get_state(conn_pid)
 
         # Stop the server to force a disconnection
         MockWebSockServer.stop(server_pid)
@@ -252,31 +252,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
       after
         # Servers handled in test
         nil
-      end
-    end
-  end
-
-  # Helper function to assert connection status
-  defp assert_connection_status(conn_pid, expected_status, timeout \\ 500) do
-    # Poll the connection status until it matches or times out
-    start_time = System.monotonic_time(:millisecond)
-    check_connection_status(conn_pid, expected_status, start_time, timeout)
-  end
-
-  defp check_connection_status(conn_pid, expected_status, start_time, timeout) do
-    current_time = System.monotonic_time(:millisecond)
-
-    if current_time - start_time > timeout do
-      state = ConnectionWrapper.get_state(conn_pid)
-      flunk("Connection status never reached #{expected_status}, stayed at #{state.status}")
-    else
-      state = ConnectionWrapper.get_state(conn_pid)
-
-      if state.status == expected_status do
-        true
-      else
-        Process.sleep(50)
-        check_connection_status(conn_pid, expected_status, start_time, timeout)
       end
     end
   end
