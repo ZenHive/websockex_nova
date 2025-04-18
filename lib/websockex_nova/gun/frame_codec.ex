@@ -241,14 +241,14 @@ defmodule WebsockexNova.Gun.FrameCodec do
 
   ## Examples
 
-      iex> WebsockexNova.Gun.FrameCodec.is_valid_close_code?(1000)
+      iex> WebsockexNova.Gun.FrameCodec.valid_close_code?(1000)
       true
 
-      iex> WebsockexNova.Gun.FrameCodec.is_valid_close_code?(999)
+      iex> WebsockexNova.Gun.FrameCodec.valid_close_code?(999)
       false
   """
-  @spec is_valid_close_code?(non_neg_integer()) :: boolean()
-  def is_valid_close_code?(code) do
+  @spec valid_close_code?(non_neg_integer()) :: boolean()
+  def valid_close_code?(code) do
     case validate_close_code(code) do
       :ok -> true
       _ -> false

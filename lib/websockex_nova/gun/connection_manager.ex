@@ -329,14 +329,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   # Private functions
 
   @doc """
-  Checks if an error is considered terminal and should prevent reconnection attempts.
+  Determines if an error should be considered terminal (non-recoverable).
 
-  Terminal errors are severe issues that indicate reconnection attempts would likely fail
-  or are not appropriate (e.g., authentication failures, connection refused).
-
-  ## Parameters
-
-  * `error` - The error to check
+  Terminal errors will prevent reconnection attempts, while non-terminal errors
+  may allow reconnection based on the retry policy.
 
   ## Returns
 
@@ -344,25 +340,22 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   * `false` if the error is transient and reconnection can be attempted
   """
   @spec terminal_error?(term()) :: boolean()
-  def terminal_error?(error), do: is_terminal_error?(error)
+  def terminal_error?(nil), do: false
 
-  # Check if an error is considered terminal
-  defp is_terminal_error?(nil), do: false
-
-  defp is_terminal_error?(error) when is_atom(error) do
+  def terminal_error?(error) when is_atom(error) do
     Enum.member?(@terminal_errors, error)
   end
 
   # Handle complex error structures (tuples, maps)
-  defp is_terminal_error?({:error, reason}) when is_atom(reason) do
+  def terminal_error?({:error, reason}) when is_atom(reason) do
     Enum.member?(@terminal_errors, reason)
   end
 
-  defp is_terminal_error?(%{reason: reason}) when is_atom(reason) do
+  def terminal_error?(%{reason: reason}) when is_atom(reason) do
     Enum.member?(@terminal_errors, reason)
   end
 
-  defp is_terminal_error?(_), do: false
+  def terminal_error?(_), do: false
 
   # Apply side effects when transitioning to specific states
   defp apply_transition_effects(state, to_state, params) do

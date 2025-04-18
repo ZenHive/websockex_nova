@@ -209,21 +209,21 @@ defmodule WebsockexNova.Gun.FrameCodecTest do
       assert FrameCodec.close_code_meaning(4000) == "Unknown close code"
     end
 
-    test "is_valid_close_code?/1 checks if close code is valid" do
+    test "valid_close_code?/1 checks if close code is valid" do
       # Valid codes
-      assert FrameCodec.is_valid_close_code?(1000) == true
-      assert FrameCodec.is_valid_close_code?(1001) == true
-      assert FrameCodec.is_valid_close_code?(3000) == true
-      assert FrameCodec.is_valid_close_code?(4000) == true
+      assert FrameCodec.valid_close_code?(1000) == true
+      assert FrameCodec.valid_close_code?(1001) == true
+      assert FrameCodec.valid_close_code?(3000) == true
+      assert FrameCodec.valid_close_code?(4000) == true
 
       # Invalid codes
-      assert FrameCodec.is_valid_close_code?(0) == false
-      assert FrameCodec.is_valid_close_code?(999) == false
-      assert FrameCodec.is_valid_close_code?(5000) == false
+      assert FrameCodec.valid_close_code?(0) == false
+      assert FrameCodec.valid_close_code?(999) == false
+      assert FrameCodec.valid_close_code?(5000) == false
 
       # Reserved codes
-      assert FrameCodec.is_valid_close_code?(1005) == false
-      assert FrameCodec.is_valid_close_code?(1006) == false
+      assert FrameCodec.valid_close_code?(1005) == false
+      assert FrameCodec.valid_close_code?(1006) == false
     end
   end
 
