@@ -32,58 +32,19 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           | {:close, integer(), binary(), ConnectionState.t()}
           | {:stop, term(), ConnectionState.t()}
           | {:error, term()}
-  def call_handle_connect(state, extra_info \\ %{}) do
-    handler_module = Map.get(state.handlers, :connection_handler)
-    handler_state = Map.get(state.handlers, :connection_handler_state)
-
-    Logger.debug("BehaviorHelpers - call_handle_connect called with handler_module: #{inspect(handler_module)}")
-
-    if handler_module && handler_state do
-      # Build connection info for the handler
-      conn_info = %{
-        host: state.host,
-        port: state.port,
-        path: Map.get(extra_info, :path, "/"),
-        protocol: Map.get(extra_info, :protocol),
-        transport: Map.get(state.options, :transport, :tcp)
-      }
-
-      Logger.debug("BehaviorHelpers - Calling handle_connect with conn_info: #{inspect(conn_info)}")
-
-      # Call the handler and process response
-      case handler_module.handle_connect(conn_info, handler_state) do
-        {:ok, new_handler_state} ->
-          {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}
-
-        {:reply, frame_type, data, new_handler_state} ->
-          # Store the handler state and the frame to send
-          updated_state =
-            ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-          {:reply, frame_type, data, updated_state}
-
-        {:close, code, reason, new_handler_state} ->
-          # Store the handler state and return close info
-          updated_state =
-            ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-          {:close, code, reason, updated_state}
-
-        {:stop, reason, new_handler_state} ->
-          # Update state but return stop directive
-          updated_state =
-            ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-          {:stop, reason, updated_state}
-
-        other ->
-          Logger.error("Invalid return from handle_connect: #{inspect(other)}")
-          {:error, :invalid_handler_return}
-      end
+  def call_handle_connect(%ConnectionState{} = state, extra_info \\ %{}) do
+    with {:ok, handler_module, handler_state} <- fetch_handler(state),
+         conn_info = build_conn_info(state, extra_info),
+         {:ok, result} <- call_handler_connect(handler_module, conn_info, handler_state, state) do
+      result
     else
-      Logger.debug("BehaviorHelpers - Skipping call_handle_connect, no handler_module or handler_state")
+      :no_handler ->
+        Logger.debug("BehaviorHelpers - Skipping call_handle_connect, no handler_module or handler_state")
+        {:ok, state}
 
-      {:ok, state}
+      {:error, reason} ->
+        Logger.error("BehaviorHelpers - call_handle_connect error: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
@@ -103,74 +64,18 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:ok, ConnectionState.t()}
           | {:reconnect, ConnectionState.t()}
           | {:stop, term(), ConnectionState.t()}
-  def call_handle_disconnect(state, reason) do
-    handler_module = Map.get(state.handlers, :connection_handler)
-    handler_state = Map.get(state.handlers, :connection_handler_state)
-
-    Logger.debug("BehaviorHelpers - call_handle_disconnect with reason: #{inspect(reason)}")
-    Logger.debug("BehaviorHelpers - handler_module: #{inspect(handler_module)}")
-
-    # Check if test_pid is properly stored
-    if handler_state != nil && is_map(handler_state) do
-      if Map.has_key?(handler_state, :test_pid) do
-        test_pid = Map.get(handler_state, :test_pid)
-        Logger.debug("BehaviorHelpers - handler_state has test_pid: #{inspect(test_pid)}")
-      else
-        Logger.debug("BehaviorHelpers - handler_state has no test_pid")
-      end
-
-      Logger.debug("BehaviorHelpers - handler_state keys: #{inspect(Map.keys(handler_state))}")
+  def call_handle_disconnect(%ConnectionState{} = state, reason) do
+    with {:ok, handler_module, handler_state} <- fetch_handler(state),
+         formatted_reason = format_disconnect_reason(reason),
+         {:ok, result} <- call_handler_disconnect(handler_module, formatted_reason, handler_state, state) do
+      result
     else
-      Logger.debug("BehaviorHelpers - handler_state is nil or not a map")
-    end
+      :no_handler ->
+        Logger.debug("BehaviorHelpers - Skipping call_handle_disconnect, no handler_module or handler_state")
+        {:ok, state}
 
-    if handler_module && handler_state do
-      # Format the reason for the handler
-      formatted_reason = format_disconnect_reason(reason)
-      Logger.debug("BehaviorHelpers - formatted_reason: #{inspect(formatted_reason)}")
-
-      # Call the handler
-      try do
-        Logger.debug("BehaviorHelpers - Calling handle_disconnect with reason: #{inspect(formatted_reason)}")
-
-        case handler_module.handle_disconnect(formatted_reason, handler_state) do
-          {:ok, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_disconnect returned {:ok, state}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:ok, updated_state}
-
-          {:reconnect, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_disconnect returned {:reconnect, state}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:reconnect, updated_state}
-
-          {:stop, stop_reason, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_disconnect returned {:stop, reason, state}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:stop, stop_reason, updated_state}
-
-          other ->
-            Logger.error("Invalid return from handle_disconnect: #{inspect(other)}")
-            {:ok, state}
-        end
-      rescue
-        e ->
-          Logger.error("Error in call_handle_disconnect: #{inspect(e)}")
-          {:ok, state}
-      end
-    else
-      Logger.debug("BehaviorHelpers - Skipping call_handle_disconnect, no handler_module or handler_state")
-
-      {:ok, state}
+      {:error, _} ->
+        {:ok, state}
     end
   end
 
@@ -192,68 +97,17 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:ok, ConnectionState.t()}
           | {:reply, atom(), binary(), ConnectionState.t(), reference()}
           | {:close, integer(), binary(), ConnectionState.t(), reference()}
-  def call_handle_frame(state, frame_type, frame_data, stream_ref) do
-    handler_module = Map.get(state.handlers, :connection_handler)
-    handler_state = Map.get(state.handlers, :connection_handler_state)
-
-    Logger.debug("BehaviorHelpers - call_handle_frame for frame_type: #{inspect(frame_type)}")
-
-    # Check if test_pid is properly stored
-    if handler_state != nil && is_map(handler_state) do
-      if Map.has_key?(handler_state, :test_pid) do
-        test_pid = Map.get(handler_state, :test_pid)
-        Logger.debug("BehaviorHelpers - handler_state has test_pid: #{inspect(test_pid)}")
-      else
-        Logger.debug("BehaviorHelpers - handler_state has no test_pid")
-      end
-    end
-
-    if handler_module && handler_state do
-      # Call the handler
-      try do
-        Logger.debug(
-          "BehaviorHelpers - Calling handle_frame with type: #{inspect(frame_type)}, data: #{inspect(frame_data)}"
-        )
-
-        case handler_module.handle_frame(frame_type, frame_data, handler_state) do
-          {:ok, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_frame returned {:ok, state}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:ok, updated_state}
-
-          {:reply, reply_type, reply_data, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_frame returned {:reply, ...}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:reply, reply_type, reply_data, updated_state, stream_ref}
-
-          {:close, code, reason, new_handler_state} ->
-            Logger.debug("BehaviorHelpers - handle_frame returned {:close, ...}")
-
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:close, code, reason, updated_state, stream_ref}
-
-          other ->
-            Logger.error("Invalid return from handle_frame: #{inspect(other)}")
-            {:ok, state}
-        end
-      rescue
-        e ->
-          Logger.error("Error in call_handle_frame: #{inspect(e)}, #{Exception.format_stacktrace()}")
-
-          {:ok, state}
-      end
+  def call_handle_frame(%ConnectionState{} = state, frame_type, frame_data, stream_ref) do
+    with {:ok, handler_module, handler_state} <- fetch_handler(state),
+         {:ok, result} <- call_handler_frame(handler_module, frame_type, frame_data, handler_state, state, stream_ref) do
+      result
     else
-      Logger.debug("BehaviorHelpers - Skipping call_handle_frame, no handler_module or handler_state")
+      :no_handler ->
+        Logger.debug("BehaviorHelpers - Skipping call_handle_frame, no handler_module or handler_state")
+        {:ok, state}
 
-      {:ok, state}
+      {:error, _} ->
+        {:ok, state}
     end
   end
 
@@ -272,70 +126,141 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:ok, ConnectionState.t()}
           | {:reconnect, ConnectionState.t()}
           | {:stop, term(), ConnectionState.t()}
-  def call_handle_timeout(state) do
-    handler_module = Map.get(state.handlers, :connection_handler)
-    handler_state = Map.get(state.handlers, :connection_handler_state)
+  def call_handle_timeout(%ConnectionState{} = state) do
+    with {:ok, handler_module, handler_state} <- fetch_handler(state),
+         true <- function_exported?(handler_module, :handle_timeout, 1) do
+      case safe_call(fn -> handler_module.handle_timeout(handler_state) end) do
+        {:ok, {:ok, new_handler_state}} ->
+          {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
-    if handler_module && is_map(handler_state) do
-      # Check if the handler implements handle_timeout
-      if function_exported?(handler_module, :handle_timeout, 1) do
-        case handler_module.handle_timeout(handler_state) do
-          {:ok, new_handler_state} ->
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:reconnect, new_handler_state}} ->
+          {:reconnect, ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
-            {:ok, updated_state}
+        {:ok, {:stop, stop_reason, new_handler_state}} ->
+          {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
-          {:reconnect, new_handler_state} ->
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, other} ->
+          Logger.error("Invalid return from handle_timeout: #{inspect(other)}")
+          {:ok, state}
 
-            {:reconnect, updated_state}
-
-          {:stop, stop_reason, new_handler_state} ->
-            updated_state =
-              ConnectionState.update_connection_handler_state(state, new_handler_state)
-
-            {:stop, stop_reason, updated_state}
-
-          other ->
-            Logger.error("Invalid return from handle_timeout: #{inspect(other)}")
-            {:ok, state}
-        end
-      else
-        # If handle_timeout is not implemented, default to reconnect
-        {:reconnect, state}
+        {:error, _} ->
+          {:ok, state}
       end
     else
-      {:reconnect, state}
+      :no_handler -> {:reconnect, state}
+      false -> {:reconnect, state}
     end
   end
 
   # Private helper functions
 
-  # Format disconnect reason for the handler
-  defp format_disconnect_reason(reason) do
-    cond do
-      is_tuple(reason) && elem(reason, 0) == :remote ->
-        case reason do
-          {:remote, code, message} when is_integer(code) and is_binary(message) ->
-            {:remote, code, message}
+  defp fetch_handler(%{handlers: %{connection_handler: mod, connection_handler_state: st}})
+       when is_atom(mod) and not is_nil(st),
+       do: {:ok, mod, st}
 
-          _ ->
-            {:remote, 1006, "Connection closed abnormally"}
-        end
+  defp fetch_handler(_), do: :no_handler
 
-      is_tuple(reason) && elem(reason, 0) == :local ->
-        case reason do
-          {:local, code, message} when is_integer(code) and is_binary(message) ->
-            {:local, code, message}
+  defp build_conn_info(state, extra_info) do
+    %{
+      host: state.host,
+      port: state.port,
+      path: Map.get(extra_info, :path, "/"),
+      protocol: Map.get(extra_info, :protocol),
+      transport: Map.get(state.options, :transport, :tcp)
+    }
+  end
 
-          _ ->
-            {:local, 1000, "Normal closure"}
-        end
+  defp call_handler_connect(handler_module, conn_info, handler_state, state) do
+    fn -> handler_module.handle_connect(conn_info, handler_state) end
+    |> safe_call()
+    |> case do
+      {:ok, {:ok, new_handler_state}} ->
+        {:ok, {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
 
-      true ->
-        {:error, reason}
+      {:ok, {:reply, frame_type, data, new_handler_state}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:reply, frame_type, data, updated_state}}
+
+      {:ok, {:close, code, reason, new_handler_state}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:close, code, reason, updated_state}}
+
+      {:ok, {:stop, reason, new_handler_state}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:stop, reason, updated_state}}
+
+      {:ok, other} ->
+        Logger.error("Invalid return from handle_connect: #{inspect(other)}")
+        {:error, :invalid_handler_return}
+
+      {:error, e} ->
+        {:error, e}
     end
   end
+
+  defp call_handler_disconnect(handler_module, formatted_reason, handler_state, state) do
+    fn -> handler_module.handle_disconnect(formatted_reason, handler_state) end
+    |> safe_call()
+    |> case do
+      {:ok, {:ok, new_handler_state}} ->
+        {:ok, {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+
+      {:ok, {:reconnect, new_handler_state}} ->
+        {:ok, {:reconnect, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+
+      {:ok, {:stop, stop_reason, new_handler_state}} ->
+        {:ok, {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+
+      {:ok, other} ->
+        Logger.error("Invalid return from handle_disconnect: #{inspect(other)}")
+        {:error, :invalid_handler_return}
+
+      {:error, e} ->
+        {:error, e}
+    end
+  end
+
+  defp call_handler_frame(handler_module, frame_type, frame_data, handler_state, state, stream_ref) do
+    fn -> handler_module.handle_frame(frame_type, frame_data, handler_state) end
+    |> safe_call()
+    |> case do
+      {:ok, {:ok, new_handler_state}} ->
+        {:ok, {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+
+      {:ok, {:reply, reply_type, reply_data, new_handler_state}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:reply, reply_type, reply_data, updated_state, stream_ref}}
+
+      {:ok, {:close, code, reason, new_handler_state}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        {:ok, {:close, code, reason, updated_state, stream_ref}}
+
+      {:ok, other} ->
+        Logger.error("Invalid return from handle_frame: #{inspect(other)}")
+        {:error, :invalid_handler_return}
+
+      {:error, e} ->
+        {:error, e}
+    end
+  end
+
+  defp safe_call(fun) do
+    {:ok, fun.()}
+  rescue
+    e ->
+      Logger.error("Error in handler callback: #{inspect(e)}")
+      {:error, e}
+  end
+
+  # Format disconnect reason for the handler
+  defp format_disconnect_reason({:remote, code, message}) when is_integer(code) and is_binary(message),
+    do: {:remote, code, message}
+
+  defp format_disconnect_reason({:remote, _, _}), do: {:remote, 1006, "Connection closed abnormally"}
+
+  defp format_disconnect_reason({:local, code, message}) when is_integer(code) and is_binary(message),
+    do: {:local, code, message}
+
+  defp format_disconnect_reason({:local, _, _}), do: {:local, 1000, "Normal closure"}
+  defp format_disconnect_reason(reason), do: {:error, reason}
 end

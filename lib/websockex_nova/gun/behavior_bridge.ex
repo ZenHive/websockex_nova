@@ -201,31 +201,48 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
           | {:reply, atom(), binary(), ConnectionState.t(), reference() | any()}
           | {:stop, term(), ConnectionState.t()}
   def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
-    # Extract frame type and data
     {frame_type, frame_data} = normalize_frame(frame)
-
     Logger.debug("BehaviorBridge: handling websocket frame type: #{inspect(frame_type)}")
 
-    # Call the connection handler's handle_frame callback
-    case BehaviorHelpers.call_handle_frame(state, frame_type, frame_data, stream_ref) do
-      {:ok, handler_state} ->
-        # No reply needed from connection handler, check if we should process the message
-        if frame_type == :text do
-          # For text frames, try to process them as JSON messages
-          process_text_message(gun_pid, stream_ref, frame_data, handler_state)
-        else
-          # For other frame types, just return the updated state
-          {:noreply, handler_state}
-        end
+    handle_frame_result(
+      BehaviorHelpers.call_handle_frame(state, frame_type, frame_data, stream_ref),
+      gun_pid,
+      stream_ref,
+      frame_type,
+      frame_data,
+      state
+    )
+  end
 
-      {:reply, reply_frame_type, reply_data, updated_state, ^stream_ref} ->
-        # Connection handler wants to send a reply
-        {:reply, reply_frame_type, reply_data, updated_state, stream_ref}
+  # Handles the result of call_handle_frame/4 for handle_websocket_frame/4
+  defp handle_frame_result({:ok, handler_state}, gun_pid, stream_ref, :text, frame_data, _state) do
+    process_text_message(gun_pid, stream_ref, frame_data, handler_state)
+  end
 
-      {:close, code, reason, updated_state, ^stream_ref} ->
-        # Connection handler wants to close the connection
-        {:reply, :close, {code, reason}, updated_state, stream_ref}
-    end
+  defp handle_frame_result({:ok, handler_state}, _gun_pid, _stream_ref, _frame_type, _frame_data, _state) do
+    {:noreply, handler_state}
+  end
+
+  defp handle_frame_result(
+         {:reply, reply_frame_type, reply_data, updated_state, stream_ref},
+         _gun_pid,
+         _stream_ref,
+         _frame_type,
+         _frame_data,
+         _state
+       ) do
+    {:reply, reply_frame_type, reply_data, updated_state, stream_ref}
+  end
+
+  defp handle_frame_result(
+         {:close, code, reason, updated_state, stream_ref},
+         _gun_pid,
+         _stream_ref,
+         _frame_type,
+         _frame_data,
+         _state
+       ) do
+    {:reply, :close, {code, reason}, updated_state, stream_ref}
   end
 
   @doc """
@@ -410,91 +427,102 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   defp normalize_frame({:close, code, reason}), do: {:close, "#{code}:#{reason}"}
   defp normalize_frame(other), do: {:unknown, inspect(other)}
 
-  # Processes a text message as JSON, calling the message handler if applicable
+  # Refactored process_text_message/4 for clarity and reduced nesting
   defp process_text_message(_gun_pid, stream_ref, frame_data, state) do
     message_handler = Map.get(state.handlers, :message_handler)
     message_handler_state = Map.get(state.handlers, :message_handler_state)
 
-    if message_handler && message_handler_state do
-      try do
-        # Try to decode the JSON
-        case @json_library.decode(frame_data) do
-          {:ok, decoded} ->
-            # Validate the message
-            case message_handler.validate_message(decoded) do
-              {:ok, validated_message} ->
-                # Process the message
-                case message_handler.handle_message(validated_message, message_handler_state) do
-                  {:ok, new_handler_state} ->
-                    # No reply needed
-                    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                    {:noreply, updated_state}
-
-                  {:reply, reply_message, new_handler_state} ->
-                    # Send a reply
-                    case message_handler.encode_message(reply_message, new_handler_state) do
-                      {:ok, frame_type, encoded_data} ->
-                        # Update state and return the reply
-                        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                        {:reply, frame_type, encoded_data, updated_state, stream_ref}
-
-                      {:error, reason} ->
-                        # Error encoding the message
-                        Logger.error("Error encoding message: #{inspect(reason)}")
-                        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                        {:noreply, updated_state}
-                    end
-
-                  {:reply_many, messages, new_handler_state} ->
-                    # In a real implementation, we'd need to handle sending multiple messages
-                    # For this bridge implementation, we'll just send the first one
-                    Logger.warning("reply_many not fully implemented, sending first message only")
-                    [first_message | _rest] = messages
-
-                    case message_handler.encode_message(first_message, new_handler_state) do
-                      {:ok, frame_type, encoded_data} ->
-                        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                        {:reply, frame_type, encoded_data, updated_state, stream_ref}
-
-                      {:error, reason} ->
-                        Logger.error("Error encoding message: #{inspect(reason)}")
-                        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                        {:noreply, updated_state}
-                    end
-
-                  {:close, code, reason, new_handler_state} ->
-                    # Close the connection
-                    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                    {:reply, :close, {code, reason}, updated_state, stream_ref}
-
-                  {:error, reason, new_handler_state} ->
-                    # Error processing the message
-                    Logger.error("Error processing message: #{inspect(reason)}")
-                    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
-                    {:noreply, updated_state}
-                end
-
-              {:error, reason, _message} ->
-                # Invalid message
-                Logger.debug("Invalid message: #{inspect(reason)}")
-                {:noreply, state}
-            end
-
-          {:error, reason} ->
-            # Failed to decode JSON
-            Logger.debug("Failed to decode JSON: #{inspect(reason)}")
-            {:noreply, state}
-        end
-      rescue
-        e ->
-          # Exception during message processing
-          Logger.error("Exception during message processing: #{inspect(e)}")
-          {:noreply, state}
-      end
-    else
-      # No message handler available
+    if is_nil(message_handler) or is_nil(message_handler_state) do
       {:noreply, state}
+    else
+      do_process_text_message(message_handler, message_handler_state, frame_data, state, stream_ref)
     end
+  end
+
+  # Handles JSON decoding, validation, and message processing for text frames
+  defp do_process_text_message(message_handler, message_handler_state, frame_data, state, stream_ref) do
+    with {:ok, decoded} <- decode_json(frame_data),
+         {:ok, validated_message} <- validate_message(message_handler, decoded) do
+      result = handle_message(message_handler, validated_message, message_handler_state)
+      handle_message_result(result, message_handler, state, stream_ref)
+    else
+      {:error, reason, _message} ->
+        Logger.debug("Invalid message: #{inspect(reason)}")
+        {:noreply, state}
+
+      {:error, reason} ->
+        Logger.debug("Failed to decode JSON: #{inspect(reason)}")
+        {:noreply, state}
+
+      exception ->
+        Logger.error("Exception during message processing: #{inspect(exception)}")
+        {:noreply, state}
+    end
+  rescue
+    e ->
+      Logger.error("Exception during message processing: #{inspect(e)}")
+      {:noreply, state}
+  end
+
+  # Decodes JSON using the configured library
+  defp decode_json(frame_data) do
+    @json_library.decode(frame_data)
+  end
+
+  # Validates the decoded message
+  defp validate_message(message_handler, decoded) do
+    message_handler.validate_message(decoded)
+  end
+
+  # Handles the validated message
+  defp handle_message(message_handler, validated_message, message_handler_state) do
+    message_handler.handle_message(validated_message, message_handler_state)
+  end
+
+  # Handles the result of handle_message/3
+  defp handle_message_result({:ok, new_handler_state}, _message_handler, state, _stream_ref) do
+    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+    {:noreply, updated_state}
+  end
+
+  defp handle_message_result({:reply, reply_message, new_handler_state}, message_handler, state, stream_ref) do
+    case message_handler.encode_message(reply_message, new_handler_state) do
+      {:ok, frame_type, encoded_data} ->
+        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+        {:reply, frame_type, encoded_data, updated_state, stream_ref}
+
+      {:error, reason} ->
+        Logger.error("Error encoding message: #{inspect(reason)}")
+        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+        {:noreply, updated_state}
+    end
+  end
+
+  defp handle_message_result({:reply_many, messages, new_handler_state}, message_handler, state, stream_ref) do
+    Logger.warning("reply_many not fully implemented, sending first message only")
+    [first_message | _rest] = messages
+
+    case message_handler.encode_message(first_message, new_handler_state) do
+      {:ok, frame_type, encoded_data} ->
+        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+        {:reply, frame_type, encoded_data, updated_state, stream_ref}
+
+      {:error, reason} ->
+        Logger.error("Error encoding message: #{inspect(reason)}")
+        updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+        {:noreply, updated_state}
+    end
+  end
+
+  defp handle_message_result({:close, code, reason, new_handler_state}, _message_handler, state, stream_ref) do
+    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+    {:reply, :close, {code, reason}, updated_state, stream_ref}
+  end
+
+  defp handle_message_result({:error, reason, new_handler_state}, _message_handler, state, _stream_ref) do
+    Logger.error("Error processing message: #{inspect(reason)}")
+    updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
+    {:noreply, updated_state}
   end
 
   # Formats disconnect reason for the connection handler
