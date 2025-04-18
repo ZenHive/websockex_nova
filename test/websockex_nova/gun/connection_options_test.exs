@@ -15,7 +15,7 @@ defmodule WebsockexNova.Gun.ConnectionOptionsTest do
 
     test "fills in defaults for missing options" do
       assert {:ok, result} = ConnectionOptions.parse_and_validate(%{})
-      assert result.transport == :tcp
+      assert result.transport == :tls
       assert result.protocols == [:http]
       assert result.retry == 5
       assert result.base_backoff == 1000

@@ -313,11 +313,10 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     opts = %{
       callback_pid: cb,
       transport: :tls,
-      transport_opts: [verify: :verify_none],
-      transport: :tcp
+      transport_opts: [verify: :verify_none]
     }
 
-    {:ok, pid} = ConnectionWrapper.open("localhost", port, Map.put(opts, :transport, :tcp))
+    {:ok, pid} = ConnectionWrapper.open("localhost", port, opts)
     Process.sleep(200)
 
     assert {:ok, _} =
