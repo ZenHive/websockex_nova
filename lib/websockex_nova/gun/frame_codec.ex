@@ -81,36 +81,25 @@ defmodule WebsockexNova.Gun.FrameCodec do
   # Private helper to safely get frame handler with fallback
   defp safe_lookup_handler(frame_type) do
     case ensure_table_exists() do
-      :ok ->
-        case :ets.lookup(@handlers_table, frame_type) do
-          [{^frame_type, handler}] ->
-            handler
-
-          [] ->
-            # Use fallback from module attribute if no entry in ETS
-            Map.get(
-              @frame_handlers,
-              frame_type,
-              ControlFrameHandler
-            )
-        end
-
-      {:error, _reason} ->
-        # Fallback to module attribute if table doesn't exist
-        Map.get(@frame_handlers, frame_type, ControlFrameHandler)
+      :ok -> lookup_handler_from_table(frame_type)
+      {:error, _reason} -> default_handler(frame_type)
     end
   end
+
+  defp lookup_handler_from_table(frame_type) do
+    case :ets.lookup(@handlers_table, frame_type) do
+      [{^frame_type, handler}] -> handler
+      [] -> default_handler(frame_type)
+    end
+  end
+
+  defp default_handler(frame_type), do: Map.get(@frame_handlers, frame_type, ControlFrameHandler)
 
   # Ensure the table exists with fallback mechanism
   defp ensure_table_exists do
     case :ets.info(@handlers_table) do
-      :undefined ->
-        # Table doesn't exist, but should have been created at startup
-        # This is a fallback mechanism for cases where init_handlers_table wasn't called
-        init_handlers_table()
-
-      _ ->
-        :ok
+      :undefined -> init_handlers_table()
+      _ -> :ok
     end
   end
 
@@ -133,10 +122,13 @@ defmodule WebsockexNova.Gun.FrameCodec do
   """
   @spec encode_frame(frame()) :: tuple() | atom()
   def encode_frame(frame) do
-    frame_type = frame_type(frame)
-    handler = safe_lookup_handler(frame_type)
-    handler.encode_frame(frame)
+    frame
+    |> frame_type()
+    |> safe_lookup_handler()
+    |> encode_with_handler(frame)
   end
+
+  defp encode_with_handler(handler, frame), do: handler.encode_frame(frame)
 
   @doc """
   Decodes a WebSocket frame received from Gun.
@@ -157,18 +149,19 @@ defmodule WebsockexNova.Gun.FrameCodec do
   """
   @spec decode_frame(tuple() | atom()) :: decode_result()
   def decode_frame(frame) do
-    frame_type = frame_type(frame)
+    case frame_type(frame) do
+      :invalid -> {:error, :invalid_frame}
+      type -> decode_with_handler(type, frame)
+    end
+  end
 
-    if frame_type == :invalid do
-      {:error, :invalid_frame}
-    else
-      handler = safe_lookup_handler(frame_type)
+  defp decode_with_handler(type, frame) do
+    handler = safe_lookup_handler(type)
 
-      try do
-        handler.decode_frame(frame)
-      rescue
-        _ -> {:error, :invalid_frame}
-      end
+    try do
+      handler.decode_frame(frame)
+    rescue
+      _ -> {:error, :invalid_frame}
     end
   end
 
@@ -191,12 +184,15 @@ defmodule WebsockexNova.Gun.FrameCodec do
   """
   @spec validate_frame(frame()) :: validate_result()
   def validate_frame(frame) do
-    frame_type = frame_type(frame)
-    handler = safe_lookup_handler(frame_type)
-    handler.validate_frame(frame)
+    frame
+    |> frame_type()
+    |> safe_lookup_handler()
+    |> validate_with_handler(frame)
   rescue
     _ -> {:error, :invalid_frame}
   end
+
+  defp validate_with_handler(handler, frame), do: handler.validate_frame(frame)
 
   @doc """
   Validates the size of a control frame payload.
@@ -267,27 +263,23 @@ defmodule WebsockexNova.Gun.FrameCodec do
       "Unknown close code"
   """
   @spec close_code_meaning(non_neg_integer()) :: String.t()
-  def close_code_meaning(code) do
-    case code do
-      1000 -> "Normal closure"
-      1001 -> "Going away"
-      1002 -> "Protocol error"
-      1003 -> "Unsupported data"
-      1004 -> "Reserved"
-      1005 -> "No status received"
-      1006 -> "Abnormal closure"
-      1007 -> "Invalid frame payload data"
-      1008 -> "Policy violation"
-      1009 -> "Message too big"
-      1010 -> "Mandatory extension"
-      1011 -> "Internal error"
-      1012 -> "Service restart"
-      1013 -> "Try again later"
-      1014 -> "Bad gateway"
-      1015 -> "TLS handshake"
-      _ -> "Unknown close code"
-    end
-  end
+  def close_code_meaning(1000), do: "Normal closure"
+  def close_code_meaning(1001), do: "Going away"
+  def close_code_meaning(1002), do: "Protocol error"
+  def close_code_meaning(1003), do: "Unsupported data"
+  def close_code_meaning(1004), do: "Reserved"
+  def close_code_meaning(1005), do: "No status received"
+  def close_code_meaning(1006), do: "Abnormal closure"
+  def close_code_meaning(1007), do: "Invalid frame payload data"
+  def close_code_meaning(1008), do: "Policy violation"
+  def close_code_meaning(1009), do: "Message too big"
+  def close_code_meaning(1010), do: "Mandatory extension"
+  def close_code_meaning(1011), do: "Internal error"
+  def close_code_meaning(1012), do: "Service restart"
+  def close_code_meaning(1013), do: "Try again later"
+  def close_code_meaning(1014), do: "Bad gateway"
+  def close_code_meaning(1015), do: "TLS handshake"
+  def close_code_meaning(_), do: "Unknown close code"
 
   @doc """
   Determines the frame type of a WebSocket frame.
@@ -301,21 +293,16 @@ defmodule WebsockexNova.Gun.FrameCodec do
   The frame type as an atom (`:text`, `:binary`, etc.)
   """
   @spec frame_type(frame()) :: atom()
-  def frame_type(frame) do
-    case frame do
-      {:text, _} -> :text
-      {:binary, _} -> :binary
-      :ping -> :ping
-      {:ping, _} -> :ping
-      :pong -> :pong
-      {:pong, _} -> :pong
-      :close -> :close
-      {:close, _} -> :close
-      {:close, _, _} -> :close
-      # If we can't determine the type, treat as invalid
-      _ -> :invalid
-    end
-  end
+  def frame_type({:text, _}), do: :text
+  def frame_type({:binary, _}), do: :binary
+  def frame_type(:ping), do: :ping
+  def frame_type({:ping, _}), do: :ping
+  def frame_type(:pong), do: :pong
+  def frame_type({:pong, _}), do: :pong
+  def frame_type(:close), do: :close
+  def frame_type({:close, _}), do: :close
+  def frame_type({:close, _, _}), do: :close
+  def frame_type(_), do: :invalid
 
   @doc """
   Gets the handler module for a specific frame type.

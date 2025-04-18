@@ -336,7 +336,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   @impl true
   def handle_info({:websocket_message, client_pid, type, message}, state) do
-    # Record the message
     message_info =
       case type do
         :text -> "TEXT: #{inspect(message)}"
@@ -346,104 +345,64 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     Logger.debug("Received WS message from #{inspect(client_pid)}: #{message_info}")
     messages = [{client_pid, type, message} | state.messages]
 
-    # Handle based on current scenario
-    scenario_response =
-      case state.scenario do
-        :normal ->
-          Logger.debug("Scenario: normal - echoing message back immediately")
-          # Echo the message back
-          case type do
-            :text -> send_text(client_pid, message, state)
-            :binary -> send_binary(client_pid, message, state)
-          end
-
-          "echo"
-
-        :delayed_response ->
-          # Delay then echo
-          if state.response_delay > 0 do
-            Logger.debug("Scenario: delayed_response - delaying echo by #{state.response_delay}ms")
-
-            Process.send_after(
-              self(),
-              {:delayed_echo, client_pid, type, message},
-              state.response_delay
-            )
-
-            "delayed echo"
-          else
-            Logger.debug("Scenario: delayed_response - no delay configured, echoing immediately")
-
-            case type do
-              :text -> send_text(client_pid, message, state)
-              :binary -> send_binary(client_pid, message, state)
-            end
-
-            "echo"
-          end
-
-        :drop_messages ->
-          Logger.debug("Scenario: drop_messages - ignoring message")
-          # Do nothing
-          "dropped"
-
-        :echo_with_error ->
-          # Randomly send error or echo
-          if :rand.uniform(10) <= 3 do
-            Logger.debug("Scenario: echo_with_error - sending error response")
-            # Send error 30% of the time
-            send(client_pid, {:send_error, "Server error"})
-            "error"
-          else
-            Logger.debug("Scenario: echo_with_error - echoing message")
-            # Echo the message back
-            case type do
-              :text -> send_text(client_pid, message, state)
-              :binary -> send_binary(client_pid, message, state)
-            end
-
-            "echo"
-          end
-
-        :unstable ->
-          # Randomly disconnect
-          if :rand.uniform(10) <= 2 do
-            Logger.debug("Scenario: unstable - disconnecting client")
-            # Disconnect 20% of the time
-            send(client_pid, {:disconnect, 1001, "Server instability"})
-            "disconnect"
-          else
-            Logger.debug("Scenario: unstable - echoing message")
-            # Echo the message back
-            case type do
-              :text -> send_text(client_pid, message, state)
-              :binary -> send_binary(client_pid, message, state)
-            end
-
-            "echo"
-          end
-      end
+    scenario_response = handle_scenario(state.scenario, client_pid, type, message, state)
 
     Logger.debug("Message handled with scenario #{state.scenario}, action: #{scenario_response}")
     {:noreply, %{state | messages: messages}}
   end
 
-  @impl true
-  def handle_info({:delayed_echo, client_pid, type, message}, state) do
-    Logger.debug("Processing delayed echo to client #{inspect(client_pid)}")
-
-    case type do
-      :text -> send_text(client_pid, message, state)
-      :binary -> send_binary(client_pid, message, state)
-    end
-
-    {:noreply, state}
+  defp handle_scenario(:normal, client_pid, type, message, state) do
+    Logger.debug("Scenario: normal - echoing message back immediately")
+    echo_message(client_pid, type, message, state)
+    "echo"
   end
 
-  @impl true
-  def handle_info(unexpected_message, state) do
-    Logger.debug("MockWebSockServer received unexpected message: #{inspect(unexpected_message)}")
-    {:noreply, state}
+  defp handle_scenario(:delayed_response, client_pid, type, message, %{response_delay: delay} = state) when delay > 0 do
+    Logger.debug("Scenario: delayed_response - delaying echo by #{delay}ms")
+    Process.send_after(self(), {:delayed_echo, client_pid, type, message}, delay)
+    "delayed echo"
+  end
+
+  defp handle_scenario(:delayed_response, client_pid, type, message, state) do
+    Logger.debug("Scenario: delayed_response - no delay configured, echoing immediately")
+    echo_message(client_pid, type, message, state)
+    "echo"
+  end
+
+  defp handle_scenario(:drop_messages, _client_pid, _type, _message, _state) do
+    Logger.debug("Scenario: drop_messages - ignoring message")
+    "dropped"
+  end
+
+  defp handle_scenario(:echo_with_error, client_pid, type, message, state) do
+    if random_chance(3, 10) do
+      Logger.debug("Scenario: echo_with_error - sending error response")
+      send(client_pid, {:send_error, "Server error"})
+      "error"
+    else
+      Logger.debug("Scenario: echo_with_error - echoing message")
+      echo_message(client_pid, type, message, state)
+      "echo"
+    end
+  end
+
+  defp handle_scenario(:unstable, client_pid, type, message, state) do
+    if random_chance(2, 10) do
+      Logger.debug("Scenario: unstable - disconnecting client")
+      send(client_pid, {:disconnect, 1001, "Server instability"})
+      "disconnect"
+    else
+      Logger.debug("Scenario: unstable - echoing message")
+      echo_message(client_pid, type, message, state)
+      "echo"
+    end
+  end
+
+  defp echo_message(client_pid, :text, message, state), do: send_text(client_pid, message, state)
+  defp echo_message(client_pid, :binary, message, state), do: send_binary(client_pid, message, state)
+
+  defp random_chance(successes, total) do
+    :rand.uniform(total) <= successes
   end
 
   # Helper functions
