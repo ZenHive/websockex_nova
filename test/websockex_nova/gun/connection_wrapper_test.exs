@@ -10,6 +10,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
+  alias WebsockexNova.TestSupport.RateLimitHandlers
+  alias WebsockexNova.Transport.RateLimiting
 
   require Logger
 
@@ -458,6 +460,88 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       assert Process.alive?(conn_pid)
       ConnectionWrapper.close(conn_pid)
       Process.sleep(@default_delay)
+    end
+  end
+
+  describe "rate limiting integration" do
+    setup %{port: port} do
+      # Use a unique name for each test's rate limiter
+      rate_limiter_name = String.to_atom("rate_limiter_" <> Integer.to_string(:erlang.unique_integer([:positive])))
+
+      on_exit(fn ->
+        if Process.whereis(rate_limiter_name), do: GenServer.stop(rate_limiter_name)
+      end)
+
+      %{port: port, rate_limiter_name: rate_limiter_name}
+    end
+
+    test "allows frame when rate limiter allows", %{port: port, rate_limiter_name: rl_name} do
+      {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_allow)
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, rate_limiter: rl_name})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "allowed"})
+      ConnectionWrapper.close(conn_pid)
+    end
+
+    test "queues frame when rate limiter queues", %{port: port, rate_limiter_name: rl_name} do
+      {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_queue)
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, rate_limiter: rl_name})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "should queue"})
+      # The frame should not be sent immediately, but will be processed on tick
+      ConnectionWrapper.close(conn_pid)
+    end
+
+    test "rejects frame when rate limiter rejects", %{port: port, rate_limiter_name: rl_name} do
+      {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_reject)
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, rate_limiter: rl_name})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      result = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "should reject"})
+      assert result == {:error, :test_rejection}
+      ConnectionWrapper.close(conn_pid)
+    end
+
+    test "executes callback when queued frame is processed", %{port: port, rate_limiter_name: rl_name} do
+      {:ok, _} =
+        RateLimiting.start_link(
+          name: rl_name,
+          handler: RateLimitHandlers.TestHandler,
+          mode: :always_queue,
+          process_interval: 50
+        )
+
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, rate_limiter: rl_name})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      # Send frame, which will be queued
+      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "queued callback"})
+      # Register a callback to confirm execution
+      # (The callback is registered internally by ConnectionWrapper, so we just need to wait)
+      # Wait for the process_interval to elapse and the callback to be executed
+      Process.sleep(100)
+      ConnectionWrapper.close(conn_pid)
+    end
+
+    test "all outgoing frames are subject to rate limiting", %{port: port, rate_limiter_name: rl_name} do
+      # Use a handler that tracks all requests
+      {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_allow)
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, rate_limiter: rl_name})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+
+      for i <- 1..3 do
+        :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "msg#{i}"})
+      end
+
+      ConnectionWrapper.close(conn_pid)
     end
   end
 

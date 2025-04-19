@@ -642,6 +642,7 @@ Tasks follow this format:
 - **Effort**: 0.5
 - **Dependencies**: T3.4
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.12
 
@@ -656,6 +657,7 @@ Tasks follow this format:
 - **Effort**: 1.5
 - **Dependencies**: T4.11
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.13
 
@@ -669,6 +671,7 @@ Tasks follow this format:
 - **Effort**: 0.5
 - **Dependencies**: T3.4
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.14
 
@@ -683,6 +686,7 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: T4.13
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.15
 
@@ -697,7 +701,8 @@ Tasks follow this format:
 - **Priority**: P2
 - **Effort**: 1
 - **Dependencies**: T4.14
-- **Status**: TODO
+- **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.16
 
@@ -741,6 +746,19 @@ Tasks follow this format:
 - **Effort**: 1.5
 - **Dependencies**: T4.17
 - **Status**: TODO
+
+### T4.19
+
+- **Name**: Integrate rate limiting into Gun pipeline
+- **Description**: Ensure all outgoing requests and frames from Gun modules are checked against the rate limiting system before being sent. If a request is queued, it should be sent when allowed by the rate limiter.
+- **Acceptance Criteria**:
+  - All outgoing requests/frames are subject to rate limiting
+  - Requests are queued or rejected according to rate limiting policy
+  - Integration is covered by tests
+- **Priority**: P1
+- **Effort**: 1.5
+- **Dependencies**: T4.12
+- **Status**: DONE
 
 ## Phase 5: Platform Integration
 

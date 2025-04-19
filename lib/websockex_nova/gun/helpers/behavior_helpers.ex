@@ -274,7 +274,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
   # Logging helpers
   # defp log_event(:connection, event, context, state) do
-  #   if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+  #   if Map.has_key?(state, :logging_handler) and
+  #              function_exported?(state.logging_handler, :log_connection_event, 3) do
   #     state.logging_handler.log_connection_event(event, context, state)
   #   else
   #     Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")

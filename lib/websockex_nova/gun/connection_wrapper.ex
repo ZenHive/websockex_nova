@@ -138,6 +138,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
   alias WebsockexNova.Gun.Helpers.StateHelpers
+  alias WebsockexNova.Transport.RateLimiting
 
   require Logger
 
@@ -187,7 +188,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           optional(:base_backoff) => non_neg_integer(),
           optional(:callback_handler) => module(),
           optional(:message_handler) => module(),
-          optional(:error_handler) => module()
+          optional(:error_handler) => module(),
+          optional(:rate_limiter) => module()
         }
 
   # Client API
@@ -421,6 +423,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def init({host, port, options, _supervisor}) do
     case ConnectionOptions.parse_and_validate(options) do
       {:ok, validated_options} ->
+        # Store :rate_limiter in options if provided, else default
+        rate_limiter = Map.get(validated_options, :rate_limiter, RateLimiting)
+        validated_options = Map.put(validated_options, :rate_limiter, rate_limiter)
         state = ConnectionState.new(host, port, validated_options)
 
         # Set up behavior handlers if provided in options
@@ -481,8 +486,38 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if state.gun_pid do
       case Map.get(state.active_streams, stream_ref) do
         :websocket ->
-          result = :gun.ws_send(state.gun_pid, stream_ref, frame)
-          {:reply, result, state}
+          # --- Rate Limiting Integration ---
+          # Build a request map for the rate limiter
+          request = %{
+            type: frame_type_from_frame(frame),
+            method: method_from_frame(frame),
+            data: frame_data_from_frame(frame),
+            stream_ref: stream_ref,
+            connection: %{host: state.host, port: state.port}
+          }
+
+          # Use the configured rate limiter (name or module)
+          rate_limiter = Map.get(state.options, :rate_limiter, RateLimiting)
+
+          case RateLimiting.check(request, rate_limiter) do
+            {:allow, _request_id} ->
+              result = :gun.ws_send(state.gun_pid, stream_ref, frame)
+              {:reply, result, state}
+
+            {:queue, request_id} ->
+              # Register a callback to send the frame when allowed
+              callback = fn ->
+                :gun.ws_send(state.gun_pid, stream_ref, frame)
+              end
+
+              _ = RateLimiting.on_process(request_id, callback, rate_limiter)
+              {:reply, :ok, state}
+
+            {:reject, reason} ->
+              {:reply, {:error, reason}, state}
+          end
+
+        # --- End Rate Limiting Integration ---
 
         nil ->
           # Return error if stream reference is not found
@@ -967,4 +1002,23 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   defp handle_websocket_upgrade_result({:error, reason}, stream_ref, state) do
     ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
   end
+
+  # Helper functions for rate limiting request construction
+
+  defp frame_type_from_frame({type, _data}) when type in [:text, :binary, :close], do: type
+  defp frame_type_from_frame(:ping), do: :ping
+  defp frame_type_from_frame(:pong), do: :pong
+  defp frame_type_from_frame(:close), do: :close
+  defp frame_type_from_frame(_), do: :unknown
+
+  defp method_from_frame({type, _data}) when type in [:text, :binary], do: to_string(type)
+  defp method_from_frame({:close, _code, _reason}), do: "close"
+  defp method_from_frame(:ping), do: "ping"
+  defp method_from_frame(:pong), do: "pong"
+  defp method_from_frame(:close), do: "close"
+  defp method_from_frame(_), do: "unknown"
+
+  defp frame_data_from_frame({_type, data}), do: data
+  defp frame_data_from_frame({:close, code, reason}), do: %{code: code, reason: reason}
+  defp frame_data_from_frame(_), do: nil
 end
