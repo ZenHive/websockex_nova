@@ -441,50 +441,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     {:ok, gun_monitor_ref}
   end
 
-  defp await_gun_up(pid, monitor_ref) do
-    case :gun.await_up(pid, 5000, monitor_ref) do
-      {:ok, protocol} ->
-        log_event(:connection, :gun_connection_established, %{protocol: protocol}, %{handlers: %{}})
-        {:ok, protocol}
-
-      {:error, reason} ->
-        Process.demonitor(monitor_ref)
-        :gun.close(pid)
-        log_event(:error, :gun_connection_failed, %{reason: reason}, %{handlers: %{}})
-        {:error, reason}
-    end
-  end
-
-  defp set_gun_owner(pid) do
-    case :gun.set_owner(pid, self()) do
-      :ok ->
-        log_event(:connection, :set_gun_owner, %{owner: self()}, %{handlers: %{}})
-        :ok
-    end
-  end
-
-  defp verify_gun_owner(pid) do
-    case :gun.info(pid) do
-      %{owner: owner} when owner == self() ->
-        log_event(:connection, :verify_gun_owner, %{owner: owner}, %{handlers: %{}})
-        :ok
-
-      _ ->
-        log_event(:connection, :verify_gun_owner_failed, %{}, %{handlers: %{}})
-        :ok
-    end
-  end
-
-  defp send_gun_up_message(pid, protocol) do
-    send(self(), {:gun_up, pid, protocol})
-    :ok
-  end
-
-  # Helper to update the gun monitor reference in the connection state
-  defp update_gun_monitor_ref(state, monitor_ref) do
-    ConnectionState.update_gun_monitor_ref(state, monitor_ref)
-  end
-
   # Calculate backoff delay based on reconnection attempts
   #
   # This function uses the WebsockexNova.Transport.Reconnection module to implement
@@ -561,5 +517,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     else
       Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
     end
+  end
+
+  # Helper to update the gun monitor reference in the connection state
+  defp update_gun_monitor_ref(state, monitor_ref) do
+    ConnectionState.update_gun_monitor_ref(state, monitor_ref)
   end
 end
