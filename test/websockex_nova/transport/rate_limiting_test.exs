@@ -1,50 +1,57 @@
 defmodule WebsockexNova.Transport.RateLimitingTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Transport.RateLimiting
   alias WebsockexNova.TestSupport.RateLimitHandlers
+  alias WebsockexNova.Transport.RateLimiting
 
   require Logger
 
   describe "start_link/1" do
     test "starts the rate limiting server" do
-      unique_name = "rate_limiter_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("rate_limiter_#{:erlang.unique_integer([:positive])}")
       opts = [name: unique_name, handler: RateLimitHandlers.TestHandler]
       {:ok, pid} = RateLimiting.start_link(opts)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       assert Process.alive?(pid)
     end
   end
 
   describe "check/2" do
     setup do
-      unique_name = "rate_limiter_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("rate_limiter_#{:erlang.unique_integer([:positive])}")
+
       opts = [
         name: unique_name,
         handler: RateLimitHandlers.TestHandler,
         mode: :normal,
         process_interval: 50
       ]
+
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       Application.delete_env(:websockex_nova, :rate_limiting)
       IO.puts("Setup test_rate_limiter with opts: #{inspect(opts)}")
       {:ok, _pid} = RateLimiting.start_link(opts)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       {:ok, server: unique_name}
     end
 
@@ -67,29 +74,34 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
   describe "on_process/3" do
     setup do
-      unique_name = "callbacks_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("callbacks_#{:erlang.unique_integer([:positive])}")
+
       opts = [
         name: unique_name,
         handler: RateLimitHandlers.TestHandler,
         mode: :always_queue,
         process_interval: 50
       ]
+
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       Application.delete_env(:websockex_nova, :rate_limiting)
       IO.puts("Setup test_callbacks with opts: #{inspect(opts)}")
       {:ok, _pid} = RateLimiting.start_link(opts)
       IO.puts("State after start_link: #{inspect(:sys.get_state(unique_name))}")
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       {:ok, server: unique_name}
     end
 
@@ -125,29 +137,34 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
   describe "automatic queue processing" do
     setup do
-      unique_name = "auto_process_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("auto_process_#{:erlang.unique_integer([:positive])}")
+
       opts = [
         name: unique_name,
         handler: RateLimitHandlers.TestHandler,
         mode: :always_queue,
         process_interval: 50
       ]
+
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       Application.delete_env(:websockex_nova, :rate_limiting)
       IO.puts("Setup test_auto_process with opts: #{inspect(opts)}")
       {:ok, _pid} = RateLimiting.start_link(opts)
       IO.puts("State after start_link: #{inspect(:sys.get_state(unique_name))}")
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       {:ok, server: unique_name}
     end
 
@@ -175,29 +192,34 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
   describe "force_process_queue/1" do
     setup do
-      unique_name = "force_process_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("force_process_#{:erlang.unique_integer([:positive])}")
+
       opts = [
         name: unique_name,
         handler: RateLimitHandlers.TestHandler,
         mode: :always_queue,
         process_interval: 5000
       ]
+
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       Application.delete_env(:websockex_nova, :rate_limiting)
       IO.puts("Setup test_force_process with opts: #{inspect(opts)}")
       {:ok, _pid} = RateLimiting.start_link(opts)
       IO.puts("State after start_link: #{inspect(:sys.get_state(unique_name))}")
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       {:ok, server: unique_name}
     end
 
@@ -221,45 +243,51 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
   describe "configuration" do
     test "uses application config for handler module" do
-      unique_name = "config_handler_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("config_handler_#{:erlang.unique_integer([:positive])}")
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       test_config = [handler: RateLimitHandlers.TestHandler, mode: :always_allow]
       Application.put_env(:websockex_nova, :rate_limiting, test_config)
       opts = [name: unique_name]
       {:ok, pid} = RateLimiting.start_link(opts)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       request = %{type: :any_type, method: "test", data: nil}
       assert {:allow, _request_id} = RateLimiting.check(request, unique_name)
     end
 
     test "uses application config for process interval" do
-      unique_name = "config_interval_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("config_interval_#{:erlang.unique_integer([:positive])}")
       original_config = Application.get_env(:websockex_nova, :rate_limiting)
       test_config = [process_interval: 123]
       Application.put_env(:websockex_nova, :rate_limiting, test_config)
       opts = [name: unique_name, handler: RateLimitHandlers.TestHandler]
       {:ok, pid} = RateLimiting.start_link(opts)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
+
         if original_config do
           Application.put_env(:websockex_nova, :rate_limiting, original_config)
         else
           Application.delete_env(:websockex_nova, :rate_limiting)
         end
       end)
+
       state = :sys.get_state(pid)
       assert state.process_interval == 123
     end
@@ -267,65 +295,75 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
   describe "edge cases" do
     test "rejects requests when queue is full" do
-      unique_name = "overflow_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("overflow_#{:erlang.unique_integer([:positive])}")
       {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.OverflowHandler)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       assert {:queue, _} = RateLimiting.check(%{}, unique_name)
       assert {:reject, :queue_full} = RateLimiting.check(%{}, unique_name)
     end
 
     test "handles negative/zero refill rates and intervals safely" do
-      unique_name = "neg_refill_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("neg_refill_#{:erlang.unique_integer([:positive])}")
       {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NegativeRefillHandler)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       assert {:allow, _} = RateLimiting.check(%{}, unique_name)
       assert {:queue, _} = RateLimiting.check(%{}, unique_name)
     end
 
     test "uses default cost for unknown request types" do
-      unique_name = "unknown_type_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("unknown_type_#{:erlang.unique_integer([:positive])}")
       {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.UnknownTypeHandler)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       assert {:allow, _} = RateLimiting.check(%{type: :not_in_map}, unique_name)
       assert {:queue, _} = RateLimiting.check(%{type: :not_in_map}, unique_name)
     end
 
     test "logs and rejects on invalid handler return" do
-      unique_name = "invalid_return_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("invalid_return_#{:erlang.unique_integer([:positive])}")
       {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.InvalidReturnHandler)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       assert {:reject, :internal_error} = RateLimiting.check(%{}, unique_name)
     end
 
     test "callback for never-processed request is not executed" do
-      unique_name = "never_process_#{:erlang.unique_integer([:positive])}" |> String.to_atom()
+      unique_name = String.to_atom("never_process_#{:erlang.unique_integer([:positive])}")
       {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NeverProcessHandler)
+
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
           pid -> GenServer.stop(pid)
         end
       end)
+
       {:queue, request_id} = RateLimiting.check(%{}, unique_name)
       test_pid = self()
       :ok = RateLimiting.on_process(request_id, fn -> send(test_pid, :should_not_happen) end, unique_name)
@@ -338,14 +376,23 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
   use ExUnit.Case, async: true
   use ExUnitProperties
 
-  alias WebsockexNova.Transport.RateLimiting
   alias WebsockexNova.TestSupport.RateLimitHandlers
+  alias WebsockexNova.Transport.RateLimiting
 
   property "queue never exceeds its limit" do
     check all n <- integer(1..20),
               seq <- list_of(constant(%{type: :queue_type}), min_length: n, max_length: n, unique: false) do
       unique_name = :"pb_queue_#{:erlang.unique_integer([:positive])}"
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, queue_limit: 3, capacity: 0, tokens: 0)
+
+      {:ok, pid} =
+        RateLimiting.start_link(
+          name: unique_name,
+          handler: RateLimitHandlers.PBTestHandler,
+          queue_limit: 3,
+          capacity: 0,
+          tokens: 0
+        )
+
       Enum.each(seq, fn _ -> RateLimiting.check(%{type: :queue_type}, unique_name) end)
       state = :sys.get_state(unique_name)
       assert :queue.len(state.handler_state.queue) <= 3
@@ -356,7 +403,16 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
   property "callbacks are executed in order of processing" do
     check all(n <- integer(2..10)) do
       unique_name = :"pb_cb_#{:erlang.unique_integer([:positive])}"
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, queue_limit: 10, capacity: 0, tokens: 0)
+
+      {:ok, pid} =
+        RateLimiting.start_link(
+          name: unique_name,
+          handler: RateLimitHandlers.PBTestHandler,
+          queue_limit: 10,
+          capacity: 0,
+          tokens: 0
+        )
+
       test_pid = self()
 
       ids =
@@ -384,7 +440,16 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
     check all n <- integer(5..20),
               seq <- list_of(constant(%{type: :allow_type}), min_length: n, max_length: n, unique: false) do
       unique_name = :"pb_tokens_#{:erlang.unique_integer([:positive])}"
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, capacity: 5, tokens: 5, queue_limit: 3)
+
+      {:ok, pid} =
+        RateLimiting.start_link(
+          name: unique_name,
+          handler: RateLimitHandlers.PBTestHandler,
+          capacity: 5,
+          tokens: 5,
+          queue_limit: 3
+        )
+
       Enum.each(seq, fn _ -> RateLimiting.check(%{type: :allow_type}, unique_name) end)
       state = :sys.get_state(unique_name)
       tokens = state.handler_state.bucket.tokens

@@ -20,14 +20,17 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
   setup do
     {:ok, server_pid, port} = MockWebSockServer.start_link()
+
     on_exit(fn ->
       Process.sleep(@default_delay)
+
       try do
         if is_pid(server_pid) and Process.alive?(server_pid), do: GenServer.stop(server_pid)
       catch
         :exit, _ -> :ok
       end
     end)
+
     %{port: port}
   end
 
@@ -114,16 +117,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       assert_connection_status(conn_pid, :connected)
       {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
       assert_connection_status(conn_pid, :websocket_connected)
+
       frames = [
         {:text, "First message"},
         {:binary, <<10, 20, 30>>},
         :ping,
         {:text, "Last message"}
       ]
+
       Enum.each(frames, fn frame ->
         :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, frame)
         Process.sleep(50)
       end)
+
       ConnectionWrapper.close(conn_pid)
     end
   end
@@ -141,10 +147,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       assert_connection_status(conn_pid, :websocket_connected)
       assert_receive({:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, 500)
       :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "Text message"})
+
       assert_receive(
         {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "Text message"}}},
         500
       )
+
       ConnectionWrapper.close(conn_pid)
     end
   end
@@ -318,10 +326,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
       assert_connection_status(conn_pid, :connected)
       pids = for _ <- 1..3, do: spawn_link(fn -> ownership_transfer_test_process() end)
+
       Enum.each(pids, fn pid ->
         :ok = ConnectionWrapper.transfer_ownership(conn_pid, pid)
         Process.sleep(30)
       end)
+
       ConnectionWrapper.close(conn_pid)
       Process.sleep(@default_delay)
     end
@@ -335,6 +345,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     defmodule CustomHandler do
       @moduledoc false
       def init(opts), do: {:ok, opts}
+
       def handle_frame(_type, _data, state) do
         send(state[:test_pid], :custom_handler_invoked)
         {:ok, state}
@@ -344,6 +355,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "invokes custom callback handler", %{port: port} do
       {:ok, conn_pid} =
         ConnectionWrapper.open("localhost", port, %{callback_handler: CustomHandler, test_pid: self(), transport: :tcp})
+
       assert_connection_status(conn_pid, :connected)
       {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
       assert_connection_status(conn_pid, :websocket_connected)
@@ -365,10 +377,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       state = ConnectionWrapper.get_state(conn_pid)
       modified_state = Map.put(state, :gun_pid, nil)
       :sys.replace_state(conn_pid, fn _ -> modified_state end)
+
       log =
         capture_log(fn ->
           _ = ConnectionWrapper.transfer_ownership(conn_pid, self())
         end)
+
       assert log =~ "Cannot transfer ownership: no Gun process available"
       ConnectionWrapper.close(conn_pid)
       Process.sleep(@default_delay)
@@ -400,13 +414,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       Process.sleep(50)
       refute Process.alive?(conn_pid)
       result = catch_exit(ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "should fail"}))
+
       assert result == {:EXIT, :normal} or
-                 result == {:error, :not_connected} or
-                 result == {:error, :stream_not_found} or
-                 (is_tuple(result) and elem(result, 0) == :normal and is_tuple(elem(result, 1)) and
-                    elem(elem(result, 1), 0) == GenServer) or
-                 (is_tuple(result) and elem(result, 0) == :noproc and is_tuple(elem(result, 1)) and
-                    elem(elem(result, 1), 0) == GenServer)
+               result == {:error, :not_connected} or
+               result == {:error, :stream_not_found} or
+               (is_tuple(result) and elem(result, 0) == :normal and is_tuple(elem(result, 1)) and
+                  elem(elem(result, 1), 0) == GenServer) or
+               (is_tuple(result) and elem(result, 0) == :noproc and is_tuple(elem(result, 1)) and
+                  elem(elem(result, 1), 0) == GenServer)
+
       Process.sleep(@default_delay)
     end
 
@@ -433,6 +449,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
   defp assert_status_with_timeout(conn_pid, expected_status, timeout, elapsed) do
     state = ConnectionWrapper.get_state(conn_pid)
+
     if state.status == expected_status do
       true
     else
@@ -447,6 +464,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     receive do
       {:gun_info, _info} ->
         ownership_transfer_test_process()
+
       _ ->
         ownership_transfer_test_process()
     end
