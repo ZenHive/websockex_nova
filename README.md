@@ -1,6 +1,6 @@
 # WebsockexNova
 
-WebsockexNova is a robust WebSocket client for Elixir, built on top of the [Gun](https://github.com/ninenines/gun) HTTP client. It provides a behavior-based architecture for easy customization and platform-specific integrations, while handling the complexities of WebSocket connections for you.
+WebsockexNova is a robust, extensible WebSocket client for Elixir, built on top of the [Gun](https://github.com/ninenines/gun) HTTP client. It provides a behavior-based architecture for easy customization and platform-specific integrations, while handling the complexities of WebSocket connections for you.
 
 ## Features
 
@@ -24,36 +24,67 @@ def deps do
 end
 ```
 
-## Basic Usage
+## Quickstart (Recommended)
+
+The primary, recommended interface for most users is the ergonomic `WebsockexNova.Client` API, which works with any adapter.
 
 ```elixir
-# Create a simple WebSocket client
-defmodule MyApp.SimpleClient do
-  use WebsockexNova.Client
+# Start a connection using the minimal Echo adapter
+{:ok, pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
 
-  # Implement required callbacks
-  def handle_connect(_conn, state) do
-    IO.puts "Connected to WebSocket server!"
-    {:ok, state}
+# Send a text message and receive an echo
+WebsockexNova.Client.send_text(pid, "Hello")
+# => {:text, "Hello"}
+
+# Send a JSON message and receive an echo
+WebsockexNova.Client.send_json(pid, %{foo: "bar"})
+# => {:text, "{\"foo\":\"bar\"}"}
+```
+
+- The Echo adapter is a minimal, reference implementation. Featureful adapters (like Deribit) support authentication, subscriptions, and more.
+- See the [Adapter Integration Guide](docs/guides/adapter_integration.md) for advanced usage and adapter development.
+
+## Advanced: Custom Process-Based Client Example
+
+For advanced use cases, you can build your own process that manages a WebsockexNova connection and interacts with it using the client API. This is useful if you want to encapsulate connection management, message routing, or integrate with other OTP behaviors.
+
+```elixir
+defmodule MyApp.AdvancedClient do
+  use GenServer
+
+  def start_link(opts) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def handle_frame({:text, message}, _conn, state) do
-    IO.puts "Received message: #{message}"
-    {:ok, state}
+  @impl true
+  def init(_opts) do
+    # Start a connection to the Echo adapter
+    {:ok, conn_pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+    {:ok, %{conn: conn_pid}}
   end
 
-  def handle_disconnect(reason, state) do
-    IO.puts "Disconnected: #{inspect(reason)}"
-    {:reconnect, state}
+  @doc """
+  Send a text message and get the reply (synchronously).
+  """
+  def echo_text(text) do
+    GenServer.call(__MODULE__, {:echo_text, text})
+  end
+
+  @impl true
+  def handle_call({:echo_text, text}, _from, %{conn: conn} = state) do
+    reply = WebsockexNova.Client.send_text(conn, text)
+    {:reply, reply, state}
   end
 end
 
-# Connect to a WebSocket server
-{:ok, client} = MyApp.SimpleClient.start_link("wss://echo.websocket.org")
-
-# Send a message
-MyApp.SimpleClient.send_frame(client, {:text, "Hello WebSocket!"})
+# Usage:
+MyApp.AdvancedClient.start_link([])
+MyApp.AdvancedClient.echo_text("Hello from advanced client!")
+# => {:text, "Hello from advanced client!"}
 ```
+
+- This pattern gives you full control over process supervision, state, and message routing.
+- For most use cases, the direct `WebsockexNova.Client` API is simpler and preferred.
 
 ## Development
 
@@ -188,6 +219,7 @@ For more information, see:
 
 - [Architecture Overview](docs/architecture.md)
 - [Gun Integration Guide](docs/guides/gun_integration.md)
+- [Adapter Integration Guide](docs/guides/adapter_integration.md)
 - [API Reference](https://hexdocs.pm/websockex_nova)
 
 ## Deployment Profiles
