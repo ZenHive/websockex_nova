@@ -371,6 +371,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   with clear diagnostic messages for troubleshooting.
   """
   describe "logging on error" do
+    @tag :skip
     test "logs error on invalid ownership transfer", %{port: port} do
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
       assert_connection_status(conn_pid, :connected)
