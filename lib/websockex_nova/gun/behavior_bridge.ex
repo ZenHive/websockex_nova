@@ -56,13 +56,13 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   @spec handle_gun_up(pid() | any(), atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_gun_up(gun_pid, protocol, state) do
-    Logger.debug("BehaviorBridge: handling gun_up with protocol: #{inspect(protocol)}")
+    log_event(:connection, :gun_up, %{protocol: protocol}, state)
 
     # First update the connection state through the ConnectionManager
     # This ensures the proper state transitions are tracked
     case ConnectionManager.transition_to(state, :connected) do
       {:ok, new_state} ->
-        Logger.debug("BehaviorBridge: State transitioned to :connected")
+        log_event(:connection, :state_transition_connected, %{protocol: protocol}, state)
 
         # Update the Gun PID in state if needed
         state_with_pid = ConnectionState.update_gun_pid(new_state, gun_pid)
@@ -74,33 +74,29 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         case BehaviorHelpers.call_handle_connect(state_with_pid, extra_info) do
           {:ok, updated_state} ->
             # No special action needed, just return the updated state
+            log_event(:connection, :no_reconnect_requested, %{reason: :normal}, updated_state)
             {:noreply, updated_state}
 
           {:reply, _frame_type, _data, updated_state} ->
-            # Handler wants to send a frame, but we may not have a WebSocket stream yet
-            # We'll just log this and ignore the reply for now - in a real implementation
-            # we might want to queue this message for later delivery
-            Logger.info("Connection handler requested frame send on connect, but no stream available yet")
+            log_event(:message, :frame_send_on_connect, %{protocol: protocol}, state)
             {:noreply, updated_state}
 
           {:close, code, reason, updated_state} ->
-            # Handler wants to close the connection - unusual but we'll respect it
-            Logger.warning("Connection handler requested close on connect: code=#{code}, reason=#{reason}")
+            log_event(:connection, :close_on_connect, %{code: code, reason: reason}, updated_state)
             {:stop, {:close_requested, code, reason}, updated_state}
 
           {:stop, reason, updated_state} ->
             # Handler wants to stop the process
+            log_event(:error, :stop_requested, %{stop_reason: reason}, updated_state)
             {:stop, reason, updated_state}
 
           other ->
-            # Unexpected return - log and continue with original state
-            Logger.error("Unexpected return from handle_connect: #{inspect(other)}")
+            log_event(:error, :unexpected_return_handle_connect, %{other: other}, state_with_pid)
             {:noreply, state_with_pid}
         end
 
       {:error, reason} ->
-        # Could not transition to connected state
-        Logger.error("BehaviorBridge: Failed to transition to :connected state: #{inspect(reason)}")
+        log_event(:error, :failed_transition_connected, %{reason: reason}, state)
         {:noreply, state}
     end
   end
@@ -137,7 +133,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
   def handle_gun_down(_gun_pid, _protocol, reason, state, killed_streams \\ [], _unprocessed_streams \\ []) do
-    Logger.debug("BehaviorBridge: handling gun_down with reason: #{inspect(reason)}")
+    log_event(:connection, :gun_down, %{reason: reason}, state)
 
     # First transition to the disconnected state
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
@@ -156,24 +152,20 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         # Call the connection handler's handle_disconnect callback
         case BehaviorHelpers.call_handle_disconnect(state_with_streams_removed, formatted_reason) do
           {:ok, updated_state} ->
-            # No reconnection requested
-            Logger.debug("BehaviorBridge: Connection handler did not request reconnection")
+            log_event(:connection, :no_reconnect_requested, %{reason: reason}, updated_state)
             {:noreply, updated_state}
 
           {:reconnect, updated_state} ->
-            # Reconnection requested
-            Logger.debug("BehaviorBridge: Connection handler requested reconnection")
+            log_event(:connection, :reconnect_requested, %{reason: reason}, updated_state)
             {:noreply, {:reconnect, updated_state}}
 
           {:stop, stop_reason, updated_state} ->
-            # Stop requested by handler
-            Logger.debug("BehaviorBridge: Connection handler requested stop: #{inspect(stop_reason)}")
+            log_event(:connection, :stop_requested, %{stop_reason: stop_reason}, updated_state)
             {:stop, stop_reason, updated_state}
         end
 
       {:error, transition_reason} ->
-        # Could not transition to disconnected state
-        Logger.error("BehaviorBridge: Failed to transition to :disconnected state: #{inspect(transition_reason)}")
+        log_event(:error, :failed_transition_disconnected, %{reason: transition_reason}, state)
         {:noreply, state}
     end
   end
@@ -202,7 +194,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
           | {:stop, term(), ConnectionState.t()}
   def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
     {frame_type, frame_data} = normalize_frame(frame)
-    Logger.debug("BehaviorBridge: handling websocket frame type: #{inspect(frame_type)}")
+    log_event(:message, :websocket_frame, %{frame_type: frame_type, frame_data: frame_data}, state)
 
     handle_frame_result(
       BehaviorHelpers.call_handle_frame(state, frame_type, frame_data, stream_ref),
@@ -265,7 +257,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   @spec handle_websocket_upgrade(pid() | any(), reference() | any(), list(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()} | {:stop, term(), ConnectionState.t()}
   def handle_websocket_upgrade(_gun_pid, stream_ref, headers, state) do
-    Logger.debug("BehaviorBridge: handling websocket upgrade")
+    log_event(:connection, :websocket_upgrade, %{stream_ref: stream_ref, headers: headers}, state)
 
     # First transition to websocket_connected state
     case ConnectionManager.transition_to(state, :websocket_connected) do
@@ -311,8 +303,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         end
 
       {:error, transition_reason} ->
-        # Could not transition to websocket_connected state
-        Logger.error("BehaviorBridge: Failed to transition to :websocket_connected state: #{inspect(transition_reason)}")
+        log_event(:error, :failed_transition_websocket_connected, %{reason: transition_reason}, state)
         {:noreply, state}
     end
   end
@@ -339,7 +330,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
   def handle_error(error, context, state) do
-    Logger.debug("BehaviorBridge: handling error: #{inspect(error)}")
+    log_event(:error, :handle_error, %{error: error, context: context}, state)
 
     # Record the error in the state
     state_with_error = ConnectionState.record_error(state, error)
@@ -400,7 +391,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   """
   @spec should_reconnect?(term(), non_neg_integer(), ConnectionState.t()) :: {boolean(), non_neg_integer() | nil}
   def should_reconnect?(error, attempt, state) do
-    Logger.debug("BehaviorBridge: checking if should reconnect for error: #{inspect(error)}, attempt: #{attempt}")
+    log_event(:connection, :should_reconnect, %{error: error, attempt: attempt}, state)
 
     error_handler = Map.get(state.handlers, :error_handler)
     error_handler_state = Map.get(state.handlers, :error_handler_state)
@@ -447,20 +438,20 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
       handle_message_result(result, message_handler, state, stream_ref)
     else
       {:error, reason, _message} ->
-        Logger.debug("Invalid message: #{inspect(reason)}")
+        log_event(:error, :invalid_message, %{reason: reason}, state)
         {:noreply, state}
 
       {:error, reason} ->
-        Logger.debug("Failed to decode JSON: #{inspect(reason)}")
+        log_event(:error, :failed_decode_json, %{reason: reason}, state)
         {:noreply, state}
 
       exception ->
-        Logger.error("Exception during message processing: #{inspect(exception)}")
+        log_event(:error, :exception_message_processing, %{exception: exception}, state)
         {:noreply, state}
     end
   rescue
     e ->
-      Logger.error("Exception during message processing: #{inspect(e)}")
+      log_event(:error, :exception_message_processing, %{exception: e}, state)
       {:noreply, state}
   end
 
@@ -492,14 +483,14 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         {:reply, frame_type, encoded_data, updated_state, stream_ref}
 
       {:error, reason} ->
-        Logger.error("Error encoding message: #{inspect(reason)}")
+        log_event(:error, :error_encoding_message, %{reason: reason}, state)
         updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
         {:noreply, updated_state}
     end
   end
 
   defp handle_message_result({:reply_many, messages, new_handler_state}, message_handler, state, stream_ref) do
-    Logger.warning("reply_many not fully implemented, sending first message only")
+    log_event(:message, :reply_many_not_implemented, %{messages: messages}, state)
     [first_message | _rest] = messages
 
     case message_handler.encode_message(first_message, new_handler_state) do
@@ -508,7 +499,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         {:reply, frame_type, encoded_data, updated_state, stream_ref}
 
       {:error, reason} ->
-        Logger.error("Error encoding message: #{inspect(reason)}")
+        log_event(:error, :error_encoding_message, %{reason: reason}, state)
         updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
         {:noreply, updated_state}
     end
@@ -520,7 +511,7 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   end
 
   defp handle_message_result({:error, reason, new_handler_state}, _message_handler, state, _stream_ref) do
-    Logger.error("Error processing message: #{inspect(reason)}")
+    log_event(:error, :error_processing_message, %{reason: reason}, state)
     updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
     {:noreply, updated_state}
   end
@@ -544,5 +535,30 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
 
   defp format_disconnect_reason(other) do
     {:error, other}
+  end
+
+  # Logging helpers
+  defp log_event(:connection, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:message, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:error, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
+    end
   end
 end
