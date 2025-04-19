@@ -132,12 +132,12 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
   ## Returns
 
-  * `:allow` - Request can proceed immediately
+  * `{:allow, request_id}` - Request can proceed immediately
   * `{:queue, request_id}` - Request is queued and will be processed later
   * `{:reject, reason}` - Request is rejected with the given reason
   """
   @spec check(map(), GenServer.server()) ::
-          :allow
+          {:allow, reference()}
           | {:queue, reference()}
           | {:reject, term()}
   def check(request, server \\ __MODULE__) do
@@ -375,13 +375,9 @@ defmodule WebsockexNova.Transport.RateLimiting do
     end
   end
 
-  defp start_callback_task(callback, request_id) do
+  defp start_callback_task(callback, _request_id) do
     case Task.start(callback) do
-      {:ok, _pid} ->
-        :ok
-
-      {:error, reason} ->
-        Logger.error("Failed to start callback task for #{inspect(request_id)}: #{inspect(reason)}")
+      {:ok, _pid} -> :ok
     end
   end
 

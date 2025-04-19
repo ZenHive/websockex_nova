@@ -250,7 +250,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   Ensures that all error returns are consistent and that resources are cleaned up properly.
   """
   describe "error handling" do
-    test "handles invalid receive_ownership gracefully", %{port: port} do
+    test "handles invalid receive_ownership gracefully", %{port: _port} do
       invalid_gun_pid = spawn(fn -> :ok end)
       Process.exit(invalid_gun_pid, :kill)
       Process.sleep(50)
