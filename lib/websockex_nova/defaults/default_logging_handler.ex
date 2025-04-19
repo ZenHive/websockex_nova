@@ -57,4 +57,12 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   defp format_log(_category, event, context, other) do
     "[LOG][#{inspect(other)}] #{inspect(event)} | #{inspect(context)}"
   end
+
+  @doc """
+  Initializes the DefaultLoggingHandler state.
+
+  Returns {:ok, opts} where opts is the options map (or empty map).
+  """
+  @spec init(map()) :: {:ok, map()}
+  def init(opts) when is_map(opts), do: {:ok, opts}
 end

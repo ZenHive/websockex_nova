@@ -430,6 +430,16 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           |> initialize_message_handler(validated_options)
           |> initialize_error_handler(validated_options)
 
+        # Set up logging handler (default if not provided)
+        {logging_handler, logging_handler_opts} =
+          case {Map.get(validated_options, :logging_handler), Map.get(validated_options, :logging_handler_options)} do
+            {nil, _} -> {WebsockexNova.Defaults.DefaultLoggingHandler, %{}}
+            {mod, nil} -> {mod, %{}}
+            {mod, opts} -> {mod, opts}
+          end
+
+        state = ConnectionState.setup_logging_handler(state, logging_handler, logging_handler_opts)
+
         case initiate_connection(state) do
           {:ok, updated_state} ->
             {:ok, updated_state}

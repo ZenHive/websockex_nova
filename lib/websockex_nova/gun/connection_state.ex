@@ -26,7 +26,9 @@ defmodule WebsockexNova.Gun.ConnectionState do
             optional(:message_handler) => module(),
             optional(:message_handler_state) => term(),
             optional(:error_handler) => module(),
-            optional(:error_handler_state) => term()
+            optional(:error_handler_state) => term(),
+            optional(:logging_handler) => module(),
+            optional(:logging_handler_state) => term()
           }
         }
 
@@ -479,5 +481,44 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec add_active_stream(t(), reference(), map()) :: t()
   def add_active_stream(state, stream_ref, metadata) when is_map(metadata) do
     %{state | active_streams: Map.put(state.active_streams, stream_ref, metadata)}
+  end
+
+  @doc """
+  Sets up the logging handler and initializes its state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `handler_module` - The logging handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_logging_handler(t(), module(), map()) :: t()
+  def setup_logging_handler(state, handler_module, handler_options) when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                logging_handler: handler_module,
+                logging_handler_state: handler_state
+              })
+        }
+
+      # If init returns an error, we'll still set the handler but with nil state
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                logging_handler: handler_module,
+                logging_handler_state: nil
+              })
+        }
+    end
   end
 end
