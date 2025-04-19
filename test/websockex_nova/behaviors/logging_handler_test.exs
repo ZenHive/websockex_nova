@@ -7,9 +7,16 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
 
   @default_state %{}
   @json_state %{log_level: :info, log_format: :json}
-  @warn_state %{log_level: :warn, log_format: :plain}
+  @warn_state %{log_level: :warning, log_format: :plain}
 
   describe "log_connection_event/3" do
+    setup do
+      old_level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: old_level) end)
+      :ok
+    end
+
     test "logs plain format by default" do
       log =
         capture_log(fn ->
@@ -33,6 +40,13 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
   end
 
   describe "log_message_event/3" do
+    setup do
+      old_level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: old_level) end)
+      :ok
+    end
+
     test "logs message events at info level by default" do
       log =
         capture_log(fn ->
@@ -55,6 +69,13 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
   end
 
   describe "log_error_event/3" do
+    setup do
+      old_level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: old_level) end)
+      :ok
+    end
+
     test "logs error events at info level by default" do
       log =
         capture_log(fn ->
@@ -79,6 +100,13 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
   end
 
   describe "edge cases" do
+    setup do
+      old_level = Logger.level()
+      Logger.configure(level: :debug)
+      on_exit(fn -> Logger.configure(level: old_level) end)
+      :ok
+    end
+
     test "handles unknown log format gracefully" do
       log =
         capture_log(fn ->
@@ -99,6 +127,30 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
       # Logger will treat :notalevel as :info (Logger.log/2 will not crash)
       assert log =~ "[MESSAGE] :foo"
       assert log =~ "bar: 2"
+    end
+  end
+
+  # Add a custom handler integration test
+  defmodule TestHandler do
+    @moduledoc false
+    @behaviour WebsockexNova.Behaviors.LoggingHandler
+
+    def log_connection_event(event, context, _state), do: send(self(), {:log, :connection, event, context})
+    def log_message_event(event, context, _state), do: send(self(), {:log, :message, event, context})
+    def log_error_event(event, context, _state), do: send(self(), {:log, :error, event, context})
+  end
+
+  describe "custom handler integration" do
+    test "custom handler sends log events as messages" do
+      state = %{logging_handler: TestHandler}
+      TestHandler.log_connection_event(:foo, %{bar: 1}, state)
+      assert_receive {:log, :connection, :foo, %{bar: 1}}
+
+      TestHandler.log_message_event(:bar, %{baz: 2}, state)
+      assert_receive {:log, :message, :bar, %{baz: 2}}
+
+      TestHandler.log_error_event(:err, %{reason: :fail}, state)
+      assert_receive {:log, :error, :err, %{reason: :fail}}
     end
   end
 end

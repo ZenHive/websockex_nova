@@ -668,7 +668,7 @@ Tasks follow this format:
 - **Priority**: P2
 - **Effort**: 0.5
 - **Dependencies**: T3.4
-- **Status**: TODO
+- **Status**: DONE
 
 ### T4.14
 
@@ -682,7 +682,7 @@ Tasks follow this format:
 - **Priority**: P2
 - **Effort**: 1
 - **Dependencies**: T4.13
-- **Status**: TODO
+- **Status**: DONE
 
 ### T4.15
 

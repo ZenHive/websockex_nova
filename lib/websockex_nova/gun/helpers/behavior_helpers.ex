@@ -273,13 +273,13 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   defp format_disconnect_reason(reason), do: {:error, reason}
 
   # Logging helpers
-  defp log_event(:connection, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
-      state.logging_handler.log_connection_event(event, context, state)
-    else
-      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
-    end
-  end
+  # defp log_event(:connection, event, context, state) do
+  #   if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+  #     state.logging_handler.log_connection_event(event, context, state)
+  #   else
+  #     Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+  #   end
+  # end
 
   defp log_event(:message, event, context, state) do
     if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do

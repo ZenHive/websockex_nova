@@ -15,7 +15,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
@@ -42,7 +42,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -92,7 +92,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -155,7 +155,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -210,7 +210,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -253,7 +253,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -278,7 +278,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
 
         if original_config do
@@ -301,7 +301,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
@@ -316,7 +316,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
@@ -331,7 +331,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
@@ -346,7 +346,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
@@ -360,7 +360,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       on_exit(fn ->
         case Process.whereis(unique_name) do
           nil -> :ok
-          pid -> GenServer.stop(pid)
+          pid -> if Process.alive?(pid), do: GenServer.stop(pid), else: :ok
         end
       end)
 
