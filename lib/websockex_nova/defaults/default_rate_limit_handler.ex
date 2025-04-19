@@ -112,7 +112,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   @impl true
   def handle_tick(state) do
-    Logger.debug("Handling tick with mode: #{inspect(state.mode)}")
+    # Logger.debug("Handling tick with mode: #{inspect(state.mode)}")
 
     case state.mode do
       :always_allow ->

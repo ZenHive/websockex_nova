@@ -725,7 +725,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 0.5
 - **Dependencies**: T3.4, T4.4
-- **Status**: TODO
+- **Status**: DONE
 
 ### T5.2
 
@@ -739,7 +739,36 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 1
 - **Dependencies**: T5.1
+- **Status**: DONE
+
+### T5.2.1
+
+- **Name**: Create Echo adapter as reference implementation
+- **Description**: Implement a simple Echo adapter as a reference implementation
+- **Acceptance Criteria**:
+  - Echo adapter implementing PlatformAdapter behavior
+  - Tests for the Echo adapter
+  - Documentation explaining the adapter with examples
+  - Simple echo server for integration tests
+- **Priority**: P1
+- **Effort**: 0.5
+- **Dependencies**: T5.2
 - **Status**: TODO
+
+### T5.2.2
+
+- **Name**: Implement process-based connection wrapper for Echo adapter
+- **Description**: Create a GenServer (or similar process) that wraps the Echo adapter, providing a `start_link/1` function, message routing, and process monitoring. This ensures the Echo adapter can be started, supervised, and tested in the same way as Gun-based connections.
+- **Acceptance Criteria**:
+  - Echo adapter can be started with `WebsockexNova.Connection.start_link/1` (or equivalent)
+  - The process supports monitoring and clean shutdown
+  - Messages sent to the connection process are routed to the Echo adapter and replies are routed back
+  - Integration tests for the Echo adapter pass
+  - Documentation updated to reflect the process-based usage pattern
+- **Priority**: P0
+- **Effort**: 1
+- **Dependencies**: T5.2.1
+- **Status**: DONE
 
 ### T5.3
 
