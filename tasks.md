@@ -507,6 +507,7 @@ Tasks follow this format:
 - **Effort**: 0.5
 - **Dependencies**: T1.5
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.2
 
@@ -521,6 +522,7 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: T4.1
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.3
 
@@ -534,6 +536,7 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: T4.2
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.4
 
@@ -548,6 +551,7 @@ Tasks follow this format:
 - **Effort**: 2
 - **Dependencies**: T4.3
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.5
 
@@ -575,6 +579,7 @@ Tasks follow this format:
   - [x] Tests for event emission and aggregation (`test/websockex_nova/defaults/default_metrics_collector_test.exs`)
   - [x] Telemetry emission integration into core modules (next step)
   - [x] Documentation and guides update
+- **Code Review Rating** Rating: 5/5
 
 ### T4.7
 
@@ -587,6 +592,7 @@ Tasks follow this format:
 - **Effort**: 0.5
 - **Dependencies**: T3.4
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.8
 
@@ -601,6 +607,7 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: T4.7
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.9
 
@@ -614,6 +621,7 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: T4.8
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.10
 
@@ -628,6 +636,7 @@ Tasks follow this format:
 - **Effort**: 2
 - **Dependencies**: T4.9
 - **Status**: DONE
+- **Code Review Rating** Rating: 5/5
 
 ### T4.11
 
@@ -969,4 +978,75 @@ Tasks follow this format:
 - **Priority**: P3
 - **Effort**: 2
 - **Dependencies**: T7.5
+- **Status**: TODO
+
+### T7.7
+
+- **Name**: Security Hardening & Secret Management
+- **Description**: Implement advanced security features including credential rotation, integration with Vault/Secrets Manager, audit logging for sensitive actions, and TLS configuration validation.
+- **Acceptance Criteria**:
+  - Support for credential rotation and refresh
+  - Integration with Vault or other secret managers
+  - Audit logging for authentication and sensitive operations
+  - TLS configuration validation and enforcement
+  - All tests passing
+- **Priority**: P2
+- **Effort**: 2
+- **Dependencies**: None
+- **Status**: TODO
+
+### T7.8
+
+- **Name**: Operational Observability & Alerting
+- **Description**: Add operational features for production readiness, including alerting integration, health check endpoints, and runbook documentation.
+- **Acceptance Criteria**:
+  - Prometheus/Sentry alerting integration
+  - Health check endpoints for platform adapters/clients
+  - Runbook documentation for common operational issues
+  - All tests passing
+- **Priority**: P3
+- **Effort**: 1
+- **Dependencies**: None
+- **Status**: TODO
+
+### T7.9
+
+- **Name**: Clustering & Distributed State
+- **Description**: Implement distributed subscription state, distributed rate limiting, and node failover/handoff for high-availability deployments.
+- **Acceptance Criteria**:
+  - Distributed subscription state synchronization
+  - Distributed rate limiting coordination
+  - Node failover and handoff support
+  - All tests passing
+- **Priority**: P3
+- **Effort**: 3
+- **Dependencies**: None
+- **Status**: TODO
+
+### T7.10
+
+- **Name**: Performance & Load Testing
+- **Description**: Add performance and load testing infrastructure, including benchmarking, stress testing, and profiling.
+- **Acceptance Criteria**:
+  - Benchmarking tools and scripts
+  - Stress tests for reconnection, subscription churn, etc.
+  - Profiling and tuning documentation
+  - All tests passing
+- **Priority**: P3
+- **Effort**: 1
+- **Dependencies**: None
+- **Status**: TODO
+
+### T7.11
+
+- **Name**: Compliance & Legal Readiness
+- **Description**: Add features and documentation for compliance (e.g., GDPR, audit trails, data retention).
+- **Acceptance Criteria**:
+  - Data retention and deletion support
+  - Audit trails for sensitive actions
+  - Compliance documentation
+  - All tests passing
+- **Priority**: P4
+- **Effort**: 1
+- **Dependencies**: None
 - **Status**: TODO
