@@ -295,9 +295,32 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{retry: 2, base_backoff: 50, transport: :tcp})
       state = ConnectionWrapper.get_state(conn_pid)
       send(conn_pid, {:gun_down, state.gun_pid, :http, :closed, [], []})
-      Process.sleep(300)
-      state = ConnectionWrapper.get_state(conn_pid)
-      assert state.status in [:disconnected, :error, :reconnecting]
+
+      expected_states = [:disconnected, :error, :reconnecting]
+      start = System.monotonic_time(:millisecond)
+      timeout = 2000
+
+      wait_for_terminal_state = fn ->
+        loop = fn loop ->
+          state = ConnectionWrapper.get_state(conn_pid)
+
+          if state.status in expected_states do
+            state.status
+          else
+            if System.monotonic_time(:millisecond) - start > timeout do
+              flunk("Connection did not reach a terminal state within #{timeout}ms, got #{inspect(state.status)}")
+            else
+              Process.sleep(50)
+              loop.(loop)
+            end
+          end
+        end
+
+        loop.(loop)
+      end
+
+      final_status = wait_for_terminal_state.()
+      assert final_status in expected_states
       ConnectionWrapper.close(conn_pid)
       Process.sleep(@default_delay)
     end
