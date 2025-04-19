@@ -90,11 +90,13 @@ defmodule WebsockexNova.Gun.ClientSupervisorTest do
   end
 
   describe "application configuration" do
-    test "respects application configuration for default options (smoke test)" do
-      # Store original env
+    setup do
       original_env = Application.get_env(:websockex_nova, :gun_client_supervisor, [])
+      on_exit(fn -> Application.put_env(:websockex_nova, :gun_client_supervisor, original_env) end)
+      :ok
+    end
 
-      # Set test configuration
+    test "respects application configuration for default options (smoke test)" do
       test_config = [
         max_restarts: 10,
         max_seconds: 60,
@@ -108,9 +110,6 @@ defmodule WebsockexNova.Gun.ClientSupervisorTest do
 
       # We can't introspect the strategy directly, but we can check the supervisor is alive
       assert Process.alive?(supervisor)
-
-      # Restore original env
-      Application.put_env(:websockex_nova, :gun_client_supervisor, original_env)
     end
   end
 end
