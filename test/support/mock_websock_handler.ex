@@ -13,7 +13,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   def init(options) do
     parent = Keyword.get(options, :parent)
-    Logger.debug("MockWebSockHandler init with options: #{inspect(options)}")
+    log_event(:connection, :init, %{options: options}, %{})
 
     state = %{
       parent: parent,
@@ -22,7 +22,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
     # Register with parent server
     if parent do
-      Logger.debug("MockWebSockHandler registering with parent: #{inspect(parent)}")
+      log_event(:connection, :registering_with_parent, %{parent: parent}, %{})
       send(parent, {:register_client, self(), state.ref})
     end
 
@@ -31,11 +31,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:text, message, opts}, state) do
-    Logger.debug("MockWebSockHandler received TEXT frame: #{inspect(message)}, opts: #{inspect(opts)}")
+    log_event(:message, :received_text_frame, %{message: message, opts: opts}, state)
 
     # Forward message to parent
     if state.parent do
-      Logger.debug("Forwarding text message to parent: #{inspect(state.parent)}")
+      log_event(:message, :forwarding_text_to_parent, %{parent: state.parent}, state)
       send(state.parent, {:websocket_message, self(), :text, message})
     end
 
@@ -46,11 +46,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   # Additional handler to match the format actually being sent by WebSockAdapter
   def handle_in({text_message, [opcode: :text]}, state) when is_binary(text_message) do
-    Logger.debug("MockWebSockHandler received TEXT frame in alternate format: #{inspect(text_message)}")
+    log_event(:message, :received_text_frame_alt, %{text_message: text_message}, state)
 
     # Forward message to parent if configured
     if state.parent do
-      Logger.debug("Forwarding text message to parent: #{inspect(state.parent)}")
+      log_event(:message, :forwarding_text_to_parent, %{parent: state.parent}, state)
       send(state.parent, {:websocket_message, self(), :text, text_message})
     end
 
@@ -60,11 +60,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:binary, message, opts}, state) do
-    Logger.debug("MockWebSockHandler received BINARY frame: #{byte_size(message)} bytes, opts: #{inspect(opts)}")
+    log_event(:message, :received_binary_frame, %{size: byte_size(message), opts: opts}, state)
 
     # Forward message to parent
     if state.parent do
-      Logger.debug("Forwarding binary message to parent: #{inspect(state.parent)}")
+      log_event(:message, :forwarding_binary_to_parent, %{parent: state.parent}, state)
       send(state.parent, {:websocket_message, self(), :binary, message})
     end
 
@@ -75,11 +75,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   # Additional handler for binary frames in the alternate format
   def handle_in({binary_message, [opcode: :binary]}, state) when is_binary(binary_message) do
-    Logger.debug("MockWebSockHandler received BINARY frame in alternate format: #{byte_size(binary_message)} bytes")
+    log_event(:message, :received_binary_frame_alt, %{size: byte_size(binary_message)}, state)
 
     # Forward message to parent if configured
     if state.parent do
-      Logger.debug("Forwarding binary message to parent: #{inspect(state.parent)}")
+      log_event(:message, :forwarding_binary_to_parent, %{parent: state.parent}, state)
       send(state.parent, {:websocket_message, self(), :binary, binary_message})
     end
 
@@ -89,21 +89,21 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:ping, message, _opts}, state) do
-    Logger.debug("MockWebSockHandler received PING frame: #{inspect(message)}")
+    log_event(:message, :received_ping_frame, %{message: message}, state)
     # Auto-respond with pong
     {:push, {:pong, message}, state}
   end
 
   @impl WebSock
   def handle_in({:pong, message, _opts}, state) do
-    Logger.debug("MockWebSockHandler received PONG frame: #{inspect(message)}")
+    log_event(:message, :received_pong_frame, %{message: message}, state)
     # Ignore pongs
     {:ok, state}
   end
 
   @impl WebSock
   def handle_in({:close, code, reason, _opts}, state) do
-    Logger.debug("MockWebSockHandler received CLOSE frame: code=#{inspect(code)}, reason=#{inspect(reason)}")
+    log_event(:message, :received_close_frame, %{code: code, reason: reason}, state)
 
     # Client requested close
     {:stop, :normal, state}
@@ -111,14 +111,14 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_info({:send_text, message}, state) do
-    Logger.debug("MockWebSockHandler sending TEXT frame: #{inspect(message)}")
+    log_event(:message, :sending_text_frame, %{message: message}, state)
     # Send text frame to client
     {:push, {:text, message}, state}
   end
 
   @impl WebSock
   def handle_info({:send_binary, message}, state) do
-    Logger.debug("MockWebSockHandler sending BINARY frame: #{byte_size(message)} bytes")
+    log_event(:message, :sending_binary_frame, %{size: byte_size(message)}, state)
     # Send binary frame to client
     {:push, {:binary, message}, state}
   end
@@ -126,13 +126,13 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   def handle_info({:send_error, reason}, state) do
     # Log error and echo it back as text
-    Logger.error("Mock WebSocket error: #{reason}")
+    log_event(:error, :mock_websocket_error, %{reason: reason}, state)
     {:push, {:text, Jason.encode!(%{error: reason})}, state}
   end
 
   @impl WebSock
   def handle_info({:disconnect, code, reason}, state) do
-    Logger.debug("MockWebSockHandler disconnecting: code=#{inspect(code)}, reason=#{inspect(reason)}")
+    log_event(:connection, :disconnecting, %{code: code, reason: reason}, state)
 
     # Close the WebSocket connection
     {:push, {:close, code, reason}, state}
@@ -141,20 +141,48 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
   @impl WebSock
   def handle_info(message, state) do
     # Log unhandled messages
-    Logger.debug("MockWebSockHandler received unhandled message: #{inspect(message)}")
+    log_event(:message, :received_unhandled_message, %{message: message}, state)
     {:ok, state}
   end
 
   @impl WebSock
   def terminate(reason, state) do
     # Log termination and notify parent if needed
-    Logger.debug("MockWebSockHandler terminating. Reason: #{inspect(reason)}")
+    log_event(:connection, :terminating, %{reason: reason}, state)
 
     if state.parent && Process.alive?(state.parent) do
-      Logger.debug("Notifying parent #{inspect(state.parent)} about termination")
+      log_event(:connection, :notifying_parent_termination, %{parent: state.parent}, state)
       send(state.parent, {:client_terminated, self(), reason})
     end
 
     :ok
+  end
+
+  # Logging helpers
+  defp log_event(:connection, event, context, state) do
+    if is_map(state) and Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:message, event, context, state) do
+    if is_map(state) and Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:error, event, context, state) do
+    if is_map(state) and Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
+    end
   end
 end

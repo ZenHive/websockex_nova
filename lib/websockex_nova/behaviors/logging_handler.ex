@@ -6,7 +6,56 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
 
   ## Usage
 
-  Implement this behavior to control how connection, message, and error events are logged. You may use the default implementation or provide your own for advanced formatting, filtering, or integration with external systems.
+  All Gun pipeline modules, helpers, and test/mock handlers now use the logging handler for connection, message, and error events. If a logging handler is not present in the connection state, logging falls back to Elixir's Logger.
+
+  ### Configuring a Custom Logging Handler
+
+  To use a custom logging handler, add it to your connection state:
+
+      state = %{logging_handler: MyApp.LoggingHandler, ...}
+
+  Your handler module must implement the `WebsockexNova.Behaviors.LoggingHandler` behavior.
+
+  ### Implementing the LoggingHandler Behavior
+
+      defmodule MyApp.LoggingHandler do
+        @behaviour WebsockexNova.Behaviors.LoggingHandler
+
+        @impl true
+        def log_connection_event(event, context, state) do
+          # Custom connection event logging
+          :ok
+        end
+
+        @impl true
+        def log_message_event(event, context, state) do
+          # Custom message event logging
+          :ok
+        end
+
+        @impl true
+        def log_error_event(event, context, state) do
+          # Custom error event logging
+          :ok
+        end
+      end
+
+  ### Example: Plugging in a Custom Handler
+
+      state = %{logging_handler: MyApp.LoggingHandler, ...}
+      # Pass this state to your connection pipeline
+
+  ### Example: Capturing Log Events in Tests
+
+      defmodule MyTest.LoggingHandler do
+        @behaviour WebsockexNova.Behaviors.LoggingHandler
+        def log_connection_event(event, context, state), do: send(self(), {:log, :connection, event, context}); :ok
+        def log_message_event(event, context, state), do: send(self(), {:log, :message, event, context}); :ok
+        def log_error_event(event, context, state), do: send(self(), {:log, :error, event, context}); :ok
+      end
+
+      # In your test setup:
+      state = %{logging_handler: MyTest.LoggingHandler, ...}
 
   ## Callbacks
 
