@@ -551,31 +551,125 @@ Tasks follow this format:
 
 ### T4.5
 
-- **Name**: Create telemetry integration tests
-- **Description**: Test cases for telemetry events
+- **Name**: Telemetry and Metrics Integration (Combined)
+- **Description**: Design and implement a unified telemetry and metrics system. Emit standardized telemetry events throughout the library, and implement a MetricsCollector behavior and default implementation that subscribes to these events. Ensure comprehensive test coverage and documentation.
 - **Acceptance Criteria**:
-  - Tests for connection telemetry events
-  - Tests for message telemetry events
-  - Tests for error telemetry events
-- **Priority**: P1
-- **Effort**: 0.5
-- **Dependencies**: T3.4
-- **Status**: TODO
-
-### T4.6
-
-- **Name**: Add telemetry integration
-- **Description**: Add standardized telemetry events throughout the library
-- **Acceptance Criteria**:
-  - Connection events (connect, disconnect)
-  - Message events (send, receive)
-  - Error events
-  - Performance measurements
+  - Consistent telemetry events are emitted for connection, message, and error events (including performance measurements)
+  - MetricsCollector behavior is defined with required callbacks and typespecs
+  - DefaultMetricsCollector implementation subscribes to telemetry events and tracks:
+    - Connection statistics (counts, durations)
+    - Message throughput (count, size, latency)
+    - Error metrics by category
+  - MetricsCollector supports different metric types (counter, gauge, histogram)
+  - Comprehensive tests for telemetry emission and metrics aggregation
+  - Documentation for event names, payloads, and metrics integration
   - All tests passing
 - **Priority**: P1
-- **Effort**: 1.5
-- **Dependencies**: T4.5
+- **Effort**: 3
+- **Dependencies**: T3.4, T4.4
 - **Status**: TODO
+
+####
+
+step-by-step implementation guide for your new **Telemetry and Metrics Integration (Combined)** task (T4.5):
+
+Telemetry and Metrics Integration: Step-by-Step Guide
+
+**1. Design Telemetry Events**
+
+- **Define event names and structure**
+  Use a consistent namespace, e.g.:
+  - `[:websockex_nova, :connection, :open]`
+  - `[:websockex_nova, :connection, :close]`
+  - `[:websockex_nova, :message, :sent]`
+  - `[:websockex_nova, :message, :received]`
+  - `[:websockex_nova, :error, :occurred]`
+- **Document event payloads**
+  For each event, specify the expected metadata and measurements (e.g., connection id, duration, message size, error reason).
+
+---
+
+**2. Emit Telemetry Events in Code**
+
+- **Add `:telemetry.execute/3` calls**
+  In your connection, message, and error handling modules, emit events at key points:
+  - On connection open/close
+  - On message send/receive
+  - On error
+- **Include relevant metadata and measurements**
+  Example:
+  ```elixir
+  :telemetry.execute(
+    [:websockex_nova, :connection, :open],
+    %{duration: duration_ms},
+    %{connection_id: conn_id, host: host, port: port}
+  )
+  ```
+
+---
+
+**3. Define the MetricsCollector Behavior**
+
+- **Create a `WebsockexNova.Behaviors.MetricsCollector` module**
+  - Specify callbacks for handling telemetry events, e.g.:
+    - `handle_connection_event/3`
+    - `handle_message_event/3`
+    - `handle_error_event/3`
+  - Include typespecs for metrics (counter, gauge, histogram).
+- **Document the expected usage and integration points.**
+
+---
+
+**4. Implement the DefaultMetricsCollector**
+
+- **Create a `WebsockexNova.Defaults.DefaultMetricsCollector` module**
+  - Subscribe to your telemetry events using `:telemetry.attach/4`.
+  - In each handler, update metrics (e.g., ETS, in-memory counters, or expose to Prometheus/StatsD).
+  - Track:
+    - Connection statistics (counts, durations)
+    - Message throughput (count, size, latency)
+    - Error metrics by category
+  - Support different metric types (counter, gauge, histogram).
+
+---
+
+**5. Integrate MetricsCollector with Telemetry**
+
+- **Ensure the default collector is started with your application.**
+- **Allow users to configure a custom collector if desired.**
+- **Document how to add additional collectors or exporters.**
+
+---
+
+**6. Write Comprehensive Tests**
+
+- **Test telemetry emission**
+  - Use `:telemetry.attach/4` in tests to capture and assert on emitted events and payloads.
+- **Test metrics aggregation**
+  - Assert that metrics are updated correctly when events are emitted.
+  - Cover edge cases (e.g., error events, rapid message bursts).
+- **Test configuration and extensibility**
+  - Ensure custom collectors can be plugged in and receive events.
+
+---
+
+**7. Documentation**
+
+- **Document all telemetry events and their payloads.**
+- **Document the MetricsCollector behavior and how to implement custom collectors.**
+- **Provide examples for subscribing to events and exporting metrics.**
+- **Add a section to your main README and/or guides.**
+
+---
+
+**8. (Optional) Expose Metrics for External Systems**
+
+- **If desired, integrate with Prometheus, StatsD, or another metrics backend.**
+- **Document how to enable and configure these integrations.**
+
+---
+
+####
 
 ### T4.7
 
@@ -703,62 +797,6 @@ Tasks follow this format:
 - **Dependencies**: T4.14
 - **Status**: DONE
 - **Code Review Rating** Rating: 5/5
-
-### T4.16
-
-- **Name**: Define MetricsCollector behavior tests
-- **Description**: Test cases for metrics collection
-- **Acceptance Criteria**:
-  - Tests for collect_connection_metrics/3, collect_message_metrics/3
-  - Tests for performance stats aggregation
-  - Tests for metric dimensions and tags
-- **Priority**: P2
-- **Effort**: 0.5
-- **Dependencies**: T4.6
-- **Status**: TODO
-
-### T4.17
-
-- **Name**: Define MetricsCollector behavior
-- **Description**: Create behavior for collecting operational metrics
-- **Acceptance Criteria**:
-  - Required callbacks with proper specs
-  - Default implementations with sensible defaults
-  - Support for different metric types (counter, gauge, histogram)
-  - Integration with telemetry events
-  - Documentation for metrics integration
-- **Priority**: P2
-- **Effort**: 1
-- **Dependencies**: T4.16
-- **Status**: TODO
-
-### T4.18
-
-- **Name**: Implement DefaultMetricsCollector
-- **Description**: Create default implementation of MetricsCollector
-- **Acceptance Criteria**:
-  - Connection statistics tracking (connect/disconnect counts, durations)
-  - Message throughput metrics (count, size, latency)
-  - Error metrics by category
-  - Integration with telemetry
-  - Tests passing
-- **Priority**: P2
-- **Effort**: 1.5
-- **Dependencies**: T4.17
-- **Status**: TODO
-
-### T4.19
-
-- **Name**: Integrate rate limiting into Gun pipeline
-- **Description**: Ensure all outgoing requests and frames from Gun modules are checked against the rate limiting system before being sent. If a request is queued, it should be sent when allowed by the rate limiter.
-- **Acceptance Criteria**:
-  - All outgoing requests/frames are subject to rate limiting
-  - Requests are queued or rejected according to rate limiting policy
-  - Integration is covered by tests
-- **Priority**: P1
-- **Effort**: 1.5
-- **Dependencies**: T4.12
-- **Status**: DONE
 
 ## Phase 5: Platform Integration
 
