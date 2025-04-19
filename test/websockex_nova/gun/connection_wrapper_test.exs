@@ -500,7 +500,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       rate_limiter_name = String.to_atom("rate_limiter_" <> Integer.to_string(:erlang.unique_integer([:positive])))
 
       on_exit(fn ->
-        if Process.whereis(rate_limiter_name), do: GenServer.stop(rate_limiter_name)
+        try do
+          case Process.whereis(rate_limiter_name) do
+            nil -> :ok
+            pid when is_pid(pid) -> GenServer.stop(pid)
+          end
+        catch
+          :exit, _ -> :ok
+        end
       end)
 
       %{port: port, rate_limiter_name: rate_limiter_name}

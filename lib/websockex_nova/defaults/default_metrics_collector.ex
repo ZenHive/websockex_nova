@@ -58,7 +58,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   # Telemetry event handlers
 
   @impl true
-  def handle_connection_event(event, measurements, metadata) do
+  def handle_connection_event(event, measurements, _metadata) do
     case event do
       [:websockex_nova, :connection, :open] ->
         incr(:connections_opened)
@@ -80,7 +80,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   end
 
   @impl true
-  def handle_message_event(event, measurements, metadata) do
+  def handle_message_event(event, measurements, _metadata) do
     case event do
       [:websockex_nova, :message, :sent] ->
         incr(:messages_sent)
@@ -100,7 +100,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   end
 
   @impl true
-  def handle_error_event(event, _measurements, metadata) do
+  def handle_error_event(_event, _measurements, metadata) do
     reason = Map.get(metadata, :reason, :unknown)
     incr({:error, reason})
     incr(:errors_total)

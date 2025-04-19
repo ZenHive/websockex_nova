@@ -6,7 +6,26 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollectorTest do
 
   setup do
     # Ensure the collector is started and ETS is clean
-    {:ok, _pid} = DefaultMetricsCollector.start_link([])
+    started? = Process.whereis(DefaultMetricsCollector)
+
+    if !started? do
+      {:ok, _pid} = DefaultMetricsCollector.start_link([])
+
+      on_exit(fn ->
+        case Process.whereis(DefaultMetricsCollector) do
+          nil ->
+            :ok
+
+          pid when is_pid(pid) ->
+            try do
+              GenServer.stop(pid)
+            catch
+              :exit, _ -> :ok
+            end
+        end
+      end)
+    end
+
     :ets.delete_all_objects(:websockex_nova_metrics)
     :ok
   end
