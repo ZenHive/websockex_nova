@@ -39,11 +39,11 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
       result
     else
       :no_handler ->
-        Logger.debug("BehaviorHelpers - Skipping call_handle_connect, no handler_module or handler_state")
+        log_event(:message, :skipping_call_handle_connect, %{}, state)
         {:ok, state}
 
       {:error, reason} ->
-        Logger.error("BehaviorHelpers - call_handle_connect error: #{inspect(reason)}")
+        log_event(:error, :call_handle_connect_error, %{reason: reason}, state)
         {:error, reason}
     end
   end
@@ -71,7 +71,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
       result
     else
       :no_handler ->
-        Logger.debug("BehaviorHelpers - Skipping call_handle_disconnect, no handler_module or handler_state")
+        log_event(:message, :skipping_call_handle_disconnect, %{}, state)
         {:ok, state}
 
       {:error, _} ->
@@ -111,7 +111,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
       result
     else
       :no_handler ->
-        Logger.debug("BehaviorHelpers - Skipping call_handle_frame, no handler_module or handler_state")
+        log_event(:message, :skipping_call_handle_frame, %{}, state)
         {:ok, state}
 
       {:error, _} ->
@@ -148,7 +148,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
         {:ok, other} ->
-          Logger.error("Invalid return from handle_timeout: #{inspect(other)}")
+          log_event(:error, :invalid_return_handle_timeout, %{other: other}, state)
           {:ok, state}
 
         {:error, _} ->
@@ -198,7 +198,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         {:ok, {:stop, reason, updated_state}}
 
       {:ok, other} ->
-        Logger.error("Invalid return from handle_connect: #{inspect(other)}")
+        log_event(:error, :invalid_return_handle_connect, %{other: other}, state)
         {:error, :invalid_handler_return}
 
       {:error, e} ->
@@ -220,7 +220,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         {:ok, {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
 
       {:ok, other} ->
-        Logger.error("Invalid return from handle_disconnect: #{inspect(other)}")
+        log_event(:error, :invalid_return_handle_disconnect, %{other: other}, state)
         {:error, :invalid_handler_return}
 
       {:error, e} ->
@@ -244,7 +244,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         {:ok, {:close, code, reason, updated_state, stream_ref}}
 
       {:ok, other} ->
-        Logger.error("Invalid return from handle_frame: #{inspect(other)}")
+        log_event(:error, :invalid_return_handle_frame, %{other: other}, state)
         {:error, :invalid_handler_return}
 
       {:error, e} ->
@@ -256,7 +256,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
     {:ok, fun.()}
   rescue
     e ->
-      Logger.error("Error in handler callback: #{inspect(e)}")
+      log_event(:error, :error_in_handler_callback, %{exception: e}, %{})
       {:error, e}
   end
 
@@ -271,4 +271,29 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
   defp format_disconnect_reason({:local, _, _}), do: {:local, 1000, "Normal closure"}
   defp format_disconnect_reason(reason), do: {:error, reason}
+
+  # Logging helpers
+  defp log_event(:connection, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:message, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:error, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
 end

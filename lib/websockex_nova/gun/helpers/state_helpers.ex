@@ -221,7 +221,7 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
 
       update_active_streams_if_needed(updated_state_with_monitor, info)
     else
-      Logger.error("Invalid ownership transfer info: #{inspect(info)}")
+      log_event(:error, :invalid_ownership_transfer_info, %{info: info}, state)
       state
     end
   end
@@ -255,15 +255,33 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
 
   # Private helper functions
 
+  # Logging helpers
+  defp log_event(:connection, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:message, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:error, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
   # Logs state transitions with standardized format and appropriate log level
   defp log_state_transition(state, new_status, message, level \\ :debug) do
-    log_fn =
-      case level do
-        :debug -> &Logger.debug/1
-        # Since Dialyzer is telling us the other cases aren't used, just use debug for everything
-        _ -> &Logger.debug/1
-      end
-
     metadata = %{
       host: state.host,
       port: state.port,
@@ -271,12 +289,11 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
       to_status: new_status
     }
 
-    # Add trace ID if present in state
     metadata =
       if Map.has_key?(state, :trace_id),
         do: Map.put(metadata, :trace_id, state.trace_id),
         else: metadata
 
-    log_fn.(fn -> {message, metadata} end)
+    log_event(:connection, :state_transition, %{message: message, metadata: metadata}, state)
   end
 end
