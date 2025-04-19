@@ -533,3 +533,106 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
     end
   end
 end
+
+defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
+  use ExUnit.Case, async: true
+  use ExUnitProperties
+
+  alias WebsockexNova.Transport.RateLimiting
+
+  defmodule PBTestHandler do
+    @moduledoc false
+    @behaviour WebsockexNova.Behaviors.RateLimitHandler
+
+    @impl true
+    def init(opts) do
+      state = %{
+        bucket: %{
+          capacity: opts[:capacity] || 5,
+          tokens: opts[:tokens] || 5
+        },
+        queue: :queue.new(),
+        queue_limit: opts[:queue_limit] || 3,
+        processed: []
+      }
+
+      {:ok, state}
+    end
+
+    @impl true
+    def check_rate_limit(request, state) do
+      if state.bucket.tokens > 0 do
+        {:allow,
+         %{state | bucket: %{state.bucket | tokens: state.bucket.tokens - 1}, processed: state.processed ++ [request.id]}}
+      else
+        if :queue.len(state.queue) < state.queue_limit do
+          {:queue, %{state | queue: :queue.in(request, state.queue)}}
+        else
+          {:reject, :queue_full, state}
+        end
+      end
+    end
+
+    @impl true
+    def handle_tick(state) do
+      case :queue.out(state.queue) do
+        {{:value, request}, new_queue} ->
+          new_state = %{state | queue: new_queue, processed: state.processed ++ [request.id]}
+          {:process, request, new_state}
+
+        {:empty, _} ->
+          {:ok, state}
+      end
+    end
+  end
+
+  property "queue never exceeds its limit" do
+    check all n <- integer(1..20),
+              seq <- list_of(constant(%{type: :queue_type}), min_length: n, max_length: n, unique: false) do
+      {:ok, pid} = RateLimiting.start_link(name: :pb_queue, handler: PBTestHandler, queue_limit: 3, capacity: 0, tokens: 0)
+      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :queue_type}, :pb_queue) end)
+      state = :sys.get_state(:pb_queue)
+      assert :queue.len(state.handler_state.queue) <= 3
+      GenServer.stop(pid)
+    end
+  end
+
+  property "callbacks are executed in order of processing" do
+    check all(n <- integer(2..10)) do
+      {:ok, pid} = RateLimiting.start_link(name: :pb_cb, handler: PBTestHandler, queue_limit: 10, capacity: 0, tokens: 0)
+      test_pid = self()
+
+      ids =
+        for _ <- 1..n do
+          {:queue, id} = RateLimiting.check(%{type: :queue_type}, :pb_cb)
+          :ok = RateLimiting.on_process(id, fn -> send(test_pid, {:cb, id}) end, :pb_cb)
+          id
+        end
+
+      {:ok, _} = RateLimiting.force_process_queue(:pb_cb)
+
+      received =
+        Enum.map(1..n, fn _ ->
+          receive do
+            {:cb, id} -> id
+          end
+        end)
+
+      assert Enum.sort(ids) == Enum.sort(received)
+      GenServer.stop(pid)
+    end
+  end
+
+  property "tokens never negative and never exceed capacity" do
+    check all n <- integer(5..20),
+              seq <- list_of(constant(%{type: :allow_type}), min_length: n, max_length: n, unique: false) do
+      {:ok, pid} = RateLimiting.start_link(name: :pb_tokens, handler: PBTestHandler, capacity: 5, tokens: 5, queue_limit: 3)
+      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :allow_type}, :pb_tokens) end)
+      state = :sys.get_state(:pb_tokens)
+      tokens = state.handler_state.bucket.tokens
+      capacity = state.handler_state.bucket.capacity
+      assert tokens >= 0 and tokens <= capacity
+      GenServer.stop(pid)
+    end
+  end
+end

@@ -47,11 +47,13 @@ defmodule WebsockexNova.MixProject do
 
       # Used for mock WebSocket server in tests
       {:cowboy, "~> 2.10", only: :test},
+
       # WebSock for standardized WebSocket handling
       {:websock, "~> 0.5", only: :test},
       {:websock_adapter, "~> 0.5", only: :test},
       # Required for Plug.Cowboy.http/3
       {:plug_cowboy, "~> 2.6", only: :test},
+      {:stream_data, "~> 1.0", only: :test},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
       # For generating temporary files (certificates) in tests
       {:temp, "~> 0.4", only: :test},
