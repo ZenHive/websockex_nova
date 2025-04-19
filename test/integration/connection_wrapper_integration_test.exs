@@ -1,5 +1,5 @@
 defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.CertificateHelper
@@ -15,9 +15,10 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     require Logger
 
-    def start_link do
-      Logger.debug("Starting CallbackHandler")
-      GenServer.start_link(__MODULE__, %{messages: []})
+    def start_link(opts \\ []) do
+      name = Keyword.get(opts, :name, nil)
+      Logger.debug("Starting CallbackHandler with name: #{inspect(name)}")
+      GenServer.start_link(__MODULE__, %{messages: []}, if(name, do: [name: name], else: []))
     end
 
     def init(state) do
@@ -88,17 +89,23 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
   end
 
   setup do
-    Logger.debug("Starting MockWebSockServer")
-    {:ok, server, port} = MockServer.start_link()
+    unique_ref = make_ref() |> :erlang.ref_to_list() |> List.to_string()
+    cb_name = String.to_atom("callback_handler_" <> unique_ref)
+    server_name = String.to_atom("mock_server_" <> unique_ref)
+
+    Logger.debug("Starting MockWebSockServer with name #{inspect(server_name)}")
+    {:ok, server, port} = MockServer.start_link(name: server_name)
     Logger.debug("MockWebSockServer started on port #{port}")
 
-    Logger.debug("Starting CallbackHandler")
-    {:ok, cb} = CallbackHandler.start_link()
+    Logger.debug("Starting CallbackHandler with name #{inspect(cb_name)}")
+    {:ok, cb} = CallbackHandler.start_link(name: cb_name)
     Logger.debug("CallbackHandler started with pid: #{inspect(cb)}")
 
     on_exit(fn ->
       Logger.debug("Stopping MockWebSockServer")
       if Process.alive?(server), do: MockServer.stop(server)
+      Logger.debug("Stopping CallbackHandler")
+      if Process.alive?(cb), do: GenServer.stop(cb)
     end)
 
     %{server: server, port: port, cb: cb}

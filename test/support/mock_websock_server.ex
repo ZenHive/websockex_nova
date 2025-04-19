@@ -52,6 +52,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
       * `:https2` - HTTP/2 over TLS
   * `:certfile` - (optional) Path to TLS certificate file. Auto-generated if not provided.
   * `:keyfile` - (optional) Path to TLS key file. Auto-generated if not provided.
+  * `:name` - (optional) Name for the GenServer process
 
   ## Returns
 
@@ -60,8 +61,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   """
   def start_link(opts \\ []) do
     Logger.debug("Starting MockWebSockServer")
+    name = Keyword.get(opts, :name, nil)
+    genserver_opts = if name, do: [name: name], else: []
 
-    case GenServer.start_link(__MODULE__, opts) do
+    case GenServer.start_link(__MODULE__, opts, genserver_opts) do
       {:ok, pid} ->
         # Get the actual port the server is listening on
         case get_port(pid) do
