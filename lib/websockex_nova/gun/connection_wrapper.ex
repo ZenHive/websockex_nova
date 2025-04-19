@@ -138,6 +138,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
   alias WebsockexNova.Gun.Helpers.StateHelpers
+  alias WebsockexNova.Telemetry.TelemetryEvents
   alias WebsockexNova.Transport.RateLimiting
 
   require Logger
@@ -516,7 +517,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
                 end
 
               :telemetry.execute(
-                WebsockexNova.Telemetry.TelemetryEvents.message_sent(),
+                TelemetryEvents.message_sent(),
                 %{size: size},
                 %{connection_id: state.gun_pid, stream_ref: stream_ref, frame_type: frame_type}
               )
