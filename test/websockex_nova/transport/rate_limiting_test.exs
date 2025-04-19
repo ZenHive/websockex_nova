@@ -344,9 +344,10 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
   property "queue never exceeds its limit" do
     check all n <- integer(1..20),
               seq <- list_of(constant(%{type: :queue_type}), min_length: n, max_length: n, unique: false) do
-      {:ok, pid} = RateLimiting.start_link(name: :pb_queue, handler: RateLimitHandlers.PBTestHandler, queue_limit: 3, capacity: 0, tokens: 0)
-      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :queue_type}, :pb_queue) end)
-      state = :sys.get_state(:pb_queue)
+      unique_name = :"pb_queue_#{:erlang.unique_integer([:positive])}"
+      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, queue_limit: 3, capacity: 0, tokens: 0)
+      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :queue_type}, unique_name) end)
+      state = :sys.get_state(unique_name)
       assert :queue.len(state.handler_state.queue) <= 3
       GenServer.stop(pid)
     end
@@ -354,17 +355,18 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
 
   property "callbacks are executed in order of processing" do
     check all(n <- integer(2..10)) do
-      {:ok, pid} = RateLimiting.start_link(name: :pb_cb, handler: RateLimitHandlers.PBTestHandler, queue_limit: 10, capacity: 0, tokens: 0)
+      unique_name = :"pb_cb_#{:erlang.unique_integer([:positive])}"
+      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, queue_limit: 10, capacity: 0, tokens: 0)
       test_pid = self()
 
       ids =
         for _ <- 1..n do
-          {:queue, id} = RateLimiting.check(%{type: :queue_type}, :pb_cb)
-          :ok = RateLimiting.on_process(id, fn -> send(test_pid, {:cb, id}) end, :pb_cb)
+          {:queue, id} = RateLimiting.check(%{type: :queue_type}, unique_name)
+          :ok = RateLimiting.on_process(id, fn -> send(test_pid, {:cb, id}) end, unique_name)
           id
         end
 
-      {:ok, _} = RateLimiting.force_process_queue(:pb_cb)
+      {:ok, _} = RateLimiting.force_process_queue(unique_name)
 
       received =
         Enum.map(1..n, fn _ ->
@@ -381,9 +383,10 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
   property "tokens never negative and never exceed capacity" do
     check all n <- integer(5..20),
               seq <- list_of(constant(%{type: :allow_type}), min_length: n, max_length: n, unique: false) do
-      {:ok, pid} = RateLimiting.start_link(name: :pb_tokens, handler: RateLimitHandlers.PBTestHandler, capacity: 5, tokens: 5, queue_limit: 3)
-      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :allow_type}, :pb_tokens) end)
-      state = :sys.get_state(:pb_tokens)
+      unique_name = :"pb_tokens_#{:erlang.unique_integer([:positive])}"
+      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.PBTestHandler, capacity: 5, tokens: 5, queue_limit: 3)
+      Enum.each(seq, fn _ -> RateLimiting.check(%{type: :allow_type}, unique_name) end)
+      state = :sys.get_state(unique_name)
       tokens = state.handler_state.bucket.tokens
       capacity = state.handler_state.bucket.capacity
       assert tokens >= 0 and tokens <= capacity
