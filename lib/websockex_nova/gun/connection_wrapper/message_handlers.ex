@@ -72,7 +72,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_connection_up(pid(), atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_connection_up(gun_pid, protocol, state) do
-    Logger.debug("Gun connection established with protocol: #{inspect(protocol)}")
+    log_event(:connection, :connection_up, %{protocol: protocol}, state)
 
     # Update state
     state =
@@ -99,7 +99,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           if websocket_stream = find_websocket_stream(updated_state) do
             :gun.ws_send(updated_state.gun_pid, websocket_stream, {frame_type, data})
           else
-            Logger.warning("Cannot send frame: no active websocket stream available")
+            log_event(:error, :no_active_websocket_stream, %{frame_type: frame_type, data: data}, updated_state)
           end
 
           updated_state
@@ -109,7 +109,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           if websocket_stream = find_websocket_stream(updated_state) do
             :gun.ws_send(updated_state.gun_pid, websocket_stream, {:close, code, reason})
           else
-            Logger.warning("Cannot send close frame: no active websocket stream available")
+            log_event(:error, :no_active_websocket_stream_close, %{code: code, reason: reason}, updated_state)
           end
 
           updated_state
@@ -156,11 +156,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
   def handle_connection_down(_gun_pid, protocol, reason, state, killed_streams \\ [], _unprocessed_streams \\ []) do
-    Logger.debug("Gun connection down: #{inspect(reason)}, protocol: #{inspect(protocol)}")
+    log_event(:connection, :connection_down, %{protocol: protocol, reason: reason}, state)
 
     # Log which streams were killed
     if !Enum.empty?(killed_streams) do
-      Logger.debug("Streams killed on disconnect: #{inspect(killed_streams)}")
+      log_event(:message, :streams_killed_on_disconnect, %{killed_streams: killed_streams}, state)
     end
 
     # Update state and clean up killed streams
@@ -223,6 +223,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_websocket_upgrade(pid(), reference(), list(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_websocket_upgrade(_gun_pid, stream_ref, headers, state) do
+    log_event(:connection, :websocket_upgrade, %{stream_ref: stream_ref, headers: headers}, state)
+
     Logger.debug("WebSocket upgrade successful for stream: #{inspect(stream_ref)}")
 
     # Update state
@@ -290,7 +292,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_websocket_frame(pid(), reference(), tuple() | atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
-    Logger.debug("Received WebSocket frame: #{inspect(frame)}")
+    log_event(:message, :websocket_frame_received, %{frame: frame, stream_ref: stream_ref}, state)
 
     # Handle special case for close frames
     state =
@@ -357,7 +359,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_error(pid(), reference() | nil, term(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_error(_gun_pid, stream_ref, reason, state) do
-    Logger.error("Gun error: #{inspect(reason)} for stream: #{inspect(stream_ref)}")
+    log_event(:error, :gun_error, %{reason: reason, stream_ref: stream_ref}, state)
 
     # Update state and clean up the stream with error
     state =
@@ -396,12 +398,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_http_response(pid(), reference(), atom(), integer(), list(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_http_response(_gun_pid, stream_ref, is_fin, status, headers, state) do
-    Logger.debug("HTTP response: #{status} for stream: #{inspect(stream_ref)}")
+    log_event(:message, :http_response, %{status: status, stream_ref: stream_ref}, state)
 
     # If this is the final message and it's not a successful upgrade, clean up the stream
     state =
       if is_fin == :fin and (status < 200 or status >= 300) do
-        Logger.debug("Cleaning up stream after final HTTP response: #{inspect(stream_ref)}")
+        log_event(:message, :cleanup_stream_after_http_response, %{stream_ref: stream_ref}, state)
         ConnectionState.remove_stream(state, stream_ref)
       else
         state
@@ -433,12 +435,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_http_data(pid(), reference(), atom(), binary(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_http_data(_gun_pid, stream_ref, is_fin, data, state) do
-    Logger.debug("HTTP data received for stream: #{inspect(stream_ref)}")
+    log_event(:message, :http_data_received, %{stream_ref: stream_ref}, state)
 
     # If this is the final message, clean up the stream
     state =
       if is_fin == :fin do
-        Logger.debug("Cleaning up stream after final HTTP data: #{inspect(stream_ref)}")
+        log_event(:message, :cleanup_stream_after_http_data, %{stream_ref: stream_ref}, state)
         ConnectionState.remove_stream(state, stream_ref)
       else
         state
@@ -457,7 +459,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   defp clean_stream_on_error(state, nil), do: state
 
   defp clean_stream_on_error(state, stream_ref) do
-    Logger.debug("Cleaning up stream after error: #{inspect(stream_ref)}")
+    log_event(:message, :cleanup_stream_after_error, %{stream_ref: stream_ref}, state)
     ConnectionState.remove_stream(state, stream_ref)
   end
 
@@ -487,6 +489,31 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       :close -> {:close, ""}
       {:close, code, reason} -> {:close, "#{code}:#{reason}"}
       other -> {:unknown, inspect(other)}
+    end
+  end
+
+  # Logging helpers
+  defp log_event(:connection, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:message, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
+
+  defp log_event(:error, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
     end
   end
 end
