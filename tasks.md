@@ -10,7 +10,7 @@ Tasks follow this format:
 - **Name**: Short description
 - **Description**: Detailed explanation of the task
 - **Acceptance Criteria**: Measurable conditions for completion
-- **Priority**: P0 (critical), P1 (high), P2 (medium), P3 (nice to have)
+- **Priority**: P0 (critical), P1 (high), P2 (medium), P3 (nice to have), P4 (low)
 - **Effort**: Estimated effort in days
 - **Dependencies**: IDs of tasks that must be completed first
 - **Status**: TODO, IN_PROGRESS, DONE
@@ -909,6 +909,21 @@ Tasks follow this format:
 - **Priority**: P2
 - **Effort**: 2
 - **Dependencies**: T5.4
+- **Status**: TODO
+
+### T6.5
+
+- **Name**: Ensure CI, Static Analysis, and Code Quality Tooling
+- **Description**: Integrate and maintain CI workflows and static analysis tools to ensure code quality and reliability.
+- **Acceptance Criteria**:
+  - GitHub Actions workflows for CI, static analysis, and test coverage are present and up to date
+  - Tools: Credo, Dialyzer, Sobelow, ExCoveralls (if not present, add and configure)
+  - CI pipeline runs on all pushes and PRs, fails on warnings or low coverage
+  - Documentation in README and/or docs/guides/ci_cd.md for running and interpreting these tools
+  - Minimum coverage and code quality thresholds are enforced
+- **Priority**: P4
+- **Effort**: 1
+- **Dependencies**: None
 - **Status**: TODO
 
 ## Phase 7: Advanced Features

@@ -65,6 +65,38 @@ defmodule WebsockexNova.Transport.RateLimiting do
   # Default interval to process queue (ms)
   @process_interval 100
 
+  defmodule State do
+    @moduledoc false
+    @enforce_keys [
+      :handler_module,
+      :handler_state,
+      :process_interval,
+      :timer_ref,
+      :callbacks,
+      :request_count,
+      :queued_request_ids
+    ]
+    defstruct [
+      :handler_module,
+      :handler_state,
+      :process_interval,
+      :timer_ref,
+      :callbacks,
+      :request_count,
+      :queued_request_ids
+    ]
+
+    @type t :: %__MODULE__{
+            handler_module: module(),
+            handler_state: term(),
+            process_interval: pos_integer(),
+            timer_ref: reference(),
+            callbacks: %{reference() => (-> any())},
+            request_count: non_neg_integer(),
+            queued_request_ids: MapSet.t(reference())
+          }
+  end
+
   @doc """
   Starts the rate limiting GenServer.
 
@@ -163,7 +195,6 @@ defmodule WebsockexNova.Transport.RateLimiting do
     handler_opts = get_handler_opts(opts)
     process_interval = get_process_interval(opts)
 
-    # If mode is set in opts, pass it to handler_opts
     handler_opts =
       if Keyword.has_key?(opts, :mode) do
         Keyword.put(handler_opts, :mode, Keyword.get(opts, :mode))
@@ -171,14 +202,10 @@ defmodule WebsockexNova.Transport.RateLimiting do
         handler_opts
       end
 
-    # Initialize the handler
     {:ok, handler_state} = handler_module.init(handler_opts)
-
-    # Set up the timer for automatic queue processing
     timer_ref = Process.send_after(self(), :process_queue, process_interval)
 
-    # Initial state
-    state = %{
+    state = %State{
       handler_module: handler_module,
       handler_state: handler_state,
       process_interval: process_interval,
@@ -193,7 +220,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
   end
 
   @impl true
-  def handle_call({:check, request, request_id}, _from, state) do
+  def handle_call({:check, request, request_id}, _from, %State{} = state) do
     %{handler_module: handler_module, handler_state: handler_state} = state
 
     case handler_module.check_rate_limit(request, handler_state) do
@@ -201,43 +228,53 @@ defmodule WebsockexNova.Transport.RateLimiting do
         {:reply, {:allow, request_id}, %{state | handler_state: new_handler_state}}
 
       {:queue, new_handler_state} ->
-        # Track the queued request_id in state.queued_request_ids
-        new_queued = MapSet.put(Map.get(state, :queued_request_ids, MapSet.new()), request_id)
+        new_queued = MapSet.put(state.queued_request_ids, request_id)
         {:reply, {:queue, request_id}, %{state | handler_state: new_handler_state, queued_request_ids: new_queued}}
 
       {:reject, reason, new_handler_state} ->
         {:reply, {:reject, reason}, %{state | handler_state: new_handler_state}}
+
+      other ->
+        Logger.error("Unexpected return from handler_module.check_rate_limit: #{inspect(other)}")
+        {:reply, {:reject, :internal_error}, state}
     end
   end
 
   @impl true
-  def handle_call({:on_process, request_id, callback}, _from, state) do
-    # Check if the request_id is tracked as queued
+  def handle_call({:on_process, request_id, callback}, _from, %State{} = state) do
     if check_request_in_queue(request_id, state) do
       new_callbacks = Map.put(state.callbacks, request_id, callback)
       {:reply, :ok, %{state | callbacks: new_callbacks}}
     else
+      # Stub: In the future, we could track orphaned callbacks and warn if they are never processed
+      Logger.warning("Tried to register callback for non-existent request_id: #{inspect(request_id)}")
       {:reply, {:error, :not_found}, state}
     end
   end
 
   @impl true
-  def handle_call(:force_process_queue, _from, state) do
-    # Process all requests in the queue
+  def handle_call(:force_process_queue, _from, %State{} = state) do
     {processed_count, new_state} = process_all_requests(state)
-
     {:reply, {:ok, processed_count}, new_state}
   end
 
   @impl true
-  def handle_info(:process_queue, state) do
-    # Process the next request in queue (if any)
+  def handle_call(msg, _from, %State{} = state) do
+    Logger.error("Received unexpected call: #{inspect(msg)}")
+    {:reply, {:error, :unexpected_call}, state}
+  end
+
+  @impl true
+  def handle_info(:process_queue, %State{} = state) do
     {_, new_state} = process_next_request(state)
-
-    # Set up the next timer
     timer_ref = Process.send_after(self(), :process_queue, state.process_interval)
-
     {:noreply, %{new_state | timer_ref: timer_ref}}
+  end
+
+  @impl true
+  def handle_info(msg, %State{} = state) do
+    Logger.error("Received unexpected info message: #{inspect(msg)}")
+    {:noreply, state}
   end
 
   # Private helper functions
@@ -302,22 +339,29 @@ defmodule WebsockexNova.Transport.RateLimiting do
     end
   end
 
-  defp check_request_in_queue(request_id, state) do
-    MapSet.member?(Map.get(state, :queued_request_ids, MapSet.new()), request_id)
+  defp check_request_in_queue(request_id, %State{queued_request_ids: queued}) do
+    MapSet.member?(queued, request_id)
   end
 
-  defp process_next_request(state) do
+  defp process_next_request(%State{} = state) do
     %{handler_module: handler_module, handler_state: handler_state} = state
 
     case handler_module.handle_tick(handler_state) do
       {:process, request, new_handler_state} ->
         request_id = Map.get(request, :id)
-        # Remove from queued_request_ids
-        new_queued = MapSet.delete(Map.get(state, :queued_request_ids, MapSet.new()), request_id)
+        new_queued = MapSet.delete(state.queued_request_ids, request_id)
 
         if request_id && Map.has_key?(state.callbacks, request_id) do
           callback = Map.get(state.callbacks, request_id)
-          Task.start(callback)
+
+          case Task.start(callback) do
+            {:ok, _pid} ->
+              :ok
+
+            {:error, reason} ->
+              Logger.error("Failed to start callback task for #{inspect(request_id)}: #{inspect(reason)}")
+          end
+
           new_callbacks = Map.delete(state.callbacks, request_id)
 
           new_state = %{
@@ -335,17 +379,19 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
       {:ok, new_handler_state} ->
         {0, %{state | handler_state: new_handler_state}}
+
+      other ->
+        Logger.error("Unexpected return from handler_module.handle_tick: #{inspect(other)}")
+        {0, state}
     end
   end
 
-  defp process_all_requests(state) do
+  defp process_all_requests(%State{} = state) do
     case process_next_request(state) do
       {0, new_state} ->
-        # No more requests to process
         {0, new_state}
 
       {count, new_state} ->
-        # Process more requests
         {more_count, final_state} = process_all_requests(new_state)
         {count + more_count, final_state}
     end
