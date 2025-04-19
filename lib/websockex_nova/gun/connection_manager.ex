@@ -113,7 +113,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, ConnectionState.t()} | {:error, :invalid_transition}
   def transition_to(state, to_state, params \\ %{}) when is_map(params) do
     if can_transition?(state.status, to_state) do
-      log_connection_event(:transition, %{from: state.status, to: to_state, params: params}, state)
+      log_event(:connection, :transition, %{from: state.status, to: to_state, params: params}, state)
 
       new_state =
         state
@@ -122,9 +122,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:ok, new_state}
     else
-      log_error_event(:invalid_transition, %{from: state.status, to: to_state}, state)
+      log_event(:error, :invalid_transition, %{from: state.status, to: to_state}, state)
 
-      log_connection_event(
+      log_event(
+        :connection,
         :valid_transitions,
         %{from: state.status, valid: Map.get(@valid_transitions, state.status, [])},
         state
@@ -175,13 +176,13 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, non_neg_integer(), ConnectionState.t()}
           | {:error, atom(), ConnectionState.t()}
   def handle_reconnection(%ConnectionState{status: :error} = state) do
-    log_connection_event(:reconnect_skip, %{reason: :already_in_error_state}, state)
+    log_event(:connection, :reconnect_skip, %{reason: :already_in_error_state}, state)
     {:error, :terminal_error, state}
   end
 
   def handle_reconnection(%ConnectionState{last_error: last_error} = state) do
     if not is_nil(last_error) and terminal_error?(last_error) do
-      log_connection_event(:reconnect_skip, %{reason: :terminal_error, last_error: last_error}, state)
+      log_event(:connection, :reconnect_skip, %{reason: :terminal_error, last_error: last_error}, state)
       error_state = ConnectionState.update_status(state, :error)
       {:error, :terminal_error, error_state}
     else
@@ -191,7 +192,8 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   defp handle_reconnection_attempts(state) do
     if max_attempts_reached?(state) do
-      log_connection_event(
+      log_event(
+        :connection,
         :reconnect_skip,
         %{reason: :max_attempts, attempts: state.reconnect_attempts, max: state.options.retry},
         state
@@ -201,7 +203,13 @@ defmodule WebsockexNova.Gun.ConnectionManager do
       {:error, :max_attempts_reached, error_state}
     else
       reconnect_after = calculate_backoff_delay(state)
-      log_connection_event(:reconnect_scheduled, %{delay: reconnect_after, attempt: state.reconnect_attempts + 1}, state)
+
+      log_event(
+        :connection,
+        :reconnect_scheduled,
+        %{delay: reconnect_after, attempt: state.reconnect_attempts + 1},
+        state
+      )
 
       updated_state =
         state
@@ -233,7 +241,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @spec schedule_reconnection(ConnectionState.t(), (non_neg_integer(), non_neg_integer() -> any())) ::
           ConnectionState.t()
   def schedule_reconnection(state, callback) when is_function(callback, 2) do
-    log_connection_event(:schedule_reconnect, %{status: state.status}, state)
+    log_event(:connection, :schedule_reconnect, %{status: state.status}, state)
 
     case handle_reconnection(state) do
       {:ok, reconnect_after, reconnecting_state} ->
@@ -241,7 +249,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         reconnecting_state
 
       {:error, reason, error_state} ->
-        log_connection_event(:reconnect_not_scheduled, %{reason: reason}, state)
+        log_event(:connection, :reconnect_not_scheduled, %{reason: reason}, state)
         error_state
     end
   end
@@ -262,7 +270,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, ConnectionState.t()}
           | {:error, term(), ConnectionState.t()}
   def initiate_connection(state) do
-    log_connection_event(:initiate_connection, %{status: state.status}, state)
+    log_event(:connection, :initiate_connection, %{status: state.status}, state)
 
     case transition_to(state, :connecting) do
       {:ok, new_state} -> {:ok, new_state}
@@ -288,11 +296,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @spec start_connection(ConnectionState.t()) ::
           {:ok, ConnectionState.t()} | {:error, term(), ConnectionState.t()}
   def start_connection(state) do
-    log_connection_event(:start_connection, %{host: state.host, port: state.port, status: state.status}, state)
+    log_event(:connection, :start_connection, %{host: state.host, port: state.port, status: state.status}, state)
 
     with {:ok, connecting_state} <- transition_to(state, :connecting),
          {:ok, gun_pid, monitor_ref} <- open_connection(connecting_state) do
-      log_connection_event(:connection_established, %{gun_pid: gun_pid}, state)
+      log_event(:connection, :connection_established, %{gun_pid: gun_pid}, state)
 
       updated_state =
         connecting_state
@@ -302,7 +310,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
       {:ok, updated_state}
     else
       {:error, reason} ->
-        log_error_event(:connection_failed, %{reason: reason}, state)
+        log_event(:error, :connection_failed, %{reason: reason}, state)
         {:error, reason, state}
     end
   end
@@ -349,7 +357,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   # Effect function for connected state
   @doc false
   def apply_connected_effects(state, _params) do
-    log_connection_event(:connected_effects, %{action: :reset_reconnect_attempts}, state)
+    log_event(:connection, :connected_effects, %{action: :reset_reconnect_attempts}, state)
     ConnectionState.reset_reconnect_attempts(state)
   end
 
@@ -357,10 +365,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @doc false
   def apply_disconnected_effects(state, params) do
     if Map.has_key?(params, :reason) do
-      log_connection_event(:disconnected_effects, %{action: :record_error, reason: params.reason}, state)
+      log_event(:connection, :disconnected_effects, %{action: :record_error, reason: params.reason}, state)
       ConnectionState.record_error(state, params.reason)
     else
-      log_connection_event(:disconnected_effects, %{action: :no_reason}, state)
+      log_event(:connection, :disconnected_effects, %{action: :no_reason}, state)
       state
     end
   end
@@ -369,10 +377,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @doc false
   def apply_error_effects(state, params) do
     if Map.has_key?(params, :reason) do
-      log_connection_event(:error_effects, %{action: :record_error, reason: params.reason}, state)
+      log_event(:connection, :error_effects, %{action: :record_error, reason: params.reason}, state)
       ConnectionState.record_error(state, params.reason)
     else
-      log_connection_event(:error_effects, %{action: :no_reason}, state)
+      log_event(:connection, :error_effects, %{action: :no_reason}, state)
       state
     end
   end
@@ -380,7 +388,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   # Establishes a connection to the server
   defp open_connection(state) do
     gun_opts = build_gun_options(state)
-    log_connection_event(:open_gun_connection, %{host: state.host, port: state.port}, state)
+    log_event(:connection, :open_gun_connection, %{host: state.host, port: state.port}, state)
     host_charlist = String.to_charlist(state.host)
 
     case gun_open(host_charlist, state.port, gun_opts) do
@@ -390,7 +398,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:error, reason} ->
         # Use a minimal state struct with handlers if available, otherwise skip handler logging
-        log_error_event(:gun_open_failed, %{reason: reason}, %{handlers: %{}})
+        log_event(:error, :gun_open_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}
     end
   end
@@ -421,7 +429,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:error, reason} ->
         # Use a minimal state struct with handlers if available, otherwise skip handler logging
-        log_error_event(:gun_open_failed, %{reason: reason}, %{handlers: %{}})
+        log_event(:error, :gun_open_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}
     end
   end
@@ -429,20 +437,20 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   defp monitor_gun_process(pid) do
     gun_monitor_ref = Process.monitor(pid)
     # Use a minimal state struct with handlers if available, otherwise skip handler logging
-    log_connection_event(:monitor_gun_process, %{gun_monitor_ref: gun_monitor_ref}, %{handlers: %{}})
+    log_event(:connection, :monitor_gun_process, %{gun_monitor_ref: gun_monitor_ref}, %{handlers: %{}})
     {:ok, gun_monitor_ref}
   end
 
   defp await_gun_up(pid, monitor_ref) do
     case :gun.await_up(pid, 5000, monitor_ref) do
       {:ok, protocol} ->
-        log_connection_event(:gun_connection_established, %{protocol: protocol}, %{handlers: %{}})
+        log_event(:connection, :gun_connection_established, %{protocol: protocol}, %{handlers: %{}})
         {:ok, protocol}
 
       {:error, reason} ->
         Process.demonitor(monitor_ref)
         :gun.close(pid)
-        log_error_event(:gun_connection_failed, %{reason: reason}, %{handlers: %{}})
+        log_event(:error, :gun_connection_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}
     end
   end
@@ -450,7 +458,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   defp set_gun_owner(pid) do
     case :gun.set_owner(pid, self()) do
       :ok ->
-        log_connection_event(:set_gun_owner, %{owner: self()}, %{handlers: %{}})
+        log_event(:connection, :set_gun_owner, %{owner: self()}, %{handlers: %{}})
         :ok
     end
   end
@@ -458,11 +466,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   defp verify_gun_owner(pid) do
     case :gun.info(pid) do
       %{owner: owner} when owner == self() ->
-        log_connection_event(:verify_gun_owner, %{owner: owner}, %{handlers: %{}})
+        log_event(:connection, :verify_gun_owner, %{owner: owner}, %{handlers: %{}})
         :ok
 
       _ ->
-        log_connection_event(:verify_gun_owner_failed, %{}, %{handlers: %{}})
+        log_event(:connection, :verify_gun_owner_failed, %{}, %{handlers: %{}})
         :ok
     end
   end
@@ -531,23 +539,27 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     state.reconnect_attempts >= max_attempts
   end
 
-  defp log_connection_event(event, context, state) do
-    case {Map.get(state.handlers, :logging_handler), Map.get(state.handlers, :logging_handler_state)} do
-      {mod, handler_state} when is_atom(mod) and not is_nil(handler_state) ->
-        mod.log_connection_event(event, context, handler_state)
-
-      _ ->
-        Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
+  defp log_event(:connection, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+      state.logging_handler.log_connection_event(event, context, state)
+    else
+      Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
     end
   end
 
-  defp log_error_event(event, context, state) do
-    case {Map.get(state.handlers, :logging_handler), Map.get(state.handlers, :logging_handler_state)} do
-      {mod, handler_state} when is_atom(mod) and not is_nil(handler_state) ->
-        mod.log_error_event(event, context, handler_state)
+  defp log_event(:message, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+      state.logging_handler.log_message_event(event, context, state)
+    else
+      Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
+    end
+  end
 
-      _ ->
-        Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
+  defp log_event(:error, event, context, state) do
+    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+      state.logging_handler.log_error_event(event, context, state)
+    else
+      Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")
     end
   end
 end
