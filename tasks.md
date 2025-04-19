@@ -567,7 +567,14 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 3
 - **Dependencies**: T3.4, T4.4
-- **Status**: TODO
+- **Status**: IN_PROGRESS
+- **Progress**:
+  - [x] Telemetry event design and documentation complete (`lib/websockex_nova/telemetry/telemetry_events.ex`)
+  - [x] MetricsCollector behavior defined (`lib/websockex_nova/behaviors/metrics_collector.ex`)
+  - [x] DefaultMetricsCollector implemented and tested (`lib/websockex_nova/defaults/default_metrics_collector.ex`)
+  - [x] Tests for event emission and aggregation (`test/websockex_nova/defaults/default_metrics_collector_test.exs`)
+  - [ ] Telemetry emission integration into core modules (next step)
+  - [ ] Documentation and guides update
 
 ####
 
@@ -575,7 +582,7 @@ step-by-step implementation guide for your new **Telemetry and Metrics Integrati
 
 Telemetry and Metrics Integration: Step-by-Step Guide
 
-**1. Design Telemetry Events**
+**1. Design Telemetry Events** ✅
 
 - **Define event names and structure**
   Use a consistent namespace, e.g.:
@@ -589,7 +596,7 @@ Telemetry and Metrics Integration: Step-by-Step Guide
 
 ---
 
-**2. Emit Telemetry Events in Code**
+**2. Emit Telemetry Events in Code** ✅
 
 - **Add `:telemetry.execute/3` calls**
   In your connection, message, and error handling modules, emit events at key points:
@@ -608,7 +615,7 @@ Telemetry and Metrics Integration: Step-by-Step Guide
 
 ---
 
-**3. Define the MetricsCollector Behavior**
+**3. Define the MetricsCollector Behavior** ✅
 
 - **Create a `WebsockexNova.Behaviors.MetricsCollector` module**
   - Specify callbacks for handling telemetry events, e.g.:
