@@ -1,5 +1,9 @@
 defmodule WebsockexNova.Gun.ClientSupervisorTest do
-  use ExUnit.Case, async: true
+  @moduledoc """
+  Tests for WebsockexNova.Gun.ClientSupervisor.
+  Note: This module uses async: false to ensure that tests verifying process registration under the hardcoded name :test_gun_supervisor do not interfere with each other or with other tests. This is required to safely test name registration.
+  """
+  use ExUnit.Case, async: false
 
   alias WebsockexNova.Gun.ClientSupervisor
 
@@ -10,12 +14,12 @@ defmodule WebsockexNova.Gun.ClientSupervisorTest do
       assert Supervisor.count_children(pid) == %{active: 0, specs: 0, supervisors: 0, workers: 0}
     end
 
-    test "accepts configuration options" do
+    test "accepts configuration options and registers under the given name" do
+      # This test intentionally uses a hardcoded name to verify registration.
+      # Do not run this test async with others using :test_gun_supervisor.
       opts = [name: :test_gun_supervisor, strategy: :one_for_one]
       assert {:ok, pid} = start_supervised({ClientSupervisor, opts})
       assert Process.alive?(pid)
-
-      # The name should be registered
       assert Process.whereis(:test_gun_supervisor) == pid
     end
   end
@@ -43,25 +47,16 @@ defmodule WebsockexNova.Gun.ClientSupervisorTest do
     end
 
     test "creates a Gun client with specified options" do
-      # Start the supervisor
       {:ok, supervisor} = start_supervised(ClientSupervisor)
-
-      # Define the options for a client
+      unique_name = :"test_gun_client_#{:erlang.unique_integer([:positive])}"
       connection_opts = [
-        name: :test_gun_client,
+        name: unique_name,
         host: "echo.websocket.org",
         port: 443,
         transport: :tls
       ]
-
-      # Verify we can add a child spec
-      assert {:ok, client_pid} =
-               ClientSupervisor.start_client(supervisor, connection_opts)
-
-      # Verify the client is alive and supervised
+      assert {:ok, client_pid} = ClientSupervisor.start_client(supervisor, connection_opts)
       assert Process.alive?(client_pid)
-
-      # Verify the client was added to children
       children = Supervisor.which_children(supervisor)
       assert Enum.any?(children, fn {_, pid, _, _} -> pid == client_pid end)
     end
@@ -70,18 +65,13 @@ defmodule WebsockexNova.Gun.ClientSupervisorTest do
   describe "restart strategy" do
     @tag :capture_log
     test "restarts a crashed client automatically (structure only)" do
-      # This test would ideally simulate a client crash and verify restart,
-      # but we'd need a more complex setup with mocks or a real connection.
-      # For now, we'll simply define the test structure for future implementation
-
       {:ok, _supervisor} = start_supervised(ClientSupervisor)
-
+      unique_name = :"test_restart_client_#{:erlang.unique_integer([:positive])}"
       _connection_opts = [
-        name: :test_restart_client,
+        name: unique_name,
         host: "example.com",
         port: 443
       ]
-
       # Future implementation would:
       # 1. Start a client
       # 2. Simulate a crash
