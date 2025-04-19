@@ -484,72 +484,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_call({:send_frame, stream_ref, frame}, _from, state) do
-    if state.gun_pid do
+    if is_nil(state.gun_pid) do
+      ErrorHandler.handle_connection_error(:not_connected, state)
+    else
       case Map.get(state.active_streams, stream_ref) do
         :websocket ->
-          # --- Rate Limiting Integration ---
-          # Build a request map for the rate limiter
-          request = %{
-            type: frame_type_from_frame(frame),
-            method: method_from_frame(frame),
-            data: frame_data_from_frame(frame),
-            stream_ref: stream_ref,
-            connection: %{host: state.host, port: state.port}
-          }
-
-          # Use the configured rate limiter (name or module)
-          rate_limiter = Map.get(state.options, :rate_limiter, RateLimiting)
-
-          case RateLimiting.check(request, rate_limiter) do
-            {:allow, _request_id} ->
-              result = :gun.ws_send(state.gun_pid, stream_ref, frame)
-              # Telemetry: message sent
-              {frame_type, frame_data} =
-                case frame do
-                  [f | _] -> {frame_type_from_frame(f), frame_data_from_frame(f)}
-                  _ -> {frame_type_from_frame(frame), frame_data_from_frame(frame)}
-                end
-
-              size =
-                case frame_data do
-                  data when is_binary(data) -> byte_size(data)
-                  _ -> 0
-                end
-
-              :telemetry.execute(
-                TelemetryEvents.message_sent(),
-                %{size: size},
-                %{connection_id: state.gun_pid, stream_ref: stream_ref, frame_type: frame_type}
-              )
-
-              {:reply, result, state}
-
-            {:queue, request_id} ->
-              # Register a callback to send the frame when allowed
-              callback = fn ->
-                :gun.ws_send(state.gun_pid, stream_ref, frame)
-              end
-
-              _ = RateLimiting.on_process(request_id, callback, rate_limiter)
-              {:reply, :ok, state}
-
-            {:reject, reason} ->
-              {:reply, {:error, reason}, state}
-          end
-
-        # --- End Rate Limiting Integration ---
+          handle_send_frame_with_rate_limiting(state, stream_ref, frame)
 
         nil ->
-          # Return error if stream reference is not found
           ErrorHandler.handle_stream_error(stream_ref, :stream_not_found, state)
 
         status ->
-          # Return error if stream is not in a valid state for sending
           ErrorHandler.handle_stream_error(stream_ref, {:invalid_stream_status, status}, state)
       end
-    else
-      # Return error if Gun process is missing (not connected)
-      ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end
 
@@ -1041,4 +988,55 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   defp frame_data_from_frame({_type, data}), do: data
   defp frame_data_from_frame({:close, code, reason}), do: %{code: code, reason: reason}
   defp frame_data_from_frame(_), do: nil
+
+  # --- Private helpers for send_frame ---
+  defp handle_send_frame_with_rate_limiting(state, stream_ref, frame) do
+    request = build_rate_limit_request(state, stream_ref, frame)
+    rate_limiter = Map.get(state.options, :rate_limiter, RateLimiting)
+
+    case RateLimiting.check(request, rate_limiter) do
+      {:allow, _request_id} ->
+        result = :gun.ws_send(state.gun_pid, stream_ref, frame)
+        emit_telemetry_for_frame(state, stream_ref, frame)
+        {:reply, result, state}
+
+      {:queue, request_id} ->
+        callback = fn -> :gun.ws_send(state.gun_pid, stream_ref, frame) end
+        _ = RateLimiting.on_process(request_id, callback, rate_limiter)
+        {:reply, :ok, state}
+
+      {:reject, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp build_rate_limit_request(state, stream_ref, frame) do
+    %{
+      type: frame_type_from_frame(frame),
+      method: method_from_frame(frame),
+      data: frame_data_from_frame(frame),
+      stream_ref: stream_ref,
+      connection: %{host: state.host, port: state.port}
+    }
+  end
+
+  defp emit_telemetry_for_frame(state, stream_ref, frame) do
+    {frame_type, frame_data} =
+      case frame do
+        [f | _] -> {frame_type_from_frame(f), frame_data_from_frame(f)}
+        _ -> {frame_type_from_frame(frame), frame_data_from_frame(frame)}
+      end
+
+    size =
+      case frame_data do
+        data when is_binary(data) -> byte_size(data)
+        _ -> 0
+      end
+
+    :telemetry.execute(
+      TelemetryEvents.message_sent(),
+      %{size: size},
+      %{connection_id: state.gun_pid, stream_ref: stream_ref, frame_type: frame_type}
+    )
+  end
 end

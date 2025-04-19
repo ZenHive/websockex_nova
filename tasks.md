@@ -567,7 +567,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 3
 - **Dependencies**: T3.4, T4.4
-- **Status**: IN_PROGRESS
+- **Status**: DONE
 - **Progress**:
   - [x] Telemetry event design and documentation complete (`lib/websockex_nova/telemetry/telemetry_events.ex`)
   - [x] MetricsCollector behavior defined (`lib/websockex_nova/behaviors/metrics_collector.ex`)

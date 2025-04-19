@@ -10,9 +10,17 @@ defmodule WebsockexNova.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       dialyzer: dialyzer(),
+      aliases: aliases(),
       preferred_cli_env: [
         dialyzer: :dev,
-        credo: :dev
+        credo: :dev,
+        sobelow: :dev,
+        lint: :dev,
+        typecheck: :dev,
+        security: :dev,
+        coverage: :test,
+        check: :dev,
+        docs: :dev
       ]
     ]
   end
@@ -72,6 +80,23 @@ defmodule WebsockexNova.MixProject do
       plt_core_path: "priv/plts",
       plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
       plt_add_apps: [:mix, :ex_unit]
+    ]
+  end
+
+  # Add aliases for code quality tools
+  defp aliases do
+    [
+      lint: ["credo --strict"],
+      typecheck: ["dialyzer"],
+      security: ["sobelow --exit --config"],
+      coverage: ["test --cover"],
+      docs: ["docs"],
+      check: [
+        "lint",
+        "typecheck",
+        "security",
+        "coverage"
+      ]
     ]
   end
 end

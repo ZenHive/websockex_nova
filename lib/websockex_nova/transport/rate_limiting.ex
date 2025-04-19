@@ -348,34 +348,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
     case handler_module.handle_tick(handler_state) do
       {:process, request, new_handler_state} ->
-        request_id = Map.get(request, :id)
-        new_queued = MapSet.delete(state.queued_request_ids, request_id)
-
-        if request_id && Map.has_key?(state.callbacks, request_id) do
-          callback = Map.get(state.callbacks, request_id)
-
-          case Task.start(callback) do
-            {:ok, _pid} ->
-              :ok
-
-            {:error, reason} ->
-              Logger.error("Failed to start callback task for #{inspect(request_id)}: #{inspect(reason)}")
-          end
-
-          new_callbacks = Map.delete(state.callbacks, request_id)
-
-          new_state = %{
-            state
-            | handler_state: new_handler_state,
-              callbacks: new_callbacks,
-              queued_request_ids: new_queued
-          }
-
-          {1, new_state}
-        else
-          new_state = %{state | handler_state: new_handler_state, queued_request_ids: new_queued}
-          {1, new_state}
-        end
+        process_tick_request(state, request, new_handler_state)
 
       {:ok, new_handler_state} ->
         {0, %{state | handler_state: new_handler_state}}
@@ -383,6 +356,32 @@ defmodule WebsockexNova.Transport.RateLimiting do
       other ->
         Logger.error("Unexpected return from handler_module.handle_tick: #{inspect(other)}")
         {0, state}
+    end
+  end
+
+  defp process_tick_request(state, request, new_handler_state) do
+    request_id = Map.get(request, :id)
+    new_queued = MapSet.delete(state.queued_request_ids, request_id)
+
+    if request_id && Map.has_key?(state.callbacks, request_id) do
+      callback = Map.get(state.callbacks, request_id)
+      start_callback_task(callback, request_id)
+      new_callbacks = Map.delete(state.callbacks, request_id)
+      new_state = %{state | handler_state: new_handler_state, callbacks: new_callbacks, queued_request_ids: new_queued}
+      {1, new_state}
+    else
+      new_state = %{state | handler_state: new_handler_state, queued_request_ids: new_queued}
+      {1, new_state}
+    end
+  end
+
+  defp start_callback_task(callback, request_id) do
+    case Task.start(callback) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to start callback task for #{inspect(request_id)}: #{inspect(reason)}")
     end
   end
 
