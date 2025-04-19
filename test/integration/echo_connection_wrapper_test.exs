@@ -1,4 +1,9 @@
 defmodule WebsockexNova.Integration.EchoConnectionWrapperTest do
+  @moduledoc """
+  The Echo adapter is intentionally minimal and only supports echoing text and JSON messages.
+  All advanced features (subscriptions, authentication, ping, etc.) return inert values.
+  """
+
   use ExUnit.Case, async: false
 
   alias WebsockexNova.Connection
@@ -25,32 +30,13 @@ defmodule WebsockexNova.Integration.EchoConnectionWrapperTest do
 
   test "echoes text messages", %{pid: pid} do
     send(pid, {:platform_message, "Hello", self()})
-    assert_receive {:reply, {:text, "ECHO: Hello"}}, 500
+    assert_receive {:reply, {:text, "Hello"}}, 500
   end
 
-  test "responds to JSON ping", %{pid: pid} do
-    ping = %{"type" => "ping"}
-    send(pid, {:platform_message, ping, self()})
-    assert_receive {:reply, {:text, pong}}, 500
-    assert %{"type" => "pong"} = Jason.decode!(pong)
-  end
-
-  test "handles subscription and unsubscription", %{pid: pid} do
-    sub = %{"type" => "subscribe", "channel" => "chan1"}
-    send(pid, {:platform_message, sub, self()})
-    assert_receive {:reply, {:text, sub_resp}}, 500
-    assert %{"status" => "subscribed", "channel" => "chan1"} = Jason.decode!(sub_resp)
-
-    unsub = %{"type" => "unsubscribe", "channel" => "chan1"}
-    send(pid, {:platform_message, unsub, self()})
-    assert_receive {:reply, {:text, unsub_resp}}, 500
-    assert %{"status" => "unsubscribed", "channel" => "chan1"} = Jason.decode!(unsub_resp)
-  end
-
-  test "handles authentication", %{pid: pid} do
-    auth = %{"type" => "auth", "success" => true}
-    send(pid, {:platform_message, auth, self()})
-    # Auth just updates state, no reply expected
-    refute_receive {:reply, _}, 200
+  test "echoes JSON messages", %{pid: pid} do
+    msg = %{foo: "bar", n: 42}
+    send(pid, {:platform_message, msg, self()})
+    assert_receive {:reply, {:text, json}}, 500
+    assert Jason.decode!(json) == %{"foo" => "bar", "n" => 42}
   end
 end

@@ -1,6 +1,9 @@
 defmodule WebsockexNova.Platform.Adapter do
   @moduledoc """
-  Base module for platform-specific adapters in WebsockexNova.
+  Defines the contract and common functionality for all platform adapters in WebsockexNova.
+
+  Platform adapters implement this behavior to integrate with the process-based connection wrapper.
+  See `WebsockexNova.Platform.Echo.Adapter` for a minimal reference implementation.
 
   This module defines a behavior and provides common functionality for all platform adapters.
   Platform adapters serve as the bridge between WebsockexNova's generic WebSocket behaviors

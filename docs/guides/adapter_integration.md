@@ -82,41 +82,31 @@ end
 
 ---
 
-## 3. Ergonomic Client API Proposal
+## 3. Ergonomic Client API (Recommended)
 
-For a more user-friendly API, you can add a client module that wraps message sending and provides adapter-specific helpers.
+**For most users, it is recommended to use the `WebsockexNova.Client` module as the primary interface for interacting with platform adapter connections.**
 
 ### Example: `WebsockexNova.Client`
 
 ```elixir
 defmodule WebsockexNova.Client do
-  @moduledoc """
-  Ergonomic client API for interacting with platform adapters.
-  """
-
-  def start_link(opts), do: WebsockexNova.Connection.start_link(opts)
-
-  def send_text(pid, text) when is_binary(text) do
-    send(pid, {:platform_message, text, self()})
-    receive do
-      {:reply, reply} -> reply
-    after
-      1000 -> {:error, :timeout}
-    end
-  end
-
-  def send_json(pid, map) when is_map(map) do
-    send(pid, {:platform_message, map, self()})
-    receive do
-      {:reply, reply} -> reply
-    after
-      1000 -> {:error, :timeout}
-    end
-  end
-
-  # Add more helpers as needed (subscribe, auth, etc.)
+  # ...
 end
+
+# Usage:
+{:ok, pid} = WebsockexNova.Connection.start_link(adapter: MyPlatform.Adapter)
+WebsockexNova.Client.send_text(pid, "Hello")
+WebsockexNova.Client.send_json(pid, %{foo: "bar"})
+WebsockexNova.Client.subscribe(pid, "channel")
+WebsockexNova.Client.authenticate(pid, %{api_key: "demo"})
+WebsockexNova.Client.ping(pid)
+WebsockexNova.Client.status(pid)
+WebsockexNova.Client.send_raw(pid, "custom message")
+WebsockexNova.Client.cast_text(pid, "fire and forget")
 ```
+
+- These helpers encapsulate the internal message protocol and provide a safe, documented, and extensible API.
+- For advanced use, you may still use `send/2` directly with the process, but this is not recommended for most users.
 
 ---
 
@@ -124,6 +114,5 @@ end
 
 - The connection wrapper is adapter-agnostic and works for any module implementing the documented contract.
 - Integration tests should follow the provided template for reliability and clarity.
-- An ergonomic client API can further simplify usage for end users.
-
-For more details, see the Echo adapter and its integration tests as a reference implementation.
+- The ergonomic client API (`WebsockexNova.Client`) is the recommended way to interact with connections.
+- For more details, see the Echo adapter and its integration tests as a reference implementation.

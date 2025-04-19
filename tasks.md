@@ -361,77 +361,6 @@ Tasks follow this format:
 - **Status**: DONE
 - **Code Review Rating** Rating: 4.5/5, The only significant missing item appears to be the telemetry integration, which was listed in the acceptance criteria. Otherwise, the refactoring has been completed according to the plan, with all other criteria met.
 
-### T2.14.1 Detailed ConnectionWrapper Refactor Plan
-
-**Sprint 1: Foundation Work (Days 1-3)**
-
-1. **Error Handling Standardization** [HIGH] ✅
-
-   - Fix the incomplete error handling at line 398 (`{:error, _reason} = error ->`)
-   - Create consistent error pattern for all error cases
-   - Add helpers for common error scenarios
-
-2. **Business Logic Migration** [HIGH] ✅
-
-   - Identify and move reconnection logic to ConnectionManager
-   - Extract state transition decisions from handle_info callbacks
-   - Use ConnectionManager for all connection lifecycle decisions
-
-3. **State Management Improvements** [HIGH] ✅
-   - Audit current state updates for consistency ✅
-   - Ensure all state changes go through ConnectionState helpers ✅
-   - Remove any direct map updates in ConnectionWrapper ✅
-   - Added new update_active_streams/2 helper to ConnectionState
-   - Created handle_ownership_transfer/2 in StateHelpers
-   - Added comprehensive tests for new helpers
-   - Refactored ConnectionWrapper to use the new helpers
-
-**Sprint 2: Architecture Alignment (Days 4-6)**
-
-4. **Behavior Delegation Implementation** [MEDIUM] ✅
-
-   - Add configuration option for callback module in init/1
-   - Store callback module in state
-   - Call appropriate callbacks for connection events:
-     - On connection established
-     - On websocket connection
-     - On disconnection
-     - On frame received
-     - On error
-
-5. **Message Handling Delegation** [MEDIUM] ✅
-
-   - Review all handle_info callbacks to ensure proper delegation to MessageHandlers ✅
-   - Improved consistency between handle_info and handle_gun_message implementations ✅
-   - Ensured proper handling of return values from MessageHandlers ✅
-   - Simplified message routing with pattern matching ✅
-   - Enhanced error and state management in message handlers ✅
-   - Improved code structure by reducing duplication in message handling logic ✅
-
-6. **Ownership Transfer Refinement** [MEDIUM] ✅
-   - Implement proper monitor cleanup during transfers ✅
-   - Add improved error handling for edge cases ✅
-   - Test and document the transfer protocol ✅
-
-**Sprint 3: Polish and Integration (Days 7-9)**
-
-7. **Code Cleanup** [LOW] ✅
-
-   - Move test-only functionality to test support modules
-   - Remove debug message handlers like `{:debug_check_mailbox, pid}`
-   - Review and clean up commented code
-
-8. **Documentation Update** [LOW] ✅
-
-   - Rewrite @moduledoc to describe thin adapter approach
-   - Document the delegation pattern and ownership model
-   - Add examples for common usage patterns
-
-9. **Testing** [CRITICAL]
-   - Ensure all existing tests pass with refactored code
-   - Add tests for new delegation patterns
-   - Add tests for error handling edge cases
-
 ## Phase 3: Reconnection & Integration
 
 ### T3.1
@@ -753,7 +682,7 @@ Tasks follow this format:
 - **Priority**: P1
 - **Effort**: 0.5
 - **Dependencies**: T5.2
-- **Status**: TODO
+- **Status**: DONE
 
 ### T5.2.2
 
@@ -798,6 +727,18 @@ Tasks follow this format:
 - **Effort**: 3
 - **Dependencies**: T5.3
 - **Status**: TODO
+
+⚠️ What to Watch For with T5.4 (Deribit Adapter)
+Adapter contract:
+The Deribit adapter will need to implement real logic for authentication, subscription, message handling, etc.
+You’ll want to override the inert handlers in the connection process for these features.
+Tests:
+You’ll need new tests for Deribit-specific flows (auth, subscribe, etc.).
+Use the Echo adapter tests as a template for echoing, but add richer tests for Deribit’s protocol.
+Client API:
+The generic client API is ready, but you may want to add Deribit-specific helpers (e.g., for signing requests, handling Deribit’s unique message formats).
+Docs:
+Add Deribit-specific usage examples to the guides as you implement.
 
 ### T5.5
 
@@ -878,6 +819,7 @@ Tasks follow this format:
   - Type specifications
   - Examples
   - All doc tests passing
+  - **Client API (`WebsockexNova.Client`) is documented as the primary interface for users, with examples for all major functions.**
 - **Priority**: P1
 - **Effort**: 2
 - **Dependencies**: T6.1, T3.4, T4.4, T4.10
@@ -905,6 +847,7 @@ Tasks follow this format:
   - Platform integration guide
   - Authentication guide
   - Advanced features guide
+  - **All guides use `WebsockexNova.Client` as the recommended interface for sending messages, subscribing, authenticating, etc.**
 - **Priority**: P2
 - **Effort**: 2
 - **Dependencies**: T5.4
@@ -924,6 +867,29 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: None
 - **Status**: TODO
+
+### T6.6
+
+- **Name**: Implement ergonomic client API
+- **Description**: Provide a user-friendly, documented API for interacting with platform adapter connections. This module should encapsulate the internal message protocol and expose clear, well-documented functions for common operations such as sending messages, subscribing, authenticating, and querying connection status. The API should be adapter-agnostic and extensible, serving as the primary interface for end users.
+- **Acceptance Criteria**:
+  - `WebsockexNova.Client` module is implemented with the following functions (at minimum):
+    - `send_text/2,3` — Send a text message and receive a reply or timeout.
+    - `send_json/2,3` — Send a map as JSON and receive a reply or timeout.
+    - `subscribe/3,4` — Subscribe to a channel/topic (if supported by the adapter).
+    - `unsubscribe/2,3` — Unsubscribe from a channel/topic (if supported).
+    - `authenticate/2,3` — Send authentication data (if supported).
+    - `ping/1,2` — Send a ping frame (if supported).
+    - `status/1,2` — Query connection status (if supported).
+    - `send_raw/2,3` — Send a raw message for advanced use.
+    - Async/cast variants for fire-and-forget operations (optional).
+  - All functions are documented with typespecs and usage examples.
+  - Comprehensive tests for all client API functions.
+  - Guides and documentation are updated to recommend the client API as the primary interface for users.
+- **Priority**: P1
+- **Effort**: 1
+- **Dependencies**: T5.2.2 (process-based connection wrapper), T4.4 (subscription management), T4.10 (authentication flow)
+- **Status**: DONE
 
 ## Phase 7: Advanced Features
 
