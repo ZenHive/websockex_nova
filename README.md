@@ -106,6 +106,82 @@ Under the hood, WebsockexNova uses Gun as its transport layer with enhanced reli
 - **Explicit Monitor References**: Passes monitor references to Gun's await functions to prevent deadlocks
 - **Ownership Transfer**: Provides a robust mechanism for transferring connection ownership between processes
 
+## Telemetry & Metrics
+
+WebsockexNova emits rich [Telemetry](https://hexdocs.pm/telemetry/telemetry.html) events for all connection, message, and error activities. This enables real-time observability, metrics collection, and integration with tools like Prometheus, StatsD, or custom dashboards.
+
+### Telemetry Events
+
+| Event Name                                           | Measurements                 | Metadata                                        |
+| ---------------------------------------------------- | ---------------------------- | ----------------------------------------------- |
+| `[:websockex_nova, :connection, :open]`              | `%{duration}` (ms, optional) | `%{connection_id, host, port}`                  |
+| `[:websockex_nova, :connection, :close]`             | `%{duration}` (ms, optional) | `%{connection_id, host, port, reason}`          |
+| `[:websockex_nova, :connection, :websocket_upgrade]` | `%{duration}` (ms, optional) | `%{connection_id, stream_ref, headers}`         |
+| `[:websockex_nova, :message, :sent]`                 | `%{size, latency}`           | `%{connection_id, stream_ref, frame_type}`      |
+| `[:websockex_nova, :message, :received]`             | `%{size, latency}`           | `%{connection_id, stream_ref, frame_type}`      |
+| `[:websockex_nova, :error, :occurred]`               | `%{}`                        | `%{connection_id, stream_ref, reason, context}` |
+
+#### Example: Subscribing to Telemetry Events
+
+```elixir
+:telemetry.attach(
+  "my-websockexnova-listener",
+  [:websockex_nova, :message, :sent],
+  fn event, measurements, metadata, _config ->
+    IO.inspect({event, measurements, metadata}, label: "WebsockexNova Telemetry")
+  end,
+  nil
+)
+```
+
+### Metrics Collection
+
+WebsockexNova provides a `MetricsCollector` behavior for aggregating metrics from telemetry events. The default implementation (`WebsockexNova.Defaults.DefaultMetricsCollector`) tracks:
+
+- Connection statistics (open/close counts, durations)
+- Message throughput (sent/received count, size, latency)
+- Error metrics (count by category)
+
+#### Using the Default Metrics Collector
+
+The default collector is started automatically, but you can also start it manually:
+
+```elixir
+WebsockexNova.Defaults.DefaultMetricsCollector.start_link([])
+
+# Query a metric (for demo/testing)
+WebsockexNova.Defaults.DefaultMetricsCollector.get_metric(:messages_sent)
+```
+
+#### Implementing a Custom Metrics Collector
+
+To implement your own collector, use the `WebsockexNova.Behaviors.MetricsCollector` behavior:
+
+```elixir
+defmodule MyApp.CustomCollector do
+  @behaviour WebsockexNova.Behaviors.MetricsCollector
+
+  def handle_connection_event(event, measurements, metadata) do
+    # Custom logic
+    :ok
+  end
+
+  def handle_message_event(event, measurements, metadata) do
+    # Custom logic
+    :ok
+  end
+
+  def handle_error_event(event, measurements, metadata) do
+    # Custom logic
+    :ok
+  end
+end
+```
+
+You can then attach your collector to telemetry events as needed.
+
+For more details, see the [API Reference](https://hexdocs.pm/websockex_nova) and the `WebsockexNova.Telemetry.TelemetryEvents` and `WebsockexNova.Behaviors.MetricsCollector` modules.
+
 ## Documentation
 
 For more information, see:

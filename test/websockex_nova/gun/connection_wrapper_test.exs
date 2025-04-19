@@ -9,6 +9,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   import ExUnit.CaptureLog
 
   alias WebsockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Telemetry.TelemetryEvents
   alias WebsockexNova.Test.Support.MockWebSockServer
   alias WebsockexNova.TestSupport.RateLimitHandlers
   alias WebsockexNova.Transport.RateLimiting
@@ -133,6 +134,36 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       end)
 
       ConnectionWrapper.close(conn_pid)
+    end
+
+    test "emits message_sent telemetry on frame send", %{port: port} do
+      require TelemetryEvents
+
+      test_pid = self()
+      event = TelemetryEvents.message_sent()
+      handler_id = make_ref()
+
+      :telemetry.attach(
+        handler_id,
+        event,
+        fn event, measurements, metadata, _config ->
+          send(test_pid, {:telemetry_event, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp})
+      assert_connection_status(conn_pid, :connected)
+      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+      assert_connection_status(conn_pid, :websocket_connected)
+      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "Telemetry Test"})
+      assert_receive {:telemetry_event, ^event, meas, meta}, 200
+      assert meta.connection_id == ConnectionWrapper.get_state(conn_pid).gun_pid
+      assert meta.stream_ref == stream_ref
+      assert meta.frame_type == :text
+      assert meas.size == byte_size("Telemetry Test")
+      ConnectionWrapper.close(conn_pid)
+      :telemetry.detach(handler_id)
     end
   end
 

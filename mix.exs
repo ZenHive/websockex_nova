@@ -59,7 +59,8 @@ defmodule WebsockexNova.MixProject do
       {:temp, "~> 0.4", only: :test},
       # For generating self-signed certificates in tests
       {:x509, "~> 0.8", only: :test},
-      {:certifi, "~> 2.5"}
+      {:certifi, "~> 2.5"},
+      {:telemetry, "~> 1.3"}
 
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}

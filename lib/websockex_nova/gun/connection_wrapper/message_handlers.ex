@@ -10,6 +10,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.Helpers.BehaviorHelpers
+  alias WebsockexNova.Telemetry.TelemetryEvents
 
   require Logger
 
@@ -72,6 +73,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_connection_up(pid(), atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_connection_up(gun_pid, protocol, state) do
+    # Telemetry: connection open
+    :telemetry.execute(
+      TelemetryEvents.connection_open(),
+      %{},
+      %{connection_id: gun_pid, host: state.host, port: state.port, protocol: protocol}
+    )
+
     log_event(:connection, :connection_up, %{protocol: protocol}, state)
 
     # Update state
@@ -156,6 +164,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
   def handle_connection_down(_gun_pid, protocol, reason, state, killed_streams \\ [], _unprocessed_streams \\ []) do
+    # Telemetry: connection close
+    :telemetry.execute(
+      TelemetryEvents.connection_close(),
+      %{},
+      %{connection_id: state.gun_pid, host: state.host, port: state.port, reason: reason, protocol: protocol}
+    )
+
     log_event(:connection, :connection_down, %{protocol: protocol, reason: reason}, state)
 
     # Log which streams were killed
@@ -223,6 +238,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_websocket_upgrade(pid(), reference(), list(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_websocket_upgrade(_gun_pid, stream_ref, headers, state) do
+    # Telemetry: websocket upgrade
+    :telemetry.execute(
+      TelemetryEvents.connection_websocket_upgrade(),
+      %{},
+      %{connection_id: state.gun_pid, stream_ref: stream_ref, headers: headers}
+    )
+
     log_event(:connection, :websocket_upgrade, %{stream_ref: stream_ref, headers: headers}, state)
 
     Logger.debug("WebSocket upgrade successful for stream: #{inspect(stream_ref)}")
@@ -292,6 +314,21 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_websocket_frame(pid(), reference(), tuple() | atom(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_websocket_frame(gun_pid, stream_ref, frame, state) do
+    # Telemetry: message received
+    {frame_type, frame_data} = extract_frame_data(frame)
+
+    size =
+      case frame_data do
+        data when is_binary(data) -> byte_size(data)
+        _ -> 0
+      end
+
+    :telemetry.execute(
+      TelemetryEvents.message_received(),
+      %{size: size},
+      %{connection_id: gun_pid, stream_ref: stream_ref, frame_type: frame_type}
+    )
+
     log_event(:message, :websocket_frame_received, %{frame: frame, stream_ref: stream_ref}, state)
 
     # Handle special case for close frames
@@ -359,6 +396,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   @spec handle_error(pid(), reference() | nil, term(), ConnectionState.t()) ::
           {:noreply, ConnectionState.t()}
   def handle_error(_gun_pid, stream_ref, reason, state) do
+    # Telemetry: error occurred
+    :telemetry.execute(
+      TelemetryEvents.error_occurred(),
+      %{},
+      %{
+        connection_id: state.gun_pid,
+        stream_ref: stream_ref,
+        reason: reason,
+        context: %{host: state.host, port: state.port}
+      }
+    )
+
     log_event(:error, :gun_error, %{reason: reason, stream_ref: stream_ref}, state)
 
     # Update state and clean up the stream with error

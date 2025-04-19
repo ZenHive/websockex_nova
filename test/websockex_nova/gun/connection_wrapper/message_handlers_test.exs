@@ -3,6 +3,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
 
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
+  alias WebsockexNova.Telemetry.TelemetryEvents
 
   defmodule MockCallbacks do
     @moduledoc false
@@ -210,6 +211,98 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlersTest do
 
       # Should not raise any error
       assert :ok = MessageHandlers.notify(state.callback_pid, message)
+    end
+  end
+
+  describe "telemetry events" do
+    setup do
+      test_pid = self()
+
+      events = [
+        TelemetryEvents.connection_open(),
+        TelemetryEvents.connection_close(),
+        TelemetryEvents.connection_websocket_upgrade(),
+        TelemetryEvents.message_received(),
+        TelemetryEvents.error_occurred()
+      ]
+
+      handler_id = make_ref()
+
+      :telemetry.attach_many(
+        handler_id,
+        events,
+        fn event, measurements, metadata, _config ->
+          send(test_pid, {:telemetry_event, event, measurements, metadata})
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler_id) end)
+      :ok
+    end
+
+    test "emits connection_open telemetry", %{state: state} do
+      protocol = :http
+      gun_pid = self()
+      MessageHandlers.handle_connection_up(gun_pid, protocol, state)
+      assert_receive {:telemetry_event, event, _meas, meta}, 100
+      assert event == TelemetryEvents.connection_open()
+      assert meta.connection_id == gun_pid
+      assert meta.host == state.host
+      assert meta.port == state.port
+      assert meta.protocol == protocol
+    end
+
+    test "emits connection_close telemetry", %{state: state} do
+      protocol = :http
+      reason = :normal
+      connected_state = ConnectionState.update_status(state, :connected)
+      MessageHandlers.handle_connection_down(self(), protocol, reason, connected_state)
+      assert_receive {:telemetry_event, event, _meas, meta}, 100
+      assert event == TelemetryEvents.connection_close()
+      assert meta.connection_id == connected_state.gun_pid
+      assert meta.host == connected_state.host
+      assert meta.port == connected_state.port
+      assert meta.reason == reason
+      assert meta.protocol == protocol
+    end
+
+    test "emits websocket_upgrade telemetry", %{state: state} do
+      stream_ref = make_ref()
+      headers = [{"sec-websocket-protocol", "json"}]
+      state = ConnectionState.update_stream(state, stream_ref, :upgrading)
+      MessageHandlers.handle_websocket_upgrade(self(), stream_ref, headers, state)
+      assert_receive {:telemetry_event, event, _meas, meta}, 100
+      assert event == TelemetryEvents.connection_websocket_upgrade()
+      assert meta.connection_id == state.gun_pid
+      assert meta.stream_ref == stream_ref
+      assert meta.headers == headers
+    end
+
+    test "emits message_received telemetry", %{state: state} do
+      stream_ref = make_ref()
+      frame = {:text, "Hello, WebSocket!"}
+      MessageHandlers.handle_websocket_frame(self(), stream_ref, frame, state)
+      assert_receive {:telemetry_event, event, meas, meta}, 100
+      assert event == TelemetryEvents.message_received()
+      assert meta.connection_id == self()
+      assert meta.stream_ref == stream_ref
+      assert meta.frame_type == :text
+      assert meas.size == byte_size("Hello, WebSocket!")
+    end
+
+    test "emits error_occurred telemetry", %{state: state} do
+      stream_ref = make_ref()
+      reason = :timeout
+      MessageHandlers.handle_error(self(), stream_ref, reason, state)
+      assert_receive {:telemetry_event, event, _meas, meta}, 100
+      assert event == TelemetryEvents.error_occurred()
+      assert meta.connection_id == state.gun_pid
+      assert meta.stream_ref == stream_ref
+      assert meta.reason == reason
+      assert is_map(meta.context)
+      assert meta.context.host == state.host
+      assert meta.context.port == state.port
     end
   end
 end

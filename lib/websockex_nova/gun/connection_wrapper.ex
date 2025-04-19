@@ -502,6 +502,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           case RateLimiting.check(request, rate_limiter) do
             {:allow, _request_id} ->
               result = :gun.ws_send(state.gun_pid, stream_ref, frame)
+              # Telemetry: message sent
+              {frame_type, frame_data} =
+                case frame do
+                  [f | _] -> {frame_type_from_frame(f), frame_data_from_frame(f)}
+                  _ -> {frame_type_from_frame(frame), frame_data_from_frame(frame)}
+                end
+
+              size =
+                case frame_data do
+                  data when is_binary(data) -> byte_size(data)
+                  _ -> 0
+                end
+
+              :telemetry.execute(
+                WebsockexNova.Telemetry.TelemetryEvents.message_sent(),
+                %{size: size},
+                %{connection_id: state.gun_pid, stream_ref: stream_ref, frame_type: frame_type}
+              )
+
               {:reply, result, state}
 
             {:queue, request_id} ->
