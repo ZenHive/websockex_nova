@@ -221,7 +221,7 @@ defmodule WebsockexNova.Auth.AuthFlowTest do
       assert updated_state == state
 
       # Verify send_frame was called with auth data
-      assert_received {:send_frame, :text, frame_data}
+      assert_received {:send_frame, :text, _frame_data}
     end
   end
 end

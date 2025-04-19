@@ -445,7 +445,6 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     opts = %{
       callback_pid: cb,
-      transport: :tls,
       protocols: [:http2],
       transport_opts: [verify: :verify_none],
       transport: :tcp
