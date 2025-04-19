@@ -1,6 +1,7 @@
 defmodule WebsockexNova.Transport.RateLimitingTest do
   use ExUnit.Case, async: false
 
+  alias WebsockexNova.Behaviors.RateLimitHandler
   alias WebsockexNova.Transport.RateLimiting
 
   require Logger
@@ -8,7 +9,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
   # Define a test handler for testing with predictable behavior
   defmodule TestHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.RateLimitHandler
+    @behaviour RateLimitHandler
 
     @impl true
     def init(opts) do
@@ -412,6 +413,123 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       else
         Application.delete_env(:websockex_nova, :rate_limiting)
       end
+    end
+  end
+
+  describe "edge cases" do
+    defmodule OverflowHandler do
+      @moduledoc false
+      @behaviour RateLimitHandler
+
+      @impl true
+      def init(_opts), do: {:ok, %{queue: :queue.new(), queue_limit: 1}}
+      @impl true
+      def check_rate_limit(_req, state) do
+        if :queue.len(state.queue) < state.queue_limit do
+          {:queue, %{state | queue: :queue.in(:req, state.queue)}}
+        else
+          {:reject, :queue_full, state}
+        end
+      end
+
+      @impl true
+      def handle_tick(state), do: {:ok, state}
+    end
+
+    test "rejects requests when queue is full" do
+      {:ok, pid} = RateLimiting.start_link(name: :overflow, handler: OverflowHandler)
+      assert {:queue, _} = RateLimiting.check(%{}, :overflow)
+      assert {:reject, :queue_full} = RateLimiting.check(%{}, :overflow)
+      GenServer.stop(pid)
+    end
+
+    defmodule NegativeRefillHandler do
+      @moduledoc false
+      @behaviour RateLimitHandler
+
+      @impl true
+      def init(_opts), do: {:ok, %{bucket: %{tokens: 1, refill_rate: -1, refill_interval: 0}}}
+      @impl true
+      def check_rate_limit(_req, state) do
+        # Simulate refill logic
+        tokens = state.bucket.tokens + max(state.bucket.refill_rate, 0)
+        if tokens > 0, do: {:allow, %{state | bucket: %{state.bucket | tokens: tokens - 1}}}, else: {:queue, state}
+      end
+
+      @impl true
+      def handle_tick(state), do: {:ok, state}
+    end
+
+    test "handles negative/zero refill rates and intervals safely" do
+      {:ok, pid} = RateLimiting.start_link(name: :neg_refill, handler: NegativeRefillHandler)
+      assert {:allow, _} = RateLimiting.check(%{}, :neg_refill)
+      assert {:queue, _} = RateLimiting.check(%{}, :neg_refill)
+      GenServer.stop(pid)
+    end
+
+    defmodule UnknownTypeHandler do
+      @moduledoc false
+      @behaviour RateLimitHandler
+
+      @impl true
+      def init(_opts), do: {:ok, %{bucket: %{tokens: 1}, cost_map: %{}}}
+      @impl true
+      def check_rate_limit(req, state) do
+        cost = Map.get(state.cost_map, req.type, 1)
+
+        if state.bucket.tokens >= cost,
+          do: {:allow, %{state | bucket: %{tokens: state.bucket.tokens - cost}}},
+          else: {:queue, state}
+      end
+
+      @impl true
+      def handle_tick(state), do: {:ok, state}
+    end
+
+    test "uses default cost for unknown request types" do
+      {:ok, pid} = RateLimiting.start_link(name: :unknown_type, handler: UnknownTypeHandler)
+      assert {:allow, _} = RateLimiting.check(%{type: :not_in_map}, :unknown_type)
+      assert {:queue, _} = RateLimiting.check(%{type: :not_in_map}, :unknown_type)
+      GenServer.stop(pid)
+    end
+
+    defmodule InvalidReturnHandler do
+      @moduledoc false
+      @behaviour RateLimitHandler
+
+      @impl true
+      def init(_opts), do: {:ok, %{}}
+      @impl true
+      def check_rate_limit(_req, _state), do: :unexpected
+      @impl true
+      def handle_tick(state), do: {:ok, state}
+    end
+
+    test "logs and rejects on invalid handler return" do
+      {:ok, pid} = RateLimiting.start_link(name: :invalid_return, handler: InvalidReturnHandler)
+      assert {:reject, :internal_error} = RateLimiting.check(%{}, :invalid_return)
+      GenServer.stop(pid)
+    end
+
+    defmodule NeverProcessHandler do
+      @moduledoc false
+      @behaviour RateLimitHandler
+
+      @impl true
+      def init(_opts), do: {:ok, %{}}
+      @impl true
+      def check_rate_limit(_req, state), do: {:queue, state}
+      @impl true
+      def handle_tick(state), do: {:ok, state}
+    end
+
+    test "callback for never-processed request is not executed" do
+      {:ok, pid} = RateLimiting.start_link(name: :never_process, handler: NeverProcessHandler)
+      {:queue, request_id} = RateLimiting.check(%{}, :never_process)
+      test_pid = self()
+      :ok = RateLimiting.on_process(request_id, fn -> send(test_pid, :should_not_happen) end, :never_process)
+      refute_receive :should_not_happen, 100
+      GenServer.stop(pid)
     end
   end
 end
