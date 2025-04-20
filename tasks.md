@@ -654,7 +654,8 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 0.5
 - **Dependencies**: None
-- **Status**: TODO
+- **Status**: DONE
+  - DummyClient fully removed from codebase and replaced with ConnectionWrapper in supervisor.
 
 ### T5.2
 

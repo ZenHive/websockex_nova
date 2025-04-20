@@ -277,6 +277,13 @@ defmodule WebsockexNova.Transport.RateLimiting do
     {:noreply, state}
   end
 
+  @impl true
+  def terminate(reason, _state) do
+    Logger.info("RateLimiting GenServer terminating: #{inspect(reason)}")
+    # No persistent state to clean up, but this is a good place for future resource cleanup
+    :ok
+  end
+
   # Private helper functions
 
   defp get_handler_module(opts) do

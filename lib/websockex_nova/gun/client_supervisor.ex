@@ -17,7 +17,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   ```
   """
 
-  use Supervisor
+  use DynamicSupervisor
 
   alias WebsockexNova.Gun.ConnectionOptions
 
@@ -52,30 +52,22 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   @spec start_link(option) :: Supervisor.on_start()
   def start_link(opts \\ []) do
     merged_opts = merge_supervisor_opts(opts)
-
-    Supervisor.start_link(
-      __MODULE__,
-      merged_opts,
-      name: Keyword.get(merged_opts, :name)
-    )
+    DynamicSupervisor.start_link(__MODULE__, merged_opts, name: Keyword.get(merged_opts, :name))
   end
 
   @impl true
-  @spec init(keyword) :: :ignore | {:ok, {Supervisor.sup_flags(), [Supervisor.child_spec()]}}
   def init(opts) do
-    supervisor_flags = build_supervisor_flags(opts)
-    children = []
-    Supervisor.init(children, supervisor_flags)
+    DynamicSupervisor.init(strategy: Keyword.get(opts, :strategy, :one_for_one))
   end
 
   @doc """
   Starts a new Gun client under this supervisor.
   """
-  @spec start_client(pid, client_option) :: Supervisor.on_start_child()
+  @spec start_client(pid, client_option) :: DynamicSupervisor.on_start_child()
   def start_client(supervisor, opts) when is_pid(supervisor) and is_list(opts) do
     validated_opts = validate_and_parse_client_opts(opts)
     client_spec = generate_client_spec(validated_opts, Keyword.get(opts, :name))
-    Supervisor.start_child(supervisor, client_spec)
+    DynamicSupervisor.start_child(supervisor, client_spec)
   end
 
   @doc """
@@ -83,7 +75,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   """
   @spec terminate_client(pid, pid | atom) :: :ok | {:error, :not_found}
   def terminate_client(supervisor, client_pid) when is_pid(client_pid) do
-    Supervisor.terminate_child(supervisor, client_pid)
+    DynamicSupervisor.terminate_child(supervisor, client_pid)
   end
 
   def terminate_client(supervisor, client_name) when is_atom(client_name) do
@@ -101,7 +93,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
            modules :: [module] | :dynamic}
         ]
   def list_clients(supervisor) do
-    Supervisor.which_children(supervisor)
+    DynamicSupervisor.which_children(supervisor)
   end
 
   @doc """
@@ -123,14 +115,6 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   defp merge_supervisor_opts(opts) do
     app_config = Application.get_env(:websockex_nova, :gun_client_supervisor, [])
     Keyword.merge(@default_config, Keyword.merge(app_config, opts))
-  end
-
-  defp build_supervisor_flags(opts) do
-    [
-      strategy: Keyword.get(opts, :strategy, :one_for_one),
-      max_restarts: Keyword.get(opts, :max_restarts, 3),
-      max_seconds: Keyword.get(opts, :max_seconds, 5)
-    ]
   end
 
   defp validate_and_parse_client_opts(opts) do
@@ -163,9 +147,15 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
   end
 
   defp generate_client_spec(client_opts, name) do
+    # Extract host, port, and options from client_opts
+    host = Map.fetch!(client_opts, :host)
+    port = Map.fetch!(client_opts, :port)
+    options = Map.drop(client_opts, [:host, :port])
+    args = {host, port, options, nil}
+
     %{
       id: make_ref(),
-      start: {WebsockexNova.Gun.DummyClient, :start_link, [client_opts, name]},
+      start: {WebsockexNova.Gun.ConnectionWrapper, :start_link, [args]},
       restart: :transient,
       shutdown: 5000,
       type: :worker

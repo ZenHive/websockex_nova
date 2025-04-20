@@ -231,6 +231,24 @@ WebsockexNova supports different deployment profiles:
 - **Lightweight Profile**: For simple WebSocket integrations
 - **Chat/Messaging Profile**: Optimized for interactive messaging platforms
 
+## Supervision Tree
+
+WebsockexNova uses a robust OTP supervision tree to ensure reliability and fault-tolerance:
+
+```
+WebsockexNova.Application (Supervisor)
+├── WebsockexNova.Gun.ClientSupervisor (DynamicSupervisor)
+│   └── WebsockexNova.Gun.ConnectionWrapper (one per connection)
+└── WebsockexNova.Transport.RateLimiting (GenServer)
+```
+
+- **ClientSupervisor**: Dynamically supervises all Gun/WebSocket connection processes. Each connection is a `ConnectionWrapper` GenServer.
+- **RateLimiting**: Centralized GenServer for rate limiting and request queueing.
+- All critical processes are supervised and implement graceful shutdown.
+- The supervision strategy is `:one_for_one` for independent fault isolation.
+
+See the code and guides for more details on customizing the supervision tree for your deployment.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
