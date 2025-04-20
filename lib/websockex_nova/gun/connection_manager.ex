@@ -388,15 +388,28 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   # Establishes a connection to the server
   defp open_connection(state) do
     gun_opts = build_gun_options(state)
+
+    Logger.debug(
+      "[Gun] Attempting to open connection to #{inspect(state.host)}:#{inspect(state.port)} with options: #{inspect(gun_opts)}"
+    )
+
     log_event(:connection, :open_gun_connection, %{host: state.host, port: state.port}, state)
     host_charlist = String.to_charlist(state.host)
 
     case gun_open(host_charlist, state.port, gun_opts) do
       {:ok, pid} ->
+        Logger.debug(
+          "[Gun] Successfully opened connection to #{inspect(state.host)}:#{inspect(state.port)} (pid=#{inspect(pid)})"
+        )
+
         {:ok, monitor_ref} = monitor_gun_process(pid)
         {:ok, pid, monitor_ref}
 
       {:error, reason} ->
+        Logger.error(
+          "[Gun] Failed to open connection to #{inspect(state.host)}:#{inspect(state.port)}: #{inspect(reason)}"
+        )
+
         # Use a minimal state struct with handlers if available, otherwise skip handler logging
         log_event(:error, :gun_open_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}

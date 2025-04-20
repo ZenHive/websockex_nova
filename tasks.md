@@ -740,6 +740,33 @@ The generic client API is ready, but you may want to add Deribit-specific helper
 Docs:
 Add Deribit-specific usage examples to the guides as you implement.
 
+### T5.4.1
+
+- **Name**: Refactor Connection Process for Full Gun/WebSocket Lifecycle and Behavior Integration
+- **Description**: Refactor `lib/websockex_nova/connection.ex` to fully implement robust, production-grade WebSocket lifecycle management. This includes:
+  - Initiating the Gun connection and WebSocket upgrade in the connection process (not just in tests or wrappers)
+  - Delegating all connection, error, and message events to the appropriate behaviors (`ConnectionHandler`, `ErrorHandler`, `MessageHandler`, `LoggingHandler`, `MetricsCollector`)
+  - Implementing reconnection logic with backoff, using behavior-driven decisions
+  - Buffering outgoing requests until the WebSocket is ready, then flushing
+  - Correlating JSON-RPC requests and responses by `id`
+  - Emitting telemetry and logging at all major lifecycle events
+  - Letting the process crash for unrecoverable errors (supervision tree restarts)
+  - Comprehensive testing of all lifecycle, error, and recovery paths
+- **Acceptance Criteria**:
+  - [ ] Connection process starts Gun connection and performs WebSocket upgrade using adapter config
+  - [ ] All Gun/WebSocket events are handled and delegated to behaviors
+  - [ ] Reconnection/backoff logic is implemented and behavior-driven
+  - [ ] Outgoing requests are buffered and flushed when ready
+  - [ ] JSON-RPC request/response correlation is robust
+  - [ ] Telemetry and logging are emitted at all key events
+  - [ ] Unrecoverable errors crash the process (let it crash philosophy)
+  - [ ] Tests cover connection, error, reconnection, and recovery flows
+- **Priority**: P0
+- **Effort**: 2
+- **Dependencies**: T5.4
+- **Status**: TODO
+- **Notes**: This refactor is foundational for all platform adapters (not just Deribit) and is required for robust, production-ready operation. Reference the Gun integration guide and all relevant behaviors for implementation details.
+
 ### T5.5
 
 - **Name**: Create platform adapter macro tests

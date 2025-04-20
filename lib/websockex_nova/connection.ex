@@ -47,6 +47,8 @@ defmodule WebsockexNova.Connection do
     * :state - the adapter's state
     * :ws_pid, :stream_ref, :frame_buffer - WebSocket connection details
     * handler modules for each concern (see above)
+    * :pending_requests - map of id => from_pid for JSON-RPC request correlation
+    * :request_buffer - list of {frame, id, from} tuples for outgoing JSON-RPC requests
 
   ## Usage
 
@@ -77,7 +79,11 @@ defmodule WebsockexNova.Connection do
           error_handler: module(),
           rate_limit_handler: module(),
           logging_handler: module(),
-          metrics_collector: module()
+          metrics_collector: module(),
+          # id => from_pid
+          pending_requests: map(),
+          # [{frame, id, from}]
+          request_buffer: list()
         }
 
   @doc """
@@ -145,7 +151,9 @@ defmodule WebsockexNova.Connection do
       error_handler: error_handler,
       rate_limit_handler: rate_limit_handler,
       logging_handler: logging_handler,
-      metrics_collector: metrics_collector
+      metrics_collector: metrics_collector,
+      pending_requests: %{},
+      request_buffer: []
     }
 
     {:ok, state}
@@ -161,24 +169,79 @@ defmodule WebsockexNova.Connection do
       :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, frame)
     end)
 
-    {:noreply, %{s | ws_pid: ws_pid, stream_ref: stream_ref, frame_buffer: []}}
+    # Flush any buffered requests (JSON-RPC)
+    {pending, _} =
+      Enum.reduce(Enum.reverse(s.request_buffer), {s.pending_requests, []}, fn {encoded, id, from}, {pending_acc, _} ->
+        Logger.debug("Flushing buffered JSON-RPC request id=#{inspect(id)} from=#{inspect(from)}")
+        :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
+        {Map.put(pending_acc, id, from), nil}
+      end)
+
+    {:noreply,
+     %{s | ws_pid: ws_pid, stream_ref: stream_ref, frame_buffer: [], request_buffer: [], pending_requests: pending}}
   end
 
   @impl true
-  def handle_info({:platform_message, message, from}, %{adapter: adapter, state: state} = s) do
-    case adapter.handle_platform_message(message, state) do
-      {:reply, reply, new_state} ->
-        send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+  def handle_info(
+        {:platform_message, message, from},
+        %{
+          adapter: adapter,
+          state: state,
+          ws_pid: ws_pid,
+          stream_ref: stream_ref,
+          pending_requests: pending,
+          request_buffer: buffer
+        } = s
+      ) do
+    cond do
+      is_map(message) and Map.has_key?(message, "id") and not is_nil(from) ->
+        {:reply, {:text, encoded}, new_state} = adapter.handle_platform_message(message, state)
+        id = message["id"]
 
-      {:ok, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        if is_nil(ws_pid) or is_nil(stream_ref) do
+          Logger.debug("Buffering JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws not ready)")
+          {:noreply, %{s | state: new_state, request_buffer: [{encoded, id, from} | buffer]}}
+        else
+          Logger.debug("Sending JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws ready)")
+          :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
+          {:noreply, %{s | state: new_state, pending_requests: Map.put(pending, id, from)}}
+        end
 
-      {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+      is_binary(message) and not is_nil(from) ->
+        case Jason.decode(message) do
+          {:ok, %{"id" => id}} ->
+            {:reply, {:text, encoded}, new_state} = adapter.handle_platform_message(message, state)
 
-      {:error, _error_info, new_state} ->
-        {:noreply, %{s | state: new_state}}
+            if is_nil(ws_pid) or is_nil(stream_ref) do
+              Logger.debug("Buffering JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws not ready)")
+              {:noreply, %{s | state: new_state, request_buffer: [{encoded, id, from} | buffer]}}
+            else
+              Logger.debug("Sending JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws ready)")
+              :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
+              {:noreply, %{s | state: new_state, pending_requests: Map.put(pending, id, from)}}
+            end
+
+          _ ->
+            {:reply, reply, new_state} = adapter.handle_platform_message(message, state)
+            send(from, {:reply, reply})
+            {:noreply, %{s | state: new_state}}
+        end
+
+      true ->
+        case adapter.handle_platform_message(message, state) do
+          {:reply, reply, new_state} ->
+            send(from, {:reply, reply})
+            {:noreply, %{s | state: new_state}}
+
+          {:ok, new_state} ->
+            {:noreply, %{s | state: new_state}}
+
+          {:noreply, new_state} ->
+            {:noreply, %{s | state: new_state}}
+
+          {:error, _error_info, new_state} ->
+            {:noreply, %{s | state: new_state}}
+        end
     end
   end
 
@@ -342,6 +405,30 @@ defmodule WebsockexNova.Connection do
 
       {:stop, stop_reason, new_state} ->
         {:stop, stop_reason, %{s | state: new_state}}
+    end
+  end
+
+  # Incoming WebSocket frame: handle JSON-RPC response correlation
+  def handle_info({:websocket_frame, {:text, frame_data}}, %{pending_requests: pending} = s) do
+    case Jason.decode(frame_data) do
+      {:ok, %{"id" => id} = resp} ->
+        case Map.pop(pending, id) do
+          {nil, _} ->
+            Logger.debug("Received JSON-RPC response for id=#{inspect(id)} but no pending request found")
+            {:noreply, s}
+
+          {from, new_pending} ->
+            Logger.debug("Routing JSON-RPC response for id=#{inspect(id)} to from=#{inspect(from)}")
+            send(from, {:reply, {:text, frame_data}})
+            {:noreply, %{s | pending_requests: new_pending}}
+        end
+
+      {:ok, _notification} ->
+        # Notification (no id), could be broadcast or handled elsewhere
+        {:noreply, s}
+
+      _ ->
+        {:noreply, s}
     end
   end
 
