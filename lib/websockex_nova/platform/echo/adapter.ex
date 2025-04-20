@@ -28,10 +28,11 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   for implementing real adapters that support authentication, subscriptions, and other features.
   """
 
-  use WebsockexNova.Platform.Adapter,
-    default_host: "echo.websocket.org",
-    default_port: 443,
-    default_path: "/"
+  use WebsockexNova.Adapter
+
+  @default_host "echo.websocket.org"
+  @default_port 443
+  @default_path "/"
 
   @impl true
   @doc """
@@ -39,6 +40,13 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   Accepts options and merges with defaults.
   """
   def init(opts) do
+    opts =
+      opts
+      |> Map.new()
+      |> Map.put_new(:host, @default_host)
+      |> Map.put_new(:port, @default_port)
+      |> Map.put_new(:path, @default_path)
+
     {:ok, opts}
   end
 
@@ -48,17 +56,9 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   - If the message is a binary, echoes as text.
   - If the message is a map, encodes as JSON and echoes as text.
   """
-  def handle_platform_message(message, state) when is_binary(message) do
-    {:reply, {:text, message}, state}
-  end
-
-  def handle_platform_message(message, state) when is_map(message) do
-    {:reply, {:text, Jason.encode!(message)}, state}
-  end
-
-  def handle_platform_message(message, state) do
-    {:reply, {:text, to_string(message)}, state}
-  end
+  def handle_platform_message(message, state) when is_binary(message), do: {:reply, {:text, message}, state}
+  def handle_platform_message(message, state) when is_map(message), do: {:reply, {:text, Jason.encode!(message)}, state}
+  def handle_platform_message(message, state), do: {:reply, {:text, to_string(message)}, state}
 
   @impl true
   @doc """

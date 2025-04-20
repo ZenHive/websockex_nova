@@ -11,12 +11,17 @@ defmodule WebsockexNova.Client do
 
   ## Examples
 
-      iex> {:ok, pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
-      iex> WebsockexNova.Client.send_text(pid, "Hello")
+      iex> {:ok, conn} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+      iex> WebsockexNova.Client.send_text(conn, "Hello")
       {:text, "Hello"}
 
-      iex> WebsockexNova.Client.send_json(pid, %{foo: "bar"})
+      iex> WebsockexNova.Client.send_json(conn, %{foo: "bar"})
       {:text, "{\"foo\":\"bar\"}"}
+
+  - `conn` is a `%WebsockexNova.ClientConn{}` struct, ready for use with all client functions.
+  - No manual WebSocket upgrade or struct building required.
+
+  **Advanced users:** If you need full control, use `WebsockexNova.Connection.start_link_raw/1` to get the raw process pid and manage upgrades yourself.
 
   See the Echo adapter for a minimal example, and featureful adapters (like Deribit) for advanced usage.
   """

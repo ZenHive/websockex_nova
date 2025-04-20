@@ -2,7 +2,7 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
   @moduledoc """
   WebsockexNova adapter for the Deribit exchange (testnet).
 
-  Implements the WebsockexNova.Platform.Adapter behaviour for Deribit, supporting:
+  Implements the WebsockexNova.Adapter contract for Deribit, supporting:
   - Authentication (public/auth)
   - Public and private JSON-RPC 2.0 requests
   - Subscriptions to public channels
@@ -17,12 +17,13 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
   See integration tests for real-world usage examples.
   """
 
-  use WebsockexNova.Platform.Adapter,
-    default_host: "test.deribit.com",
-    default_port: 443,
-    default_path: "/ws/api/v2"
+  use WebsockexNova.Adapter
 
   require Logger
+
+  @default_host "test.deribit.com"
+  @default_port 443
+  @default_path "/ws/api/v2"
 
   @impl true
   @doc """
@@ -34,10 +35,12 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
     state =
       opts
       |> Map.new()
+      |> Map.put_new(:host, @default_host)
+      |> Map.put_new(:port, @default_port)
+      |> Map.put_new(:path, @default_path)
       |> Map.put_new(:message_id, 1)
       |> Map.put_new(:subscriptions, %{})
       |> Map.put_new(:auth_token, nil)
-      # Ensure Gun is configured for Deribit's wildcard SSL cert
       |> Map.put_new(:transport, :tls)
       |> Map.put_new(:transport_opts,
         verify: :verify_peer,
@@ -52,19 +55,9 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
   @doc """
   Handles platform messages (JSON-RPC 2.0 requests and notifications).
   """
-  def handle_platform_message(message, state) when is_map(message) do
-    # Encode and send as JSON-RPC
-    {:reply, {:text, Jason.encode!(message)}, state}
-  end
-
-  def handle_platform_message(message, state) when is_binary(message) do
-    # Assume already JSON-encoded, forward as-is
-    {:reply, {:text, message}, state}
-  end
-
-  def handle_platform_message(_other, state) do
-    {:error, %{reason: :invalid_message}, state}
-  end
+  def handle_platform_message(message, state) when is_map(message), do: {:reply, {:text, Jason.encode!(message)}, state}
+  def handle_platform_message(message, state) when is_binary(message), do: {:reply, {:text, message}, state}
+  def handle_platform_message(_other, state), do: {:error, %{reason: :invalid_message}, state}
 
   @impl true
   @doc """
@@ -116,9 +109,7 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
       "jsonrpc" => "2.0",
       "id" => id,
       "method" => "public/unsubscribe",
-      "params" => %{
-        "channels" => [channel]
-      }
+      "params" => %{"channels" => [channel]}
     }
 
     {:text, Jason.encode!(req)}

@@ -7,6 +7,16 @@ defmodule WebsockexNova.Connection do
   rate limiting, logging, and metrics events to handler modules. These handlers can be customized via options
   or default to robust implementations in `WebsockexNova.Defaults`.
 
+  ## Ergonomic Connection Flow
+
+  The recommended way to start a connection is:
+
+      {:ok, conn} = WebsockexNova.Connection.start_link(adapter: MyAdapter)
+      WebsockexNova.Client.send_text(conn, "Hello")
+
+  - `conn` is a `%WebsockexNova.ClientConn{}` struct, ready for use with all client functions.
+  - No manual WebSocket upgrade or struct building required.
+
   ## Handler Injection
 
   You can specify custom handler modules for each concern via options to `start_link/1`:
@@ -44,17 +54,16 @@ defmodule WebsockexNova.Connection do
 
   The GenServer state is a map containing:
     * :adapter - the platform adapter module
-    * :state - the adapter's state
-    * :ws_pid, :stream_ref, :frame_buffer - WebSocket connection details
+    * :adapter_state - the adapter's state
+    * :ws_stream_ref - the WebSocket stream reference
     * handler modules for each concern (see above)
     * :pending_requests - map of id => from_pid for JSON-RPC request correlation
     * :request_buffer - list of {frame, id, from} tuples for outgoing JSON-RPC requests
     * :wrapper_pid - the ConnectionWrapper pid
 
-  ## Usage
+  ## Advanced Usage
 
-      {:ok, pid} = WebsockexNova.Connection.start_link(adapter: MyAdapter)
-      # Optionally override handlers as needed
+  If you need full control, use `WebsockexNova.Connection.start_link_raw/1` to get the raw process pid and manage upgrades yourself.
 
   """
   use GenServer
@@ -69,10 +78,8 @@ defmodule WebsockexNova.Connection do
   """
   @type t :: %{
           adapter: module(),
-          state: term(),
-          ws_pid: pid() | nil,
-          stream_ref: reference() | nil,
-          frame_buffer: list(),
+          adapter_state: term(),
+          ws_stream_ref: reference() | nil,
           connection_handler: module(),
           message_handler: module(),
           subscription_handler: module(),
@@ -103,12 +110,74 @@ defmodule WebsockexNova.Connection do
     * :metrics_collector - module implementing MetricsCollector behavior (default: DefaultMetricsCollector)
 
   ## Returns
-    * {:ok, pid} on success
-    * {:error, reason} on failure
+    * {:ok, WebsockexNova.ClientConn.t()} on success
+    * {:error, term()} on failure
   """
-  @spec start_link(Keyword.t()) :: GenServer.on_start()
+  @spec start_link(Keyword.t()) :: {:ok, WebsockexNova.ClientConn.t()} | {:error, term()}
   def start_link(opts) do
+    __MODULE__
+    |> GenServer.start_link(opts)
+    |> case do
+      {:ok, pid} ->
+        # Wait for the websocket upgrade to complete and get the stream_ref
+        case wait_for_stream_ref(pid, 2000) do
+          {:ok, stream_ref} ->
+            {:ok, %WebsockexNova.ClientConn{pid: pid, stream_ref: stream_ref}}
+
+          {:error, reason} ->
+            GenServer.stop(pid)
+            {:error, reason}
+        end
+
+      error ->
+        error
+    end
+  end
+
+  # Lower-level API for advanced users: returns the raw pid, does not upgrade websocket
+  @spec start_link_raw(Keyword.t()) :: GenServer.on_start()
+  def start_link_raw(opts) do
     GenServer.start_link(__MODULE__, opts)
+  end
+
+  defp wait_for_stream_ref(pid, timeout) do
+    start = System.monotonic_time(:millisecond)
+    do_wait_for_stream_ref(pid, start, timeout)
+  end
+
+  defp do_wait_for_stream_ref(pid, start, timeout) do
+    case :sys.get_state(pid) do
+      %{ws_stream_ref: ref} when not is_nil(ref) ->
+        {:ok, ref}
+
+      _ ->
+        if System.monotonic_time(:millisecond) - start > timeout do
+          {:error, :websocket_upgrade_timeout}
+        else
+          Process.sleep(25)
+          do_wait_for_stream_ref(pid, start, timeout)
+        end
+    end
+  end
+
+  defp wait_until_connected(wrapper_pid, timeout \\ 2000) do
+    start = System.monotonic_time(:millisecond)
+    do_wait_until_connected(wrapper_pid, start, timeout)
+  end
+
+  defp do_wait_until_connected(wrapper_pid, start, timeout) do
+    state = GenServer.call(wrapper_pid, :get_state)
+
+    if state.status == :connected do
+      :ok
+    else
+      if System.monotonic_time(:millisecond) - start > timeout do
+        {:error, :timeout}
+      else
+        Process.sleep(25)
+        do_wait_until_connected(wrapper_pid, start, timeout)
+      end
+    end
   end
 
   @impl true
@@ -138,19 +207,20 @@ defmodule WebsockexNova.Connection do
     Logger.debug("  logging_handler: #{inspect(logging_handler)}")
     Logger.debug("  metrics_collector: #{inspect(metrics_collector)}")
 
+    # Call adapter.init/1 first to get adapter_state with defaults
     {:ok, adapter_state} = adapter.init(opts_map)
 
-    # Extract Gun connection config from adapter or opts
+    # Extract Gun connection config from adapter_state or adapter
     gun_config =
       if function_exported?(adapter, :gun_config, 1) do
-        adapter.gun_config(opts_map)
+        adapter.gun_config(adapter_state)
       else
         %{
-          host: Keyword.fetch!(opts, :host),
-          port: Keyword.get(opts, :port, 443),
-          transport: Keyword.get(opts, :transport, :tls),
-          path: Keyword.get(opts, :path, "/"),
-          ws_opts: Keyword.get(opts, :ws_opts, %{})
+          host: Map.fetch!(adapter_state, :host),
+          port: Map.get(adapter_state, :port, 443),
+          transport: Map.get(adapter_state, :transport, :tls),
+          path: Map.get(adapter_state, :path, "/"),
+          ws_opts: Map.get(adapter_state, :ws_opts, %{})
         }
       end
 
@@ -168,11 +238,15 @@ defmodule WebsockexNova.Connection do
         }
       )
 
+    # Wait until connected before upgrading
+    :ok = wait_until_connected(wrapper_pid, 2000)
+    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, gun_config.path)
+
     state = %State{
       adapter: adapter,
       adapter_state: adapter_state,
       wrapper_pid: wrapper_pid,
-      ws_stream_ref: nil,
+      ws_stream_ref: stream_ref,
       ws_status: :connecting,
       connection_handler: connection_handler,
       message_handler: message_handler,
@@ -211,7 +285,11 @@ defmodule WebsockexNova.Connection do
   end
 
   @impl true
-  def handle_info({:platform_message, message, from}, %{adapter: adapter, adapter_state: adapter_state} = state) do
+  def handle_info(
+        {:platform_message, _stream_ref, message, from},
+        %{adapter: adapter, adapter_state: adapter_state} = state
+      ) do
+    # Call the adapter's handle_platform_message/2
     case adapter.handle_platform_message(message, adapter_state) do
       {:reply, reply, new_adapter_state} ->
         if from, do: send(from, {:reply, reply})

@@ -1,5 +1,54 @@
 # WebsockexNova Behavior Customization Guide
 
+## Quickstart: Ergonomic Connection Flow
+
+WebsockexNova now provides a simple, ergonomic API for connecting and sending messages:
+
+```elixir
+{:ok, conn} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+WebsockexNova.Client.send_text(conn, "Hello")
+```
+
+- `conn` is a `%WebsockexNova.ClientConn{}` struct, ready for use with all client functions.
+- No manual WebSocket upgrade or struct building required.
+
+**Advanced users:** If you need full control, use `WebsockexNova.Connection.start_link_raw/1` to get the raw process pid and manage upgrades yourself.
+
+---
+
+## Adapter Macro: Fast, Consistent Adapter Authoring
+
+To make building adapters as easy and consistent as possible, WebsockexNova provides a macro: `use WebsockexNova.Adapter`.
+
+### What does it do?
+
+- Injects all core `@behaviour` declarations for connection, message, subscription, auth, error, rate limit, logging, and metrics handlers.
+- Provides safe, no-op default implementations for all optional callbacks.
+- Lets you override only what you need—implement just the required callbacks for your use case.
+- Ensures your adapter is always up-to-date with the latest handler contracts.
+
+### How to use it
+
+```elixir
+defmodule MyApp.Platform.MyAdapter do
+  use WebsockexNova.Adapter
+
+  @impl WebsockexNova.Behaviors.ConnectionHandler
+  def handle_connect(conn_info, state), do: {:ok, state}
+
+  @impl WebsockexNova.Behaviors.SubscriptionHandler
+  def subscribe(channel, params, state), do: {:subscribed, channel, params, state}
+
+  # ...implement only the callbacks you need...
+end
+```
+
+**Tip:** You only need to implement the required callbacks for your adapter. All optional callbacks have safe defaults, so you can focus on your platform logic.
+
+**Recommended:** Start every new adapter with `use WebsockexNova.Adapter` for maximum maintainability and minimal boilerplate.
+
+---
+
 This guide provides a comprehensive overview of how to implement custom behaviors in WebsockexNova,
 allowing you to tailor WebSocket communication to your specific needs.
 
