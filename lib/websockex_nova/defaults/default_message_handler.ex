@@ -40,6 +40,18 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   @allowed_statuses Enum.map(~w(subscribed unsubscribed), &String.to_atom/1)
 
   @impl true
+  def init(opts \\ %{}) do
+    # Initialize state with optional processed_count and subscriptions
+    state =
+      opts
+      |> Map.new()
+      |> Map.put_new(:processed_count, 0)
+      |> Map.put_new(:subscriptions, %{})
+
+    {:ok, state}
+  end
+
+  @impl true
   def handle_message(%{"type" => "error"} = message, state) do
     # Handle error messages
     error_message = Map.get(message, "message", "Unknown error")

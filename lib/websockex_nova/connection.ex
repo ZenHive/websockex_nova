@@ -191,46 +191,76 @@ defmodule WebsockexNova.Connection do
     {:ok, state}
   end
 
+  @doc """
+  Upgrades the connection to a WebSocket and returns the stream_ref.
+  """
+  @spec upgrade_to_websocket(pid(), String.t(), list()) :: {:ok, reference()} | {:error, term()}
+  def upgrade_to_websocket(pid, path, headers \\ []) do
+    GenServer.call(pid, {:upgrade_to_websocket, path, headers})
+  end
+
   @impl true
-  def handle_info({:platform_message, message, from}, %{wrapper_pid: wrapper_pid} = s) do
-    # Forward the message to the ConnectionWrapper and reply to the caller
-    reply = ConnectionWrapper.send_frame(wrapper_pid, message)
-    if from, do: send(from, {:reply, reply})
-    {:noreply, s}
+  def handle_call({:upgrade_to_websocket, path, headers}, _from, %{wrapper_pid: wrapper_pid} = s) do
+    case ConnectionWrapper.upgrade_to_websocket(wrapper_pid, path, headers) do
+      {:ok, stream_ref} ->
+        {:reply, {:ok, stream_ref}, %{s | ws_stream_ref: stream_ref}}
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, s}
+    end
   end
 
-  def handle_info({:subscribe, channel, params, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.subscribe(wrapper_pid, channel, params)
+  @impl true
+  def handle_info({:platform_message, message, from}, %{adapter: adapter, adapter_state: adapter_state} = state) do
+    case adapter.handle_platform_message(message, adapter_state) do
+      {:reply, reply, new_adapter_state} ->
+        if from, do: send(from, {:reply, reply})
+        {:noreply, %{state | adapter_state: new_adapter_state}}
+
+      {:ok, new_adapter_state} ->
+        {:noreply, %{state | adapter_state: new_adapter_state}}
+
+      {:noreply, new_adapter_state} ->
+        {:noreply, %{state | adapter_state: new_adapter_state}}
+
+      {:error, reason, new_adapter_state} ->
+        if from, do: send(from, {:error, reason})
+        {:noreply, %{state | adapter_state: new_adapter_state}}
+    end
+  end
+
+  def handle_info({:subscribe, stream_ref, channel, params, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.subscribe(wrapper_pid, stream_ref, channel, params)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:unsubscribe, channel, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.unsubscribe(wrapper_pid, channel)
+  def handle_info({:unsubscribe, stream_ref, channel, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.unsubscribe(wrapper_pid, stream_ref, channel)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:authenticate, credentials, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.authenticate(wrapper_pid, credentials)
+  def handle_info({:authenticate, stream_ref, credentials, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.authenticate(wrapper_pid, stream_ref, credentials)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:ping, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.ping(wrapper_pid)
+  def handle_info({:ping, stream_ref, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.ping(wrapper_pid, stream_ref)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:status, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.status(wrapper_pid)
+  def handle_info({:status, stream_ref, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.status(wrapper_pid, stream_ref)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:send_frame, frame}, %{wrapper_pid: wrapper_pid} = s) do
-    ConnectionWrapper.send_frame(wrapper_pid, frame)
+  def handle_info({:send_frame, stream_ref, frame}, %{wrapper_pid: wrapper_pid} = s) do
+    ConnectionWrapper.send_frame(wrapper_pid, stream_ref, frame)
     {:noreply, s}
   end
 

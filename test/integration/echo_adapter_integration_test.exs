@@ -6,7 +6,8 @@ defmodule WebsockexNova.Integration.EchoAdapterIntegrationTest do
   @moduletag :integration
 
   setup do
-    {:ok, pid} = Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+    {:ok, pid} =
+      Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
 
     on_exit(fn ->
       if Process.alive?(pid), do: Process.exit(pid, :kill)

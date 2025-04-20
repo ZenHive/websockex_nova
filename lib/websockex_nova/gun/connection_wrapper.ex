@@ -288,7 +288,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   @doc """
-  Gets the current state of the connection wrapper.
+  Gets the current connection state.
 
   ## Parameters
 
@@ -296,7 +296,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Returns
 
-  The current state of the connection wrapper.
+  * The current state struct
   """
   @spec get_state(pid()) :: ConnectionState.t()
   def get_state(pid) do
@@ -500,8 +500,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     end
   end
 
+  @impl true
   def handle_call(:get_state, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call(:get_port, _from, state) do
+    {:reply, state.port, state}
   end
 
   def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do

@@ -198,11 +198,13 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   * `:drop_messages` - Drop all incoming messages (don't respond)
   * `:echo_with_error` - Echo messages back but occasionally send error frames
   * `:unstable` - Randomly disconnect clients
+  * `:custom` - Use a custom handler function for message processing
   """
-  def set_scenario(server_pid, scenario)
-      when scenario in [:normal, :delayed_response, :drop_messages, :echo_with_error, :unstable] do
-    Logger.debug("Setting server scenario to: #{inspect(scenario)}")
-    GenServer.call(server_pid, {:set_scenario, scenario})
+  @spec set_scenario(pid(), atom(), function() | nil) :: :ok
+  def set_scenario(server_pid, scenario, custom_handler \\ nil)
+      when scenario in [:normal, :delayed_response, :drop_messages, :echo_with_error, :unstable, :custom] do
+    Logger.debug("Setting server scenario to #{scenario}")
+    GenServer.call(server_pid, {:set_scenario, scenario, custom_handler})
   end
 
   @doc """
@@ -314,8 +316,18 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   @impl true
-  def handle_call({:set_scenario, scenario}, _from, state) do
-    {:reply, :ok, %{state | scenario: scenario}}
+  def handle_call({:set_scenario, scenario, custom_handler}, _from, state) do
+    new_state = %{state | scenario: scenario}
+
+    # Store custom handler if provided
+    new_state =
+      if scenario == :custom && is_function(custom_handler) do
+        Map.put(new_state, :custom_handler, custom_handler)
+      else
+        Map.put(new_state, :custom_handler, nil)
+      end
+
+    {:reply, :ok, new_state}
   end
 
   @impl true
@@ -414,6 +426,12 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     {:noreply, state}
   end
 
+  @impl true
+  def handle_info({:set_token_expired, value}, state) when is_boolean(value) do
+    Process.put(:token_expired, value)
+    {:noreply, state}
+  end
+
   # Private functions
 
   # Start server with appropriate protocol
@@ -472,51 +490,74 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   defp get_tls_files(_protocol, _opts), do: {nil, nil}
 
+  # Handle scenarios based on the configuration
   defp handle_scenario(:normal, client_pid, type, message, state) do
-    Logger.debug("Scenario: normal - echoing message back immediately")
-    echo_message(client_pid, type, message, state)
-    "echo"
-  end
-
-  defp handle_scenario(:delayed_response, client_pid, type, message, %{response_delay: delay} = _state) when delay > 0 do
-    Logger.debug("Scenario: delayed_response - delaying echo by #{delay}ms")
-    Process.send_after(self(), {:delayed_echo, client_pid, type, message}, delay)
-    "delayed echo"
+    # Echo the message back after any configured delay
+    maybe_delay_response(client_pid, type, message, state)
+    :echo
   end
 
   defp handle_scenario(:delayed_response, client_pid, type, message, state) do
-    Logger.debug("Scenario: delayed_response - no delay configured, echoing immediately")
-    echo_message(client_pid, type, message, state)
-    "echo"
+    # Always delay by the configured amount
+    if state.response_delay > 0 do
+      Process.send_after(self(), {:delayed_echo, client_pid, type, message}, state.response_delay)
+      :delayed
+    else
+      maybe_delay_response(client_pid, type, message, state)
+      :echo
+    end
   end
 
   defp handle_scenario(:drop_messages, _client_pid, _type, _message, _state) do
-    Logger.debug("Scenario: drop_messages - ignoring message")
-    "dropped"
+    # Don't respond at all
+    :drop
   end
 
   defp handle_scenario(:echo_with_error, client_pid, type, message, state) do
-    if random_chance(3, 10) do
-      Logger.debug("Scenario: echo_with_error - sending error response")
-      send(client_pid, {:send_error, "Server error"})
-      "error"
+    # Randomly send an error message instead of echo
+    if :rand.uniform(10) <= 3 do
+      # 30% chance of error
+      send(client_pid, {:send_error, "Random server error"})
+      :error
     else
-      Logger.debug("Scenario: echo_with_error - echoing message")
-      echo_message(client_pid, type, message, state)
-      "echo"
+      maybe_delay_response(client_pid, type, message, state)
+      :echo
     end
   end
 
-  defp handle_scenario(:unstable, client_pid, type, message, state) do
-    if random_chance(2, 10) do
-      Logger.debug("Scenario: unstable - disconnecting client")
-      send(client_pid, {:disconnect, 1001, "Server instability"})
-      "disconnect"
+  defp handle_scenario(:unstable, client_pid, _type, _message, _state) do
+    # Randomly disconnect
+    if :rand.uniform(10) <= 2 do
+      # 20% chance of disconnect
+      send(client_pid, {:disconnect, 1001, "Random server disconnect"})
+      :disconnect
     else
-      Logger.debug("Scenario: unstable - echoing message")
-      echo_message(client_pid, type, message, state)
-      "echo"
+      # Otherwise just echo
+      echo_message(client_pid, :text, "Server is unstable", nil)
+      :echo
     end
+  end
+
+  defp handle_scenario(:custom, client_pid, type, message, state) do
+    # Use the custom handler if defined
+    if is_function(state.custom_handler, 3) do
+      state.custom_handler.(client_pid, type, message)
+      :custom
+    else
+      # Fallback to normal behavior
+      maybe_delay_response(client_pid, type, message, state)
+      :echo
+    end
+  end
+
+  defp handle_scenario(other, client_pid, type, message, state) do
+    Logger.warning("Unknown scenario #{inspect(other)}, falling back to normal")
+    maybe_delay_response(client_pid, type, message, state)
+    :echo
+  end
+
+  defp maybe_delay_response(client_pid, type, message, state) do
+    echo_message(client_pid, type, message, state)
   end
 
   defp echo_message(client_pid, :text, message, state), do: send_text(client_pid, message, state)

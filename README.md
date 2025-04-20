@@ -30,7 +30,7 @@ The primary, recommended interface for most users is the ergonomic `WebsockexNov
 
 ```elixir
 # Start a connection using the minimal Echo adapter
-{:ok, pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+{:ok, pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
 
 # Send a text message and receive an echo
 WebsockexNova.Client.send_text(pid, "Hello")
@@ -59,7 +59,7 @@ defmodule MyApp.AdvancedClient do
   @impl true
   def init(_opts) do
     # Start a connection to the Echo adapter
-    {:ok, conn_pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
+    {:ok, conn_pid} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
     {:ok, %{conn: conn_pid}}
   end
 

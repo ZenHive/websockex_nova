@@ -44,6 +44,18 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   @default_max_delay 30_000
 
   @impl true
+  def init(opts \\ %{}) do
+    state =
+      opts
+      |> Map.new()
+      |> Map.put_new(:max_reconnect_attempts, @default_max_reconnect_attempts)
+      |> Map.put_new(:base_delay, @default_base_delay)
+      |> Map.put_new(:max_delay, @default_max_delay)
+
+    {:ok, state}
+  end
+
+  @impl true
   def handle_error(error, context, state) do
     # Track the error in the state
     state =
