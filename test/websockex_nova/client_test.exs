@@ -34,7 +34,8 @@ defmodule WebsockexNova.ClientTest do
     assert Client.send_json(fake_pid, %{foo: "bar"}, 50) == {:error, :timeout}
   end
 
-  # The following tests use the Echo adapter, which does not support subscribe, unsubscribe, authenticate, ping, or status.
+  # The following tests use the Echo adapter, which does not support subscribe, unsubscribe,
+  # authenticate, ping, or status.
   # We expect inert or default responses (e.g., timeouts or echo of the message as text).
 
   test "subscribe/3 returns timeout or inert response for Echo adapter", %{pid: pid} do
