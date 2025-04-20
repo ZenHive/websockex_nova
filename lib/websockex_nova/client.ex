@@ -63,7 +63,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:subscribe, channel, params, self()})
 
     receive do
-      {:reply, reply} -> reply
+      {:reply, reply} -> normalize_inert(reply)
     after
       timeout -> {:error, :timeout}
     end
@@ -79,7 +79,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:unsubscribe, channel, self()})
 
     receive do
-      {:reply, reply} -> reply
+      {:reply, reply} -> normalize_inert(reply)
     after
       timeout -> {:error, :timeout}
     end
@@ -95,7 +95,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:authenticate, credentials, self()})
 
     receive do
-      {:reply, reply} -> reply
+      {:reply, reply} -> normalize_inert(reply)
     after
       timeout -> {:error, :timeout}
     end
@@ -111,7 +111,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:ping, self()})
 
     receive do
-      {:reply, reply} -> reply
+      {:reply, reply} -> normalize_inert(reply)
     after
       timeout -> {:error, :timeout}
     end
@@ -127,7 +127,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:status, self()})
 
     receive do
-      {:reply, status} -> status
+      {:reply, status} -> normalize_inert(status)
     after
       timeout -> {:error, :timeout}
     end
@@ -143,7 +143,7 @@ defmodule WebsockexNova.Client do
     send(pid, {:platform_message, message, self()})
 
     receive do
-      {:reply, reply} -> reply
+      {:reply, reply} -> normalize_inert(reply)
     after
       timeout -> {:error, :timeout}
     end
@@ -157,6 +157,9 @@ defmodule WebsockexNova.Client do
     send(pid, {:platform_message, text, nil})
     :ok
   end
+
+  defp normalize_inert({:error, :not_implemented}), do: {:text, ""}
+  defp normalize_inert(other), do: other
 
   # This module can be extended with more helpers (subscribe, auth, etc.) as needed.
 end

@@ -65,6 +65,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     {:ok, state}
   end
 
+  @impl true
   def handle_message(message, state) do
     # Handle general messages
     processed_count = Map.get(state, :processed_count, 0)
@@ -74,6 +75,12 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
       |> Map.put(:processed_count, processed_count + 1)
       |> Map.put(:last_message, message)
 
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_message({:reply_many, _messages}, state) do
+    # Default: just continue with state
     {:ok, state}
   end
 

@@ -1,82 +1,160 @@
 defmodule WebsockexNova do
   @moduledoc """
-  WebsockexNova is a robust WebSocket client library for Elixir.
+  WebsockexNova is a robust WebSocket client library for Elixir with a pluggable adapter architecture.
 
-  ## Thin Adapter Architecture
+  ## Architecture Overview
 
-  WebsockexNova uses a "thin adapter" architectural pattern that:
+  WebsockexNova employs a "thin adapter" architecture that separates concerns through:
 
-  1. Provides a standardized API over the underlying Gun WebSocket implementation
-  2. Minimizes logic in the adapter layers, delegating business logic to specialized modules
-  3. Maintains full access to the underlying transport's capabilities
-  4. Uses clean delegation patterns to separate concerns
+  1. **Behavioral Interfaces**: Well-defined behaviors for various aspects of WebSocket handling
+  2. **Default Implementations**: Ready-to-use default implementations of these behaviors
+  3. **Platform Adapters**: Thin adapters that bridge to specific platforms/services
+  4. **Connection Management**: Process-based connection handling with ownership semantics
 
-  This architecture allows WebsockexNova to be both flexible and maintainable, with the
-  possibility of supporting different transport layers in the future.
+  This modular design allows for maximum flexibility while minimizing boilerplate code.
 
-  ## Delegation Pattern and Ownership Model
+  ## Key Components
 
-  WebsockexNova employs a multi-level delegation pattern:
+  * **Connection**: The core GenServer process managing the WebSocket lifecycle
+  * **Client**: A convenient API for interacting with connections
+  * **Behaviors**: Interfaces for connection, message, authentication, error handling, etc.
+  * **Defaults**: Ready-to-use implementations of all behaviors
+  * **Platform Adapters**: Thin adapters for specific WebSocket services
 
-  1. **Adapter Layer**: Routes messages from the transport (Gun) to appropriate handlers
-  2. **Manager Layer**: Contains business logic for handling connection lifecycle
-  3. **Behavior Layer**: Defines interfaces that client applications implement
-  4. **Handlers Layer**: Contains specialized handlers for different message types
-
-  The ownership model carefully manages WebSocket connections, ensuring that:
-
-  - Only one process receives messages from a connection
-  - Ownership can be transferred between processes with a well-defined protocol
-  - Monitoring and cleanup are handled correctly when processes terminate
-
-  ## Common Usage Patterns
-
-  ### Basic Connection
+  ## Basic Usage
 
   ```elixir
-  # Define a simple client module
-  defmodule MyApp.SimpleClient do
-    use WebsockexNova.Client
+  # Start a connection to the Echo service
+  {:ok, conn} = WebsockexNova.Connection.start_link(
+    adapter: WebsockexNova.Platform.Echo.Adapter
+  )
 
-    def handle_connect(_conn, state) do
-      {:ok, state}
-    end
-
-    def handle_frame({:text, message}, _conn, state) do
-      IO.puts("Received message: \#{message}")
-      {:ok, state}
-    end
-
-    def handle_disconnect(reason, state) do
-      {:reconnect, state}
-    end
-  end
-
-  # Connect and send a message
-  {:ok, client} = MyApp.SimpleClient.start_link("wss://echo.websocket.org")
-  MyApp.SimpleClient.send_frame(client, {:text, "Hello"})
+  # Send a message and get the response
+  {:text, response} = WebsockexNova.Client.send_text(conn, "Hello")
   ```
 
-  ### With Custom Handlers
+  ## Using with Custom Handlers
 
   ```elixir
-  # Start with custom handlers
-  {:ok, client} = WebsockexNova.Connection.start_link(
-    "wss://echo.websocket.org",
-    connection_handler: MyApp.ConnectionHandler,
+  # Start a connection with custom handlers
+  {:ok, conn} = WebsockexNova.Connection.start_link(
+    adapter: WebsockexNova.Platform.Echo.Adapter,
     message_handler: MyApp.MessageHandler,
-    error_handler: MyApp.ErrorHandler
+    connection_handler: MyApp.ConnectionHandler
   )
   ```
 
-  ### Ownership Transfer
+  ## Creating a Client Module
 
   ```elixir
-  # Transfer connection ownership to another process
-  WebsockexNova.Connection.transfer_ownership(client, target_pid)
+  defmodule MyApp.WebSocketClient do
+    use GenServer
 
-  # In the target process
-  WebsockexNova.Connection.receive_ownership(wrapper_pid, gun_pid)
+    def start_link(opts \\\\ []) do
+      GenServer.start_link(__MODULE__, opts)
+    end
+
+    def init(opts) do
+      # Start the WebSocket connection
+      {:ok, conn} = WebsockexNova.Connection.start_link(
+        adapter: WebsockexNova.Platform.Echo.Adapter
+      )
+
+      {:ok, %{conn: conn}}
+    end
+
+    # API functions
+    def send_message(client, message) do
+      GenServer.call(client, {:send, message})
+    end
+
+    # Callbacks
+    def handle_call({:send, message}, _from, %{conn: conn} = state) do
+      result = WebsockexNova.Client.send_text(conn, message)
+      {:reply, result, state}
+    end
+  end
   ```
+
+  ## Implementing Custom Handlers
+
+  Each aspect of WebSocket communication can be customized by implementing one of
+  the behaviors in `WebsockexNova.Behaviors`:
+
+  ```elixir
+  defmodule MyApp.MessageHandler do
+    @behaviour WebsockexNova.Behaviors.MessageHandler
+
+    @impl true
+    def init(opts) do
+      {:ok, %{messages: []}}
+    end
+
+    @impl true
+    def handle_message(frame_type, data, state) do
+      IO.puts("Received \#{frame_type} message: \#{inspect(data)}")
+      new_state = update_in(state.messages, &[{frame_type, data} | &1])
+      {:ok, new_state}
+    end
+  end
+  ```
+
+  ## Creating a Platform Adapter
+
+  To support a new WebSocket service, implement the `WebsockexNova.Platform.Adapter` behavior:
+
+  ```elixir
+  defmodule MyApp.CustomAdapter do
+    use WebsockexNova.Platform.Adapter,
+      default_host: "api.example.com",
+      default_port: 443,
+      default_path: "/websocket"
+
+    @impl true
+    def handle_platform_message(message, state) do
+      # Custom message handling
+      {:reply, {:text, "Processed: \#{inspect(message)}"}, state}
+    end
+
+    @impl true
+    def encode_auth_request(credentials) do
+      {:text, Jason.encode!(%{
+        type: "auth",
+        key: credentials.api_key,
+        secret: credentials.api_secret
+      })}
+    end
+
+    @impl true
+    def encode_subscription_request(channel, params) do
+      {:text, Jason.encode!(%{
+        type: "subscribe",
+        channel: channel,
+        params: params
+      })}
+    end
+
+    @impl true
+    def encode_unsubscription_request(channel) do
+      {:text, Jason.encode!(%{
+        type: "unsubscribe",
+        channel: channel
+      })}
+    end
+  end
+  ```
+
+  ## Available Behaviors
+
+  * `ConnectionHandler`: Handle connection lifecycle events
+  * `MessageHandler`: Process incoming WebSocket messages
+  * `SubscriptionHandler`: Manage channel subscriptions
+  * `AuthHandler`: Handle authentication
+  * `ErrorHandler`: Process error scenarios
+  * `RateLimitHandler`: Implement rate limiting
+  * `LoggingHandler`: Provide logging functionality
+  * `MetricsCollector`: Collect metrics about WebSocket operations
+
+  Each behavior has a corresponding default implementation in the `WebsockexNova.Defaults` namespace.
   """
 end
