@@ -28,7 +28,11 @@ defmodule WebsockexNova.Gun.ConnectionState do
             optional(:error_handler) => module(),
             optional(:error_handler_state) => term(),
             optional(:logging_handler) => module(),
-            optional(:logging_handler_state) => term()
+            optional(:logging_handler_state) => term(),
+            optional(:subscription_handler) => module(),
+            optional(:subscription_handler_state) => term(),
+            optional(:auth_handler) => module(),
+            optional(:auth_handler_state) => term()
           }
         }
 
@@ -517,6 +521,78 @@ defmodule WebsockexNova.Gun.ConnectionState do
               Map.merge(state.handlers, %{
                 logging_handler: handler_module,
                 logging_handler_state: nil
+              })
+        }
+    end
+  end
+
+  @doc """
+  Sets up the subscription handler and initializes its state.
+
+  ## Parameters
+  * `state` - Current connection state
+  * `handler_module` - The subscription handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_subscription_handler(t(), module(), map()) :: t()
+  def setup_subscription_handler(state, handler_module, handler_options) when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                subscription_handler: handler_module,
+                subscription_handler_state: handler_state
+              })
+        }
+
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                subscription_handler: handler_module,
+                subscription_handler_state: nil
+              })
+        }
+    end
+  end
+
+  @doc """
+  Sets up the auth handler and initializes its state.
+
+  ## Parameters
+  * `state` - Current connection state
+  * `handler_module` - The auth handler module to use
+  * `handler_options` - Options to pass to the handler's init/1 function
+
+  ## Returns
+  Updated connection state struct with the handler and its state
+  """
+  @spec setup_auth_handler(t(), module(), map()) :: t()
+  def setup_auth_handler(state, handler_module, handler_options) when is_atom(handler_module) do
+    case handler_module.init(handler_options) do
+      {:ok, handler_state} ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                auth_handler: handler_module,
+                auth_handler_state: handler_state
+              })
+        }
+
+      _error ->
+        %{
+          state
+          | handlers:
+              Map.merge(state.handlers, %{
+                auth_handler: handler_module,
+                auth_handler_state: nil
               })
         }
     end

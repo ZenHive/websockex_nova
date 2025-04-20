@@ -1,7 +1,9 @@
 defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
   use ExUnit.Case, async: false
 
+  alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.ConnectionHandler
+  alias WebsockexNova.Behaviors.SubscriptionHandler
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
 
@@ -103,6 +105,34 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       {:ok, updated_state}
     end
+
+    def ping(stream_ref, state) do
+      {:pinged, stream_ref, state}
+    end
+
+    def status(stream_ref, state) do
+      {:status, stream_ref, state}
+    end
+  end
+
+  defmodule TestSubscriptionHandler do
+    @moduledoc false
+    @behaviour SubscriptionHandler
+
+    def init(_opts), do: {:ok, %{}}
+    def subscribe(channel, params, state), do: {:subscribed, channel, params, state}
+    def unsubscribe(channel, state), do: {:unsubscribed, channel, state}
+  end
+
+  defmodule TestAuthHandler do
+    @moduledoc false
+    @behaviour AuthHandler
+
+    def init(_opts), do: {:ok, %{}}
+    def generate_auth_data(state), do: {:ok, %{token: "t"}, state}
+    def handle_auth_response(_resp, state), do: {:ok, state}
+    def needs_reauthentication?(_state), do: false
+    def authenticate(stream_ref, credentials, state), do: {:authenticated, stream_ref, credentials, state}
   end
 
   describe "behavior delegation" do
@@ -257,6 +287,43 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         # Servers handled in test
         nil
       end
+    end
+
+    setup do
+      {:ok, pid} =
+        ConnectionWrapper.open("localhost", 1234, %{
+          callback_handler: TestConnectionHandler,
+          subscription_handler: TestSubscriptionHandler,
+          auth_handler: TestAuthHandler,
+          transport: :tcp
+        })
+
+      {:ok, pid: pid}
+    end
+
+    test "subscribe/4 delegates to subscription handler", %{pid: pid} do
+      assert {:subscribed, "chan", %{foo: 1}, %{}} =
+               ConnectionWrapper.subscribe(pid, :ref, "chan", %{foo: 1})
+    end
+
+    test "unsubscribe/3 delegates to subscription handler", %{pid: pid} do
+      assert {:unsubscribed, "chan", %{}} =
+               ConnectionWrapper.unsubscribe(pid, :ref, "chan")
+    end
+
+    test "authenticate/3 delegates to auth handler", %{pid: pid} do
+      assert {:authenticated, :ref, %{user: "u"}, %{}} =
+               ConnectionWrapper.authenticate(pid, :ref, %{user: "u"})
+    end
+
+    test "ping/2 delegates to connection handler", %{pid: pid} do
+      assert {:pinged, :ref, %{}} =
+               ConnectionWrapper.ping(pid, :ref)
+    end
+
+    test "status/2 delegates to connection handler", %{pid: pid} do
+      assert {:status, :ref, %{}} =
+               ConnectionWrapper.status(pid, :ref)
     end
   end
 end

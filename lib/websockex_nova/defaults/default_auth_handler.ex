@@ -174,40 +174,45 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     end
   end
 
-  @doc """
-  Authenticate with the provided credentials.
+  # @doc """
+  # Authenticate with the provided credentials.
 
-  This function is called by the Connection module when WebsockexNova.Client.authenticate/2 is used.
-  It delegates to the adapter's encode_auth_request/1 function to generate the appropriate auth request
-  for the platform.
+  # This function is called by the Connection module when WebsockexNova.Client.authenticate/2 is used.
+  # It delegates to the adapter's encode_auth_request/1 function to generate the appropriate auth request
+  # for the platform.
 
-  ## Parameters
+  # ## Parameters
 
-  * `credentials` - Authentication credentials (typically %{api_key: key, secret: secret})
-  * `state` - Current state
+  # * `credentials` - Authentication credentials (typically %{api_key: key, secret: secret})
+  # * `state` - Current state
 
-  ## Returns
+  # ## Returns
 
-  * `{:reply, reply, new_state}` - Send a message back to the caller
-  * `{:noreply, new_state}` - No immediate reply
-  """
-  def authenticate(credentials, state) do
-    case state.adapter.encode_auth_request(credentials) do
-      {:text, request} ->
-        # Send auth request frame to the websocket and update state
-        send(self(), {:send_frame, {:text, request}})
+  # * `{:reply, reply, new_state}` - Send a message back to the caller
+  # * `{:noreply, new_state}` - No immediate reply
+  # """
+  # def authenticate(credentials, state) do
+  #   case state.adapter.encode_auth_request(credentials) do
+  #     {:text, request} ->
+  #       # Send auth request frame to the websocket and update state
+  #       send(self(), {:send_frame, {:text, request}})
 
-        updated_state =
-          state
-          |> Map.put(:auth_status, :authenticating)
-          |> Map.put(:credentials, credentials)
+  #       updated_state =
+  #         state
+  #         |> Map.put(:auth_status, :authenticating)
+  #         |> Map.put(:credentials, credentials)
 
-        {:noreply, updated_state}
+  #       {:noreply, updated_state}
 
-      {:error, reason} ->
-        # Authentication encoding failed
-        {:error, reason, state}
-    end
+  #     {:error, reason} ->
+  #       # Authentication encoding failed
+  #       {:error, reason, state}
+  #   end
+  # end
+
+  @impl true
+  def authenticate(_stream_ref, _credentials, state) do
+    {:ok, state}
   end
 
   # Private helper functions

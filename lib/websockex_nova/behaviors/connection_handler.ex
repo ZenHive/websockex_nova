@@ -232,5 +232,31 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
               | {:reconnect, state()}
               | {:stop, term(), state()}
 
+  @doc """
+  Ping the connection or stream. Used for keepalive or health checks.
+
+  ## Parameters
+  * stream_ref - The stream reference for the WebSocket connection
+  * state - Current handler state
+
+  ## Returns
+  * {:ok, new_state} - Ping successful
+  * {:error, reason, new_state} - Ping failed
+  """
+  @callback ping(stream_ref :: term(), state()) :: {:ok, state()} | {:error, term(), state()}
+
+  @doc """
+  Query the status of the connection or stream.
+
+  ## Parameters
+  * stream_ref - The stream reference for the WebSocket connection
+  * state - Current handler state
+
+  ## Returns
+  * {:ok, status, new_state} - Status information and updated state
+  * {:error, reason, new_state} - Status query failed
+  """
+  @callback status(stream_ref :: term(), state()) :: {:ok, term(), state()} | {:error, term(), state()}
+
   @optional_callbacks [handle_timeout: 1]
 end

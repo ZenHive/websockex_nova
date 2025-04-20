@@ -116,4 +116,14 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
       {:stop, :max_reconnect_attempts_reached, state}
     end
   end
+
+  @impl true
+  def ping(_stream_ref, state) do
+    {:ok, state}
+  end
+
+  @impl true
+  def status(_stream_ref, state) do
+    {:ok, :ok, state}
+  end
 end

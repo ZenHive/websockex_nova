@@ -157,4 +157,20 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   - `false`: Current authentication is still valid
   """
   @callback needs_reauthentication?(state :: map()) :: boolean()
+
+  @doc """
+  Authenticates using the provided credentials and current state.
+
+  ## Parameters
+  - credentials: The credentials to use for authentication (map or struct)
+  - state: The current state map
+  - stream_ref: The stream reference for the WebSocket connection
+
+  ## Returns
+  - {:ok, updated_state}: Authentication successful
+  - {:error, reason, updated_state}: Authentication failed
+  """
+  @callback authenticate(stream_ref :: term(), credentials :: map(), state :: map()) ::
+              {:ok, updated_state :: map()}
+              | {:error, reason :: atom() | String.t(), updated_state :: map()}
 end

@@ -419,6 +419,46 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     GenServer.call(pid, {:wait_for_websocket_upgrade, stream_ref, timeout})
   end
 
+  @doc """
+  Subscribes to a channel using the configured subscription handler.
+  """
+  @spec subscribe(pid(), reference(), String.t(), map()) :: any
+  def subscribe(pid, stream_ref, channel, params) do
+    GenServer.call(pid, {:subscribe, stream_ref, channel, params})
+  end
+
+  @doc """
+  Unsubscribes from a channel using the configured subscription handler.
+  """
+  @spec unsubscribe(pid(), reference(), String.t()) :: any
+  def unsubscribe(pid, stream_ref, channel) do
+    GenServer.call(pid, {:unsubscribe, stream_ref, channel})
+  end
+
+  @doc """
+  Authenticates using the configured auth handler.
+  """
+  @spec authenticate(pid(), reference(), map()) :: any
+  def authenticate(pid, stream_ref, credentials) do
+    GenServer.call(pid, {:authenticate, stream_ref, credentials})
+  end
+
+  @doc """
+  Sends a ping using the configured connection handler.
+  """
+  @spec ping(pid(), reference()) :: any
+  def ping(pid, stream_ref) do
+    GenServer.call(pid, {:ping, stream_ref})
+  end
+
+  @doc """
+  Gets the status using the configured connection handler.
+  """
+  @spec status(pid(), reference()) :: any
+  def status(pid, stream_ref) do
+    GenServer.call(pid, {:status, stream_ref})
+  end
+
   # Server callbacks
   @impl true
   def init({host, port, options, _supervisor}) do
@@ -433,6 +473,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         state =
           state
           |> initialize_connection_handler(validated_options)
+          |> initialize_subscription_handler(validated_options)
+          |> initialize_auth_handler(validated_options)
           |> initialize_message_handler(validated_options)
           |> initialize_error_handler(validated_options)
 
@@ -510,6 +552,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     {:reply, state.port, state}
   end
 
+  @impl true
   def handle_call({:transfer_ownership, new_owner_pid}, _from, state) do
     case validate_transfer_ownership(state, new_owner_pid) do
       :ok ->
@@ -522,6 +565,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     end
   end
 
+  @impl true
   def handle_call({:receive_ownership, gun_pid}, _from, state) do
     case validate_gun_pid(gun_pid) do
       :ok ->
@@ -534,6 +578,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     end
   end
 
+  @impl true
   def handle_call({:wait_for_websocket_upgrade, stream_ref, timeout}, _from, state) do
     if state.gun_pid do
       monitor_ref = state.gun_monitor_ref
@@ -543,6 +588,46 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       # Return error if Gun process is missing (not connected)
       ErrorHandler.handle_connection_error(:not_connected, state)
     end
+  end
+
+  @impl true
+  def handle_call({:subscribe, _stream_ref, channel, params}, _from, state) do
+    handler = Map.get(state.handlers, :subscription_handler)
+    handler_state = Map.get(state.handlers, :subscription_handler_state)
+    result = handler.subscribe(channel, params, handler_state)
+    {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call({:unsubscribe, _stream_ref, channel}, _from, state) do
+    handler = Map.get(state.handlers, :subscription_handler)
+    handler_state = Map.get(state.handlers, :subscription_handler_state)
+    result = handler.unsubscribe(channel, handler_state)
+    {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call({:authenticate, stream_ref, credentials}, _from, state) do
+    handler = Map.get(state.handlers, :auth_handler)
+    handler_state = Map.get(state.handlers, :auth_handler_state)
+    result = handler.authenticate(stream_ref, credentials, handler_state)
+    {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call({:ping, stream_ref}, _from, state) do
+    handler = Map.get(state.handlers, :connection_handler)
+    handler_state = Map.get(state.handlers, :connection_handler_state)
+    result = handler.ping(stream_ref, handler_state)
+    {:reply, result, state}
+  end
+
+  @impl true
+  def handle_call({:status, stream_ref}, _from, state) do
+    handler = Map.get(state.handlers, :connection_handler)
+    handler_state = Map.get(state.handlers, :connection_handler_state)
+    result = handler.status(stream_ref, handler_state)
+    {:reply, result, state}
   end
 
   @impl true
@@ -782,6 +867,36 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           |> Map.put(:connection_wrapper_pid, self())
 
         ConnectionState.setup_connection_handler(state, handler_module, handler_options)
+    end
+  end
+
+  defp initialize_subscription_handler(state, options) do
+    handler_module = Map.get(options, :subscription_handler) || Map.get(options, :callback_handler)
+
+    if handler_module do
+      handler_options =
+        options
+        |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+        |> Map.put(:connection_wrapper_pid, self())
+
+      ConnectionState.setup_subscription_handler(state, handler_module, handler_options)
+    else
+      state
+    end
+  end
+
+  defp initialize_auth_handler(state, options) do
+    handler_module = Map.get(options, :auth_handler) || Map.get(options, :callback_handler)
+
+    if handler_module do
+      handler_options =
+        options
+        |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+        |> Map.put(:connection_wrapper_pid, self())
+
+      ConnectionState.setup_auth_handler(state, handler_module, handler_options)
+    else
+      state
     end
   end
 
