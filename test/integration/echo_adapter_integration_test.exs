@@ -6,30 +6,30 @@ defmodule WebsockexNova.Integration.EchoAdapterIntegrationTest do
   @moduletag :integration
 
   setup do
-    {:ok, pid} =
+    {:ok, conn} =
       Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
 
     on_exit(fn ->
-      if Process.alive?(pid), do: Process.exit(pid, :kill)
+      if Process.alive?(conn.pid), do: Process.exit(conn.pid, :kill)
     end)
 
-    %{pid: pid}
+    %{conn: conn}
   end
 
-  test "echoes text messages", %{pid: pid} do
-    send(pid, {:platform_message, "Hello", self()})
+  test "echoes text messages", %{conn: conn} do
+    send(conn.pid, {:platform_message, conn.stream_ref, "Hello", self()})
     assert_receive {:reply, {:text, "Hello"}}, 1000
   end
 
-  test "echoes JSON messages", %{pid: pid} do
+  test "echoes JSON messages", %{conn: conn} do
     msg = %{foo: "bar", n: 42}
-    send(pid, {:platform_message, msg, self()})
+    send(conn.pid, {:platform_message, conn.stream_ref, msg, self()})
     assert_receive {:reply, {:text, json}}, 1000
     assert Jason.decode!(json) == %{"foo" => "bar", "n" => 42}
   end
 
-  test "echoes non-binary, non-map messages as string", %{pid: pid} do
-    send(pid, {:platform_message, 12_345, self()})
+  test "echoes non-binary, non-map messages as string", %{conn: conn} do
+    send(conn.pid, {:platform_message, conn.stream_ref, 12_345, self()})
     assert_receive {:reply, {:text, "12345"}}, 1000
   end
 end

@@ -11,32 +11,33 @@ defmodule WebsockexNova.Integration.EchoConnectionWrapperTest do
   @moduletag :integration
 
   setup do
-    {:ok, pid} =
+    {:ok, conn} =
       Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
 
     on_exit(fn ->
-      if Process.alive?(pid), do: Process.exit(pid, :normal)
+      if Process.alive?(conn.pid), do: Process.exit(conn.pid, :normal)
     end)
 
-    %{pid: pid}
+    %{conn: conn}
   end
 
-  test "process is alive and monitorable", %{pid: pid} do
-    assert Process.alive?(pid)
-    ref = Process.monitor(pid)
-    Process.unlink(pid)
-    Process.exit(pid, :kill)
+  test "process is alive and monitorable", %{conn: conn} do
+    assert Process.alive?(conn.pid)
+    ref = Process.monitor(conn.pid)
+    Process.unlink(conn.pid)
+    Process.exit(conn.pid, :kill)
+    pid = conn.pid
     assert_receive {:DOWN, ^ref, :process, ^pid, :killed}, 1000
   end
 
-  test "echoes text messages", %{pid: pid} do
-    send(pid, {:platform_message, "Hello", self()})
+  test "echoes text messages", %{conn: conn} do
+    send(conn.pid, {:platform_message, conn.stream_ref, "Hello", self()})
     assert_receive {:reply, {:text, "Hello"}}, 500
   end
 
-  test "echoes JSON messages", %{pid: pid} do
+  test "echoes JSON messages", %{conn: conn} do
     msg = %{foo: "bar", n: 42}
-    send(pid, {:platform_message, msg, self()})
+    send(conn.pid, {:platform_message, conn.stream_ref, msg, self()})
     assert_receive {:reply, {:text, json}}, 500
     assert Jason.decode!(json) == %{"foo" => "bar", "n" => 42}
   end
