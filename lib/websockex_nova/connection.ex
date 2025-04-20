@@ -49,6 +49,7 @@ defmodule WebsockexNova.Connection do
     * handler modules for each concern (see above)
     * :pending_requests - map of id => from_pid for JSON-RPC request correlation
     * :request_buffer - list of {frame, id, from} tuples for outgoing JSON-RPC requests
+    * :wrapper_pid - the ConnectionWrapper pid
 
   ## Usage
 
@@ -58,7 +59,7 @@ defmodule WebsockexNova.Connection do
   """
   use GenServer
 
-  alias WebsockexNova.ConnectionTest.NoopAdapter
+  alias WebsockexNova.Connection.State
   alias WebsockexNova.Gun.ConnectionWrapper
 
   require Logger
@@ -83,7 +84,8 @@ defmodule WebsockexNova.Connection do
           # id => from_pid
           pending_requests: map(),
           # [{frame, id, from}]
-          request_buffer: list()
+          request_buffer: list(),
+          wrapper_pid: pid() | nil
         }
 
   @doc """
@@ -137,13 +139,41 @@ defmodule WebsockexNova.Connection do
     Logger.debug("  metrics_collector: #{inspect(metrics_collector)}")
 
     {:ok, adapter_state} = adapter.init(opts_map)
-    # ws_pid and stream_ref are nil until upgraded; frame_buffer holds frames to send once ready
-    state = %{
+
+    # Extract Gun connection config from adapter or opts
+    gun_config =
+      if function_exported?(adapter, :gun_config, 1) do
+        adapter.gun_config(opts_map)
+      else
+        %{
+          host: Keyword.fetch!(opts, :host),
+          port: Keyword.get(opts, :port, 443),
+          transport: Keyword.get(opts, :transport, :tls),
+          path: Keyword.get(opts, :path, "/"),
+          ws_opts: Keyword.get(opts, :ws_opts, %{})
+        }
+      end
+
+    # Start Gun connection using ConnectionWrapper
+    {:ok, wrapper_pid} =
+      ConnectionWrapper.open(
+        to_string(gun_config.host),
+        gun_config.port,
+        %{
+          transport: gun_config.transport,
+          ws_opts: gun_config.ws_opts,
+          callback_handler: connection_handler,
+          message_handler: message_handler,
+          error_handler: error_handler
+        }
+      )
+
+    state = %State{
       adapter: adapter,
-      state: adapter_state,
-      ws_pid: nil,
-      stream_ref: nil,
-      frame_buffer: [],
+      adapter_state: adapter_state,
+      wrapper_pid: wrapper_pid,
+      ws_stream_ref: nil,
+      ws_status: :connecting,
       connection_handler: connection_handler,
       message_handler: message_handler,
       subscription_handler: subscription_handler,
@@ -152,110 +182,56 @@ defmodule WebsockexNova.Connection do
       rate_limit_handler: rate_limit_handler,
       logging_handler: logging_handler,
       metrics_collector: metrics_collector,
-      pending_requests: %{},
-      request_buffer: []
+      reconnect_attempts: 0,
+      backoff_state: nil,
+      last_error: nil,
+      config: Map.merge(opts_map, gun_config)
     }
 
     {:ok, state}
   end
 
-  @doc """
-  Called by the Gun connection wrapper when the WebSocket is established.
-  Flushes any buffered frames.
-  """
-  def handle_info({:set_ws, ws_pid, stream_ref}, s) do
-    # Flush any buffered frames
-    Enum.each(Enum.reverse(s.frame_buffer), fn frame ->
-      :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, frame)
-    end)
-
-    # Flush any buffered requests (JSON-RPC)
-    {pending, _} =
-      Enum.reduce(Enum.reverse(s.request_buffer), {s.pending_requests, []}, fn {encoded, id, from}, {pending_acc, _} ->
-        Logger.debug("Flushing buffered JSON-RPC request id=#{inspect(id)} from=#{inspect(from)}")
-        :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
-        {Map.put(pending_acc, id, from), nil}
-      end)
-
-    {:noreply,
-     %{s | ws_pid: ws_pid, stream_ref: stream_ref, frame_buffer: [], request_buffer: [], pending_requests: pending}}
-  end
-
   @impl true
-  def handle_info(
-        {:platform_message, message, from},
-        %{
-          adapter: adapter,
-          state: state,
-          ws_pid: ws_pid,
-          stream_ref: stream_ref,
-          pending_requests: pending,
-          request_buffer: buffer
-        } = s
-      ) do
-    cond do
-      is_map(message) and Map.has_key?(message, "id") and not is_nil(from) ->
-        {:reply, {:text, encoded}, new_state} = adapter.handle_platform_message(message, state)
-        id = message["id"]
-
-        if is_nil(ws_pid) or is_nil(stream_ref) do
-          Logger.debug("Buffering JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws not ready)")
-          {:noreply, %{s | state: new_state, request_buffer: [{encoded, id, from} | buffer]}}
-        else
-          Logger.debug("Sending JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws ready)")
-          :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
-          {:noreply, %{s | state: new_state, pending_requests: Map.put(pending, id, from)}}
-        end
-
-      is_binary(message) and not is_nil(from) ->
-        case Jason.decode(message) do
-          {:ok, %{"id" => id}} ->
-            {:reply, {:text, encoded}, new_state} = adapter.handle_platform_message(message, state)
-
-            if is_nil(ws_pid) or is_nil(stream_ref) do
-              Logger.debug("Buffering JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws not ready)")
-              {:noreply, %{s | state: new_state, request_buffer: [{encoded, id, from} | buffer]}}
-            else
-              Logger.debug("Sending JSON-RPC request id=#{inspect(id)} from=#{inspect(from)} (ws ready)")
-              :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, {:text, encoded})
-              {:noreply, %{s | state: new_state, pending_requests: Map.put(pending, id, from)}}
-            end
-
-          _ ->
-            {:reply, reply, new_state} = adapter.handle_platform_message(message, state)
-            send(from, {:reply, reply})
-            {:noreply, %{s | state: new_state}}
-        end
-
-      true ->
-        case adapter.handle_platform_message(message, state) do
-          {:reply, reply, new_state} ->
-            send(from, {:reply, reply})
-            {:noreply, %{s | state: new_state}}
-
-          {:ok, new_state} ->
-            {:noreply, %{s | state: new_state}}
-
-          {:noreply, new_state} ->
-            {:noreply, %{s | state: new_state}}
-
-          {:error, _error_info, new_state} ->
-            {:noreply, %{s | state: new_state}}
-        end
-    end
-  end
-
-  # Send a frame over the WebSocket (called by the adapter via send(self(), {:send_frame, frame}))
-  @impl true
-  def handle_info({:send_frame, frame}, %{ws_pid: ws_pid, stream_ref: stream_ref} = s)
-      when not is_nil(ws_pid) and not is_nil(stream_ref) do
-    :ok = ConnectionWrapper.send_frame(ws_pid, stream_ref, frame)
+  def handle_info({:platform_message, message, from}, %{wrapper_pid: wrapper_pid} = s) do
+    # Forward the message to the ConnectionWrapper and reply to the caller
+    reply = ConnectionWrapper.send_frame(wrapper_pid, message)
+    if from, do: send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:send_frame, frame}, s) do
-    # Buffer the frame until the WebSocket is ready
-    {:noreply, %{s | frame_buffer: [frame | s.frame_buffer]}}
+  def handle_info({:subscribe, channel, params, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.subscribe(wrapper_pid, channel, params)
+    send(from, {:reply, reply})
+    {:noreply, s}
+  end
+
+  def handle_info({:unsubscribe, channel, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.unsubscribe(wrapper_pid, channel)
+    send(from, {:reply, reply})
+    {:noreply, s}
+  end
+
+  def handle_info({:authenticate, credentials, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.authenticate(wrapper_pid, credentials)
+    send(from, {:reply, reply})
+    {:noreply, s}
+  end
+
+  def handle_info({:ping, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.ping(wrapper_pid)
+    send(from, {:reply, reply})
+    {:noreply, s}
+  end
+
+  def handle_info({:status, from}, %{wrapper_pid: wrapper_pid} = s) do
+    reply = ConnectionWrapper.status(wrapper_pid)
+    send(from, {:reply, reply})
+    {:noreply, s}
+  end
+
+  def handle_info({:send_frame, frame}, %{wrapper_pid: wrapper_pid} = s) do
+    ConnectionWrapper.send_frame(wrapper_pid, frame)
+    {:noreply, s}
   end
 
   # Subscription events: delegate to subscription_handler

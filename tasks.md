@@ -641,9 +641,70 @@ Tasks follow this format:
 - **Status**: DONE
 - **Code Review Rating** Rating: 5/5
 
-## Phase 5: Platform Integration
+## Phase 5: Production-Grade Orchestration & Integration
 
 ### T5.1
+
+- **Name**: Remove DummyClient from all orchestration and integration code
+- **Description**: Ensure that DummyClient is no longer used in any part of the codebase, including tests, supervisors, and documentation. All orchestration and integration tests should use the real connection stack (Connection, ConnectionWrapper, Gun, etc.).
+- **Acceptance Criteria**:
+  - DummyClient is not referenced in any test, supervisor, or runtime code
+  - All tests use the real connection stack
+  - Documentation is updated to reflect this change
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: None
+- **Status**: TODO
+
+### T5.2
+
+- **Name**: Comprehensive integration test suite for connection lifecycle
+- **Description**: Implement a suite of integration tests covering the full connection lifecycle, including connect, disconnect, send, receive, subscribe, authenticate, ping, status, error handling, and reconnection. Tests should use a real echo/test WebSocket server and the production connection stack.
+- **Acceptance Criteria**:
+  - Tests for connect/disconnect (normal and error cases)
+  - Tests for send/receive (text, JSON, binary)
+  - Tests for subscribe/unsubscribe (including error and edge cases)
+  - Tests for authenticate (success, failure, expired token, etc.)
+  - Tests for ping/pong and status
+  - Tests for reconnection logic (simulate dropped connections, network errors, etc.)
+  - Tests for error propagation (ensure errors from the wrapper/adapter are surfaced to the client)
+  - Tests for ownership transfer between processes
+  - All tests pass reliably in CI
+- **Priority**: P0
+- **Effort**: 2
+- **Dependencies**: T3.1
+- **Status**: TODO
+
+### T5.3
+
+- **Name**: Telemetry and metrics integration for connection events
+- **Description**: Integrate Telemetry events for all major connection lifecycle events (connect, disconnect, send, receive, error, reconnect, etc.) and ensure metrics can be collected by Prometheus/StatsD. Document event names and payloads.
+- **Acceptance Criteria**:
+  - Telemetry events are emitted for all major lifecycle events
+  - Metrics can be collected by Prometheus/StatsD
+  - Documentation of event names and payloads is up to date
+- **Priority**: P1
+- **Effort**: 1
+- **Dependencies**: T3.2
+- **Status**: TODO
+
+### T5.4
+
+- **Name**: Supervision tree and OTP best practices audit
+- **Description**: Review and update the supervision tree to ensure it follows OTP best practices, including restart strategies, graceful shutdown, and dynamic supervision if needed. Document the supervision tree.
+- **Acceptance Criteria**:
+  - Supervision tree follows OTP best practices
+  - All critical processes are supervised
+  - Graceful shutdown is implemented
+  - Supervision tree is documented
+- **Priority**: P1
+- **Effort**: 1
+- **Dependencies**: T3.2
+- **Status**: TODO
+
+## Phase 6: Platform Integration
+
+### T6.1
 
 - **Name**: Create platform adapter template tests
 - **Description**: Test cases for the platform adapter base module
@@ -656,7 +717,7 @@ Tasks follow this format:
 - **Dependencies**: T3.4, T4.4
 - **Status**: DONE
 
-### T5.2
+### T6.2
 
 - **Name**: Create platform adapter template
 - **Description**: Base module for platform-specific adapters
@@ -667,10 +728,10 @@ Tasks follow this format:
   - All tests passing
 - **Priority**: P1
 - **Effort**: 1
-- **Dependencies**: T5.1
+- **Dependencies**: T6.1
 - **Status**: DONE
 
-### T5.2.1
+### T6.2.1
 
 - **Name**: Create Echo adapter as reference implementation
 - **Description**: Implement a simple Echo adapter as a reference implementation
@@ -681,10 +742,10 @@ Tasks follow this format:
   - Simple echo server for integration tests
 - **Priority**: P1
 - **Effort**: 0.5
-- **Dependencies**: T5.2
+- **Dependencies**: T6.2
 - **Status**: DONE
 
-### T5.2.2
+### T6.2.2
 
 - **Name**: Implement process-based connection wrapper for Echo adapter
 - **Description**: Create a GenServer (or similar process) that wraps the Echo adapter, providing a `start_link/1` function, message routing, and process monitoring. This ensures the Echo adapter can be started, supervised, and tested in the same way as Gun-based connections.
@@ -696,10 +757,10 @@ Tasks follow this format:
   - Documentation updated to reflect the process-based usage pattern
 - **Priority**: P0
 - **Effort**: 1
-- **Dependencies**: T5.2.1
+- **Dependencies**: T6.2.1
 - **Status**: DONE
 
-### T5.3
+### T6.3
 
 - **Name**: Create Deribit adapter tests
 - **Description**: Test cases for Deribit platform adapter
@@ -710,10 +771,10 @@ Tasks follow this format:
   - Tests for error handling
 - **Priority**: P1
 - **Effort**: 1.5
-- **Dependencies**: T5.2, T4.10
+- **Dependencies**: T6.2, T4.10
 - **Status**: TODO
 
-### T5.4
+### T6.4
 
 - **Name**: Implement Deribit platform adapter
 - **Description**: Create adapter for the Deribit exchange
@@ -725,10 +786,10 @@ Tasks follow this format:
   - All tests passing
 - **Priority**: P1
 - **Effort**: 3
-- **Dependencies**: T5.3
+- **Dependencies**: T6.3
 - **Status**: TODO
 
-⚠️ What to Watch For with T5.4 (Deribit Adapter)
+⚠️ What to Watch For with T6.4 (Deribit Adapter)
 Adapter contract:
 The Deribit adapter will need to implement real logic for authentication, subscription, message handling, etc.
 You'll want to override the inert handlers in the connection process for these features.
@@ -740,7 +801,7 @@ The generic client API is ready, but you may want to add Deribit-specific helper
 Docs:
 Add Deribit-specific usage examples to the guides as you implement.
 
-### T5.4.1
+### T6.4.1
 
 - **Name**: Refactor Connection Process for Full Gun/WebSocket Lifecycle and Behavior Integration
 - **Description**: Refactor `lib/websockex_nova/connection.ex` to fully implement robust, production-grade WebSocket lifecycle management. This includes:
@@ -763,11 +824,11 @@ Add Deribit-specific usage examples to the guides as you implement.
   - [ ] Tests cover connection, error, reconnection, and recovery flows
 - **Priority**: P0
 - **Effort**: 2
-- **Dependencies**: T5.4
+- **Dependencies**: T6.4
 - **Status**: TODO
 - **Notes**: This refactor is foundational for all platform adapters (not just Deribit) and is required for robust, production-ready operation. Reference the Gun integration guide and all relevant behaviors for implementation details.
 
-### T5.5
+### T6.5
 
 - **Name**: Create platform adapter macro tests
 - **Description**: Test cases for platform adapter macros
@@ -777,10 +838,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - Tests for configuration options
 - **Priority**: P2
 - **Effort**: 0.5
-- **Dependencies**: T5.2
+- **Dependencies**: T6.2
 - **Status**: TODO
 
-### T5.6
+### T6.6
 
 - **Name**: Create using macros for platform adapters
 - **Description**: Create macros to simplify adapter creation
@@ -791,10 +852,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - All tests passing
 - **Priority**: P2
 - **Effort**: 1.5
-- **Dependencies**: T5.5
+- **Dependencies**: T6.5
 - **Status**: TODO
 
-### T5.7
+### T6.7
 
 - **Name**: Create platform client template tests
 - **Description**: Test cases for platform-specific clients
@@ -804,10 +865,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - Tests for configuration
 - **Priority**: P2
 - **Effort**: 0.5
-- **Dependencies**: T5.2
+- **Dependencies**: T6.2
 - **Status**: TODO
 
-### T5.8
+### T6.8
 
 - **Name**: Create platform-specific client templates
 - **Description**: Templates for building platform-specific clients
@@ -821,9 +882,9 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: T5.7
 - **Status**: TODO
 
-## Phase 6: Testing Infrastructure & Documentation
+## Phase 7: Testing Infrastructure & Documentation
 
-### T6.1
+### T7.1
 
 - **Name**: Create module documentation tests
 - **Description**: Tests that verify documentation completeness
@@ -836,7 +897,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T6.2
+### T7.2
 
 - **Name**: Create API documentation
 - **Description**: Comprehensive documentation for public API
@@ -849,10 +910,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - **Client API (`WebsockexNova.Client`) is documented as the primary interface for users, with examples for all major functions.**
 - **Priority**: P1
 - **Effort**: 2
-- **Dependencies**: T6.1, T3.4, T4.4, T4.10
+- **Dependencies**: T7.1, T3.4, T4.4, T4.10
 - **Status**: TODO
 
-### T6.3
+### T7.3
 
 - **Name**: Implement test coverage reporting
 - **Description**: Add tools for measuring test coverage
@@ -865,7 +926,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T6.4
+### T7.4
 
 - **Name**: Create example usage guides
 - **Description**: Create comprehensive guides with examples
@@ -877,10 +938,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - **All guides use `WebsockexNova.Client` as the recommended interface for sending messages, subscribing, authenticating, etc.**
 - **Priority**: P2
 - **Effort**: 2
-- **Dependencies**: T5.4
+- **Dependencies**: T6.4
 - **Status**: TODO
 
-### T6.5
+### T7.5
 
 - **Name**: Ensure CI, Static Analysis, and Code Quality Tooling
 - **Description**: Integrate and maintain CI workflows and static analysis tools to ensure code quality and reliability.
@@ -895,7 +956,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T6.6
+### T7.6
 
 - **Name**: Implement ergonomic client API
 - **Description**: Provide a user-friendly, documented API for interacting with platform adapter connections. This module should encapsulate the internal message protocol and expose clear, well-documented functions for common operations such as sending messages, subscribing, authenticating, and querying connection status. The API should be adapter-agnostic and extensible, serving as the primary interface for end users.
@@ -915,12 +976,12 @@ Add Deribit-specific usage examples to the guides as you implement.
   - Guides and documentation are updated to recommend the client API as the primary interface for users.
 - **Priority**: P1
 - **Effort**: 1
-- **Dependencies**: T5.2.2 (process-based connection wrapper), T4.4 (subscription management), T4.10 (authentication flow)
+- **Dependencies**: T6.2.2 (process-based connection wrapper), T4.4 (subscription management), T4.10 (authentication flow)
 - **Status**: DONE
 
-## Phase 7: Advanced Features
+## Phase 8: Advanced Features
 
-### T7.1
+### T8.1
 
 - **Name**: Create CodecHandler behavior tests
 - **Description**: Test cases for codec handling
@@ -933,7 +994,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: T3.4
 - **Status**: TODO
 
-### T7.2
+### T8.2
 
 - **Name**: Add binary protocol support (CodecHandler)
 - **Description**: Create pluggable codec system for different formats
@@ -945,10 +1006,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - All tests passing
 - **Priority**: P3
 - **Effort**: 2
-- **Dependencies**: T7.1
+- **Dependencies**: T8.1
 - **Status**: TODO
 
-### T7.3
+### T8.3
 
 - **Name**: Create backpressure mechanism tests
 - **Description**: Test cases for flow control
@@ -961,7 +1022,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: T3.4
 - **Status**: TODO
 
-### T7.4
+### T8.4
 
 - **Name**: Implement backpressure mechanisms
 - **Description**: Create flow control for high-volume streams
@@ -972,10 +1033,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - All tests passing
 - **Priority**: P3
 - **Effort**: 2.5
-- **Dependencies**: T7.3
+- **Dependencies**: T8.3
 - **Status**: TODO
 
-### T7.5
+### T8.5
 
 - **Name**: Create dynamic configuration tests
 - **Description**: Test cases for runtime configuration
@@ -988,7 +1049,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: T3.4
 - **Status**: TODO
 
-### T7.6
+### T8.6
 
 - **Name**: Add dynamic configuration support
 - **Description**: Create system for runtime configuration changes
@@ -999,10 +1060,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - All tests passing
 - **Priority**: P3
 - **Effort**: 2
-- **Dependencies**: T7.5
+- **Dependencies**: T8.5
 - **Status**: TODO
 
-### T7.7
+### T8.7
 
 - **Name**: Security Hardening & Secret Management
 - **Description**: Implement advanced security features including credential rotation, integration with Vault/Secrets Manager, audit logging for sensitive actions, and TLS configuration validation.
@@ -1017,7 +1078,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T7.8
+### T8.8
 
 - **Name**: Operational Observability & Alerting
 - **Description**: Add operational features for production readiness, including alerting integration, health check endpoints, and runbook documentation.
@@ -1031,7 +1092,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T7.9
+### T8.9
 
 - **Name**: Clustering & Distributed State
 - **Description**: Implement distributed subscription state, distributed rate limiting, and node failover/handoff for high-availability deployments.
@@ -1045,7 +1106,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T7.10
+### T8.10
 
 - **Name**: Performance & Load Testing
 - **Description**: Add performance and load testing infrastructure, including benchmarking, stress testing, and profiling.
@@ -1059,7 +1120,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: None
 - **Status**: TODO
 
-### T7.11
+### T8.11
 
 - **Name**: Compliance & Legal Readiness
 - **Description**: Add features and documentation for compliance (e.g., GDPR, audit trails, data retention).
