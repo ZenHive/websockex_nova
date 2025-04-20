@@ -109,6 +109,7 @@ defmodule WebsockexNova.Behaviors.ErrorHandler do
 
   ## Callbacks
 
+  * `init/1` - Initialize the handler's state
   * `handle_error/3` - Process an error and determine the appropriate action
   * `should_reconnect?/3` - Determine if reconnection should be attempted
   * `log_error/3` - Log an error with appropriate context
@@ -156,6 +157,22 @@ defmodule WebsockexNova.Behaviors.ErrorHandler do
   * `{false, _}` - Should not reconnect
   """
   @type reconnect_decision :: {boolean(), delay()}
+
+  @doc """
+  Initialize the handler's state.
+
+  Called when the error handler is started. The return value becomes the initial state.
+
+  ## Parameters
+
+  * `opts` - The options passed to the handler
+
+  ## Returns
+
+  * `{:ok, state}` - The initialized state
+  * `{:error, reason}` - Initialization failed
+  """
+  @callback init(opts :: term()) :: {:ok, state()} | {:error, term()}
 
   @doc """
   Handle an error and determine the appropriate action.

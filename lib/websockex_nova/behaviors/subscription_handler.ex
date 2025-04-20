@@ -120,6 +120,7 @@ defmodule WebsockexNova.Behaviors.SubscriptionHandler do
 
   ## Callbacks
 
+  * `init/1` - Initialize the handler's state
   * `subscribe/3` - Track a new subscription
   * `unsubscribe/2` - Remove an existing subscription
   * `handle_subscription_response/2` - Process subscription-related messages
@@ -181,6 +182,22 @@ defmodule WebsockexNova.Behaviors.SubscriptionHandler do
   @type handle_response_return ::
           {:ok, state()}
           | {:error, term(), state()}
+
+  @doc """
+  Initialize the handler's state.
+
+  Called when the subscription handler is started. The return value becomes the initial state.
+
+  ## Parameters
+
+  * `opts` - The options passed to the handler
+
+  ## Returns
+
+  * `{:ok, state}` - The initialized state
+  * `{:error, reason}` - Initialization failed
+  """
+  @callback init(opts :: term()) :: {:ok, state()} | {:error, term()}
 
   @doc """
   Track a new subscription to a channel or topic.

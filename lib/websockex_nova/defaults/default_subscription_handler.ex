@@ -62,6 +62,16 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @type subscription_response :: SubscriptionHandler.subscription_response()
 
   @impl true
+  def init(opts \\ %{}) do
+    state =
+      opts
+      |> Map.new()
+      |> Map.put_new(:subscriptions, %{})
+
+    {:ok, state}
+  end
+
+  @impl true
   @spec subscribe(channel(), params(), state()) ::
           {:ok, subscription_id(), state()}
           | {:error, term(), state()}

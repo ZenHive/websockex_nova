@@ -174,6 +174,7 @@ defmodule Examples.CustomHandlers do
     require Logger
 
     # Initialize state with defaults (not part of behavior)
+    @impl true
     def init(opts) do
       {:ok,
        %{
@@ -341,6 +342,7 @@ defmodule Examples.CustomHandlers do
     require Logger
 
     # Initialize state with defaults (not part of behavior)
+    @impl true
     def init(opts) do
       {:ok,
        %{

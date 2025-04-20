@@ -146,7 +146,7 @@ defmodule WebsockexNova.Gun.ClientSupervisor do
     end
   end
 
-  defp generate_client_spec(client_opts, name) do
+  defp generate_client_spec(client_opts, _name) do
     # Extract host, port, and options from client_opts
     host = Map.fetch!(client_opts, :host)
     port = Map.fetch!(client_opts, :port)

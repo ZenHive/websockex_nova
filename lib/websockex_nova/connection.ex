@@ -417,7 +417,7 @@ defmodule WebsockexNova.Connection do
   # Incoming WebSocket frame: handle JSON-RPC response correlation
   def handle_info({:websocket_frame, {:text, frame_data}}, %{pending_requests: pending} = s) do
     case Jason.decode(frame_data) do
-      {:ok, %{"id" => id} = resp} ->
+      {:ok, %{"id" => id} = _resp} ->
         case Map.pop(pending, id) do
           {nil, _} ->
             Logger.debug("Received JSON-RPC response for id=#{inspect(id)} but no pending request found")
