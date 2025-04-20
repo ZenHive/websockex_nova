@@ -44,6 +44,46 @@ WebsockexNova.Client.send_json(pid, %{foo: "bar"})
 - The Echo adapter is a minimal, reference implementation. Featureful adapters (like Deribit) support authentication, subscriptions, and more.
 - See the [Adapter Integration Guide](docs/guides/adapter_integration.md) for advanced usage and adapter development.
 
+## Supervising Connections (Best Practice)
+
+To manage connection lifecycles and ensure fault tolerance, you can supervise your WebSocket connections using Elixir's `DynamicSupervisor` and the public API. Each connection process should be started with the public API (e.g., `WebsockexNova.Connection.start_link/1`) and supervised as a worker.
+
+**Example: Dynamic Supervision of Connections**
+
+```elixir
+defmodule MyApp.ConnectionSupervisor do
+  use DynamicSupervisor
+
+  def start_link(init_arg) do
+    DynamicSupervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+  end
+
+  @impl true
+  def init(_init_arg) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  def start_connection(opts) do
+    spec = %{
+      id: make_ref(),
+      start: {WebsockexNova.Connection, :start_link, [opts]},
+      restart: :transient,
+      shutdown: 5000,
+      type: :worker
+    }
+    DynamicSupervisor.start_child(__MODULE__, spec)
+  end
+end
+
+# Usage:
+{:ok, _sup} = MyApp.ConnectionSupervisor.start_link([])
+{:ok, conn_pid} = MyApp.ConnectionSupervisor.start_connection(adapter: WebsockexNova.Platform.Echo.Adapter, host: "echo.websocket.org", port: 443)
+```
+
+- Each connection is supervised as a separate process.
+- You can dynamically add or remove connections as needed.
+- This pattern is recommended for robust, production-grade applications.
+
 ## Advanced: Custom Process-Based Client Example
 
 For advanced use cases, you can build your own process that manages a WebsockexNova connection and interacts with it using the client API. This is useful if you want to encapsulate connection management, message routing, or integrate with other OTP behaviors.
@@ -237,12 +277,9 @@ WebsockexNova uses a robust OTP supervision tree to ensure reliability and fault
 
 ```
 WebsockexNova.Application (Supervisor)
-├── WebsockexNova.Gun.ClientSupervisor (DynamicSupervisor)
-│   └── WebsockexNova.Gun.ConnectionWrapper (one per connection)
 └── WebsockexNova.Transport.RateLimiting (GenServer)
 ```
 
-- **ClientSupervisor**: Dynamically supervises all Gun/WebSocket connection processes. Each connection is a `ConnectionWrapper` GenServer.
 - **RateLimiting**: Centralized GenServer for rate limiting and request queueing.
 - All critical processes are supervised and implement graceful shutdown.
 - The supervision strategy is `:one_for_one` for independent fault isolation.

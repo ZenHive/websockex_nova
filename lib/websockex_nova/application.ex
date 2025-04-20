@@ -4,7 +4,6 @@ defmodule WebsockexNova.Application do
   @moduledoc false
   use Application
 
-  alias WebsockexNova.Gun.ClientSupervisor
   alias WebsockexNova.Gun.FrameCodec
   alias WebsockexNova.Transport.RateLimiting
 
@@ -16,9 +15,6 @@ defmodule WebsockexNova.Application do
     children = [
       # Starts a worker by calling: WebsockexNova.Worker.start_link(arg)
       # {WebsockexNova.Worker, arg}
-
-      # Start the Gun client supervisor
-      {ClientSupervisor, name: ClientSupervisor},
 
       # Start the rate limiter
       {RateLimiting, get_rate_limiting_opts()}
