@@ -1,68 +1,127 @@
 # Writing Platform Adapters for WebsockexNova
 
-This guide explains how to implement a platform adapter that works seamlessly with the process-based connection wrapper (`WebsockexNova.Connection`). It also provides a template for integration tests and a proposal for an ergonomic client API.
+This guide explains how to implement a platform adapter that works seamlessly with the process-based connection wrapper (`WebsockexNova.Connection`). It also clarifies the distinction between behaviors and default implementations, and provides a step-by-step template for adapter development and integration testing.
 
 ---
 
-## 1. Adapter Contract
+## 1. Architecture: Behaviors vs. Defaults
 
-To be compatible with `WebsockexNova.Connection`, your adapter module **must** implement the following contract:
+WebsockexNova is designed for composability and extensibility. It separates concerns using **behaviors** (contracts) and **default implementations** (sensible, overridable modules):
 
-### Required Functions
+- **Behaviors** (in `lib/websockex_nova/behaviors/`) define the required callbacks for connection, message, error, subscription, authentication, rate limiting, logging, and metrics handling. Behaviors do **not** provide any default logic.
+- **Defaults** (in `lib/websockex_nova/defaults/`) provide full, overridable implementations for each behavior. You can use these as-is, or override only the callbacks you need to customize.
 
-```elixir
-def init(opts :: map()) :: {:ok, state()} | {:error, reason}
+**Best Practice:** Compose your adapter by using or extending the default handlers, and override only what is platform-specific.
 
-def handle_platform_message(message, state) ::
-  {:reply, reply, state} |
-  {:ok, state} |
-  {:noreply, state} |
-  {:error, error_info, state}
-```
+---
 
-- `init/1` receives a map of options and returns `{:ok, state}`.
-- `handle_platform_message/2` receives a message (usually a string or map) and the current state, and returns one of the supported tuples.
+## 2. Writing a Platform Adapter: Step-by-Step
 
-### Example Adapter Skeleton
+### Step 1: Use the Platform Adapter Macro
+
+Start your adapter module with the `WebsockexNova.Platform.Adapter` macro. This sets up the contract and default config for your platform:
 
 ```elixir
-defmodule MyPlatform.Adapter do
+defmodule MyApp.PlatformAdapters.Deribit do
   use WebsockexNova.Platform.Adapter,
-    default_host: "wss://example.com",
+    default_host: "wss://www.deribit.com/ws/api/v2",
     default_port: 443
 
-  @impl true
-  def init(opts) do
-    # Initialize state from opts
-    {:ok, %{opts: opts, ...}}
-  end
-
-  @impl true
-  def handle_platform_message(message, state) when is_binary(message) do
-    # Handle text message
-    {:reply, {:text, "Echo: " <> message}, state}
-  end
-
-  def handle_platform_message(message, state) when is_map(message) do
-    # Handle JSON message
-    {:reply, {:text, Jason.encode!(%{"echo" => message})}, state}
-  end
+  # ...implement required callbacks below
 end
 ```
 
----
+### Step 2: Compose with Default Handlers
 
-## 2. Integration Test Template
-
-Create a test file like `test/integration/my_adapter_integration_test.exs`:
+You can use or extend the default handler modules for connection, message, error, subscription, authentication, rate limiting, logging, and metrics. For example:
 
 ```elixir
-defmodule WebsockexNova.Integration.MyAdapterIntegrationTest do
+defmodule MyApp.DeribitConnectionHandler do
+  use WebsockexNova.Defaults.DefaultConnectionHandler
+  # Override only what you need:
+  def handle_connect(conn_info, state) do
+    # Custom Deribit handshake logic
+    {:reply, :text, "{\"jsonrpc\":\"2.0\",...}", state}
+  end
+end
+
+defmodule MyApp.DeribitMessageHandler do
+  use WebsockexNova.Defaults.DefaultMessageHandler
+  # Override message_type/1, handle_message/2, etc. as needed
+end
+```
+
+You can do the same for error, subscription, auth, rate limit, logging, and metrics handlers.
+
+### Step 3: Implement Platform-Specific Logic
+
+Implement the required callbacks for your platform adapter (see `WebsockexNova.Platform.Adapter` docs):
+
+- `init/1`
+- `handle_platform_message/2`
+- `encode_auth_request/1`
+- `encode_subscription_request/2`
+- `encode_unsubscription_request/1`
+
+Example:
+
+```elixir
+@impl true
+def handle_platform_message(%{"method" => "heartbeat"}, state) do
+  {:noreply, state}
+end
+
+@impl true
+def encode_auth_request(credentials) do
+  {:text, Jason.encode!(%{"jsonrpc" => "2.0", ...})}
+end
+# ...and so on
+```
+
+### Step 4: Start a Connection with Your Adapter
+
+```elixir
+{:ok, pid} = WebsockexNova.Connection.start_link(
+  adapter: MyApp.PlatformAdapters.Deribit,
+  connection_handler: MyApp.DeribitConnectionHandler,
+  message_handler: MyApp.DeribitMessageHandler,
+  # ...other handlers as needed
+  credentials: %{api_key: "...", secret: "..."}
+)
+```
+
+### Step 5: Interact via the Client API
+
+**Always use the `WebsockexNova.Client` module as the primary interface for interacting with your connection:**
+
+```elixir
+WebsockexNova.Client.send_text(pid, "Hello")
+WebsockexNova.Client.send_json(pid, %{foo: "bar"})
+WebsockexNova.Client.subscribe(pid, "ticker.BTC-PERPETUAL.raw")
+WebsockexNova.Client.authenticate(pid, %{api_key: "...", secret: "..."})
+WebsockexNova.Client.ping(pid)
+WebsockexNova.Client.status(pid)
+```
+
+---
+
+## 3. Integration Test Template (Recommended)
+
+Create a test file like `test/integration/deribit_adapter_integration_test.exs`:
+
+```elixir
+defmodule WebsockexNova.Integration.DeribitAdapterIntegrationTest do
   use ExUnit.Case, async: false
   alias WebsockexNova.Connection
 
   setup do
-    {:ok, pid} = Connection.start_link(adapter: MyPlatform.Adapter, api_key: "demo-key")
+    {:ok, pid} = Connection.start_link(
+      adapter: MyApp.PlatformAdapters.Deribit,
+      connection_handler: MyApp.DeribitConnectionHandler,
+      message_handler: MyApp.DeribitMessageHandler,
+      # ...other handlers as needed
+      credentials: %{api_key: "demo-key", secret: "demo-secret"}
+    )
     on_exit(fn ->
       if Process.alive?(pid), do: Process.exit(pid, :kill)
     end)
@@ -70,49 +129,33 @@ defmodule WebsockexNova.Integration.MyAdapterIntegrationTest do
   end
 
   test "echoes text messages", %{pid: pid} do
-    send(pid, {:platform_message, "Hello", self()})
-    assert_receive {:reply, {:text, "Echo: Hello"}}, 500
+    WebsockexNova.Client.send_text(pid, "Hello")
+    assert_receive {:reply, {:text, _}}, 500
   end
 
   # Add more tests for ping, auth, subscribe, etc.
 end
 ```
 
-- Always use `Process.unlink(pid)` before killing if you want to assert on monitor messages.
+---
+
+## 4. Best Practices & Common Pitfalls
+
+- **Use default handlers** as a base and override only what you need.
+- **Do not implement the behaviors from scratch** unless you have a strong reason; leverage the tested defaults.
+- **Always use the Client API** (`WebsockexNova.Client`) for interacting with connections.
+- **Pass all required handlers and credentials** when starting a connection.
+- **Test your adapter with real and mock servers** to ensure protocol compliance.
+- **Consult the Echo adapter and its tests** for a minimal, working reference.
 
 ---
 
-## 3. Ergonomic Client API (Recommended)
+## 5. Summary
 
-**For most users, it is recommended to use the `WebsockexNova.Client` module as the primary interface for interacting with platform adapter connections.**
+- **Behaviors** define contracts; **defaults** provide full, overridable implementations.
+- **Compose your adapter** by using/extending defaults and implementing only platform-specific logic.
+- **Start connections** with all required handlers and credentials.
+- **Interact via the Client API** for safety and ergonomics.
+- **Write integration tests** using the provided template.
 
-### Example: `WebsockexNova.Client`
-
-```elixir
-defmodule WebsockexNova.Client do
-  # ...
-end
-
-# Usage:
-{:ok, pid} = WebsockexNova.Connection.start_link(adapter: MyPlatform.Adapter)
-WebsockexNova.Client.send_text(pid, "Hello")
-WebsockexNova.Client.send_json(pid, %{foo: "bar"})
-WebsockexNova.Client.subscribe(pid, "channel")
-WebsockexNova.Client.authenticate(pid, %{api_key: "demo"})
-WebsockexNova.Client.ping(pid)
-WebsockexNova.Client.status(pid)
-WebsockexNova.Client.send_raw(pid, "custom message")
-WebsockexNova.Client.cast_text(pid, "fire and forget")
-```
-
-- These helpers encapsulate the internal message protocol and provide a safe, documented, and extensible API.
-- For advanced use, you may still use `send/2` directly with the process, but this is not recommended for most users.
-
----
-
-## 4. Summary
-
-- The connection wrapper is adapter-agnostic and works for any module implementing the documented contract.
-- Integration tests should follow the provided template for reliability and clarity.
-- The ergonomic client API (`WebsockexNova.Client`) is the recommended way to interact with connections.
-- For more details, see the Echo adapter and its integration tests as a reference implementation.
+For more details, see the Echo adapter and its integration tests as a reference implementation.

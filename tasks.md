@@ -731,12 +731,12 @@ Tasks follow this format:
 ⚠️ What to Watch For with T5.4 (Deribit Adapter)
 Adapter contract:
 The Deribit adapter will need to implement real logic for authentication, subscription, message handling, etc.
-You’ll want to override the inert handlers in the connection process for these features.
+You'll want to override the inert handlers in the connection process for these features.
 Tests:
-You’ll need new tests for Deribit-specific flows (auth, subscribe, etc.).
-Use the Echo adapter tests as a template for echoing, but add richer tests for Deribit’s protocol.
+You'll need new tests for Deribit-specific flows (auth, subscribe, etc.).
+Use the Echo adapter tests as a template for echoing, but add richer tests for Deribit's protocol.
 Client API:
-The generic client API is ready, but you may want to add Deribit-specific helpers (e.g., for signing requests, handling Deribit’s unique message formats).
+The generic client API is ready, but you may want to add Deribit-specific helpers (e.g., for signing requests, handling Deribit's unique message formats).
 Docs:
 Add Deribit-specific usage examples to the guides as you implement.
 
