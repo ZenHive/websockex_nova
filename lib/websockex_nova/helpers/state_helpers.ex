@@ -135,4 +135,40 @@ defmodule WebsockexNova.Helpers.StateHelpers do
     # Handle case when state doesn't have a handlers map
     Map.put(state, :handlers, updated_handlers)
   end
+
+  @doc """
+  Retrieves the host from the state, adapter_state, or config, in that order.
+  Returns nil if not found.
+  """
+  @spec get_host(map()) :: String.t() | nil
+  def get_host(%{host: host}) when is_binary(host), do: host
+  def get_host(%{adapter_state: %{host: host}}) when is_binary(host), do: host
+  def get_host(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_host(adapter_state)
+  def get_host(%{config: %{host: host}}) when is_binary(host), do: host
+  def get_host(%{config: config}) when is_map(config), do: get_host(config)
+  def get_host(_), do: nil
+
+  @doc """
+  Retrieves the port from the state, adapter_state, or config, in that order.
+  Returns nil if not found.
+  """
+  @spec get_port(map()) :: non_neg_integer() | nil
+  def get_port(%{port: port}) when is_integer(port), do: port
+  def get_port(%{adapter_state: %{port: port}}) when is_integer(port), do: port
+  def get_port(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_port(adapter_state)
+  def get_port(%{config: %{port: port}}) when is_integer(port), do: port
+  def get_port(%{config: config}) when is_map(config), do: get_port(config)
+  def get_port(_), do: nil
+
+  @doc """
+  Retrieves the status from the state, adapter_state, or config, in that order.
+  Returns nil if not found.
+  """
+  @spec get_status(map()) :: atom() | nil
+  def get_status(%{status: status}) when is_atom(status), do: status
+  def get_status(%{adapter_state: %{status: status}}) when is_atom(status), do: status
+  def get_status(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_status(adapter_state)
+  def get_status(%{config: %{status: status}}) when is_atom(status), do: status
+  def get_status(%{config: config}) when is_map(config), do: get_status(config)
+  def get_status(_), do: nil
 end

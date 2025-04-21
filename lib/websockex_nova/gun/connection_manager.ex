@@ -41,6 +41,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Helpers.StateHelpers
 
   require Logger
 
@@ -113,7 +114,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, ConnectionState.t()} | {:error, :invalid_transition}
   def transition_to(state, to_state, params \\ %{}) when is_map(params) do
     if can_transition?(state.status, to_state) do
-      log_event(:connection, :transition, %{from: state.status, to: to_state, params: params}, state)
+      log_event(:connection, :transition, %{from: StateHelpers.get_status(state), to: to_state, params: params}, state)
 
       new_state =
         state
@@ -122,12 +123,12 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:ok, new_state}
     else
-      log_event(:error, :invalid_transition, %{from: state.status, to: to_state}, state)
+      log_event(:error, :invalid_transition, %{from: StateHelpers.get_status(state), to: to_state}, state)
 
       log_event(
         :connection,
         :valid_transitions,
-        %{from: state.status, valid: Map.get(@valid_transitions, state.status, [])},
+        %{from: StateHelpers.get_status(state), valid: Map.get(@valid_transitions, StateHelpers.get_status(state), [])},
         state
       )
 
@@ -241,7 +242,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @spec schedule_reconnection(ConnectionState.t(), (non_neg_integer(), non_neg_integer() -> any())) ::
           ConnectionState.t()
   def schedule_reconnection(state, callback) when is_function(callback, 2) do
-    log_event(:connection, :schedule_reconnect, %{status: state.status}, state)
+    log_event(:connection, :schedule_reconnect, %{status: StateHelpers.get_status(state)}, state)
 
     case handle_reconnection(state) do
       {:ok, reconnect_after, reconnecting_state} ->
@@ -270,7 +271,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, ConnectionState.t()}
           | {:error, term(), ConnectionState.t()}
   def initiate_connection(state) do
-    log_event(:connection, :initiate_connection, %{status: state.status}, state)
+    log_event(:connection, :initiate_connection, %{status: StateHelpers.get_status(state)}, state)
 
     case transition_to(state, :connecting) do
       {:ok, new_state} -> {:ok, new_state}
@@ -296,7 +297,12 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @spec start_connection(ConnectionState.t()) ::
           {:ok, ConnectionState.t()} | {:error, term(), ConnectionState.t()}
   def start_connection(state) do
-    log_event(:connection, :start_connection, %{host: state.host, port: state.port, status: state.status}, state)
+    log_event(
+      :connection,
+      :start_connection,
+      %{host: StateHelpers.get_host(state), port: StateHelpers.get_port(state), status: StateHelpers.get_status(state)},
+      state
+    )
 
     with {:ok, connecting_state} <- transition_to(state, :connecting),
          {:ok, gun_pid, monitor_ref} <- open_connection(connecting_state) do
@@ -390,16 +396,22 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     gun_opts = build_gun_options(state)
 
     Logger.debug(
-      "[Gun] Attempting to open connection to #{inspect(state.host)}:#{inspect(state.port)} with options: #{inspect(gun_opts)}"
+      "[Gun] Attempting to open connection to #{inspect(StateHelpers.get_host(state))}:#{inspect(StateHelpers.get_port(state))} with options: #{inspect(gun_opts)}"
     )
 
-    log_event(:connection, :open_gun_connection, %{host: state.host, port: state.port}, state)
-    host_charlist = String.to_charlist(state.host)
+    log_event(
+      :connection,
+      :open_gun_connection,
+      %{host: StateHelpers.get_host(state), port: StateHelpers.get_port(state)},
+      state
+    )
 
-    case gun_open(host_charlist, state.port, gun_opts) do
+    host_charlist = String.to_charlist(StateHelpers.get_host(state))
+
+    case gun_open(host_charlist, StateHelpers.get_port(state), gun_opts) do
       {:ok, pid} ->
         Logger.debug(
-          "[Gun] Successfully opened connection to #{inspect(state.host)}:#{inspect(state.port)} (pid=#{inspect(pid)})"
+          "[Gun] Successfully opened connection to #{inspect(StateHelpers.get_host(state))}:#{inspect(StateHelpers.get_port(state))} (pid=#{inspect(pid)})"
         )
 
         {:ok, monitor_ref} = monitor_gun_process(pid)
@@ -407,7 +419,7 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:error, reason} ->
         Logger.error(
-          "[Gun] Failed to open connection to #{inspect(state.host)}:#{inspect(state.port)}: #{inspect(reason)}"
+          "[Gun] Failed to open connection to #{inspect(StateHelpers.get_host(state))}:#{inspect(StateHelpers.get_port(state))}: #{inspect(reason)}"
         )
 
         # Use a minimal state struct with handlers if available, otherwise skip handler logging

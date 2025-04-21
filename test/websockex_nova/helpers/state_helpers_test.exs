@@ -183,4 +183,41 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
       assert Map.has_key?(updated_state.handlers, {:test_handler, :state})
     end
   end
+
+  describe "robust state accessors" do
+    alias WebsockexNova.Helpers.StateHelpers
+
+    test "get_host/1 returns host from top-level, adapter_state, config, or nil" do
+      assert StateHelpers.get_host(%{host: "a.com"}) == "a.com"
+      assert StateHelpers.get_host(%{adapter_state: %{host: "b.com"}}) == "b.com"
+      assert StateHelpers.get_host(%{adapter_state: %{other: 1}, config: %{host: "c.com"}}) == "c.com"
+      assert StateHelpers.get_host(%{config: %{host: "d.com"}}) == "d.com"
+      assert StateHelpers.get_host(%{adapter_state: %{config: %{host: "e.com"}}}) == "e.com"
+      assert StateHelpers.get_host(%{}) == nil
+      assert StateHelpers.get_host(%{adapter_state: %{}}) == nil
+      assert StateHelpers.get_host(%{config: %{}}) == nil
+    end
+
+    test "get_port/1 returns port from top-level, adapter_state, config, or nil" do
+      assert StateHelpers.get_port(%{port: 123}) == 123
+      assert StateHelpers.get_port(%{adapter_state: %{port: 456}}) == 456
+      assert StateHelpers.get_port(%{adapter_state: %{other: 1}, config: %{port: 789}}) == 789
+      assert StateHelpers.get_port(%{config: %{port: 321}}) == 321
+      assert StateHelpers.get_port(%{adapter_state: %{config: %{port: 654}}}) == 654
+      assert StateHelpers.get_port(%{}) == nil
+      assert StateHelpers.get_port(%{adapter_state: %{}}) == nil
+      assert StateHelpers.get_port(%{config: %{}}) == nil
+    end
+
+    test "get_status/1 returns status from top-level, adapter_state, config, or nil" do
+      assert StateHelpers.get_status(%{status: :ok}) == :ok
+      assert StateHelpers.get_status(%{adapter_state: %{status: :foo}}) == :foo
+      assert StateHelpers.get_status(%{adapter_state: %{other: 1}, config: %{status: :bar}}) == :bar
+      assert StateHelpers.get_status(%{config: %{status: :baz}}) == :baz
+      assert StateHelpers.get_status(%{adapter_state: %{config: %{status: :qux}}}) == :qux
+      assert StateHelpers.get_status(%{}) == nil
+      assert StateHelpers.get_status(%{adapter_state: %{}}) == nil
+      assert StateHelpers.get_status(%{config: %{}}) == nil
+    end
+  end
 end
