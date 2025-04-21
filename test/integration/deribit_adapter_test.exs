@@ -40,7 +40,7 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
     # Send a public/ping JSON-RPC message
     ping_msg = %{jsonrpc: "2.0", id: 1, method: "public/ping", params: %{}}
     result = Client.send_json(conn, ping_msg)
-    IO.inspect(result, label: "send_json result")
+    # IO.inspect(result, label: "send_json result")
 
     # Print all messages currently in the mailbox after send_json
     IO.puts("--- Mailbox after send_json ---")
@@ -107,7 +107,7 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
   defp flush_mailbox do
     receive do
       msg ->
-        IO.inspect(msg, label: "mailbox message")
+        # IO.inspect(msg, label: "mailbox message")
         flush_mailbox()
     after
       100 -> :ok

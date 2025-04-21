@@ -60,6 +60,9 @@ defmodule WebsockexNova.Connection do
     * :pending_requests - map of id => from_pid for JSON-RPC request correlation
     * :request_buffer - list of {frame, id, from} tuples for outgoing JSON-RPC requests
     * :wrapper_pid - the ConnectionWrapper pid
+    * :reconnect_attempts - number of reconnection attempts
+    * :backoff_state - current backoff state
+    * :last_error - last error encountered
 
   ## Advanced Usage
 
@@ -69,7 +72,9 @@ defmodule WebsockexNova.Connection do
   use GenServer
 
   alias WebsockexNova.Connection.State
+  alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Telemetry.TelemetryEvents
 
   require Logger
 
@@ -92,7 +97,10 @@ defmodule WebsockexNova.Connection do
           pending_requests: map(),
           # [{frame, id, from}]
           request_buffer: list(),
-          wrapper_pid: pid() | nil
+          wrapper_pid: pid() | nil,
+          reconnect_attempts: non_neg_integer(),
+          backoff_state: term(),
+          last_error: term()
         }
 
   @doc """
@@ -656,11 +664,112 @@ defmodule WebsockexNova.Connection do
     {:noreply, state}
   end
 
+  # Gun connection up
+  def handle_info({:gun_up, gun_pid, protocol}, state) do
+    Logger.info("Gun connection up: #{inspect(protocol)}")
+    :telemetry.execute(TelemetryEvents.connection_up(), %{protocol: protocol}, %{gun_pid: gun_pid})
+    {:noreply, state}
+  end
+
+  # Gun connection down
+  def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams}, state) do
+    Logger.warning("Gun connection down: #{inspect(reason)}")
+    :telemetry.execute(TelemetryEvents.connection_down(), %{protocol: protocol, reason: reason}, %{gun_pid: gun_pid})
+    # Clean up pending_requests and buffer
+    state = %{state | pending_requests: %{}, request_buffer: [], last_error: reason}
+    # Schedule reconnection using ConnectionManager
+    reconnect_callback = fn delay, _attempt ->
+      Process.send_after(self(), :reconnect, delay)
+    end
+
+    new_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
+    {:noreply, new_state}
+  end
+
+  # Gun WebSocket upgrade
+  def handle_info({:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers}, state) do
+    Logger.info("WebSocket upgrade successful: #{inspect(headers)}")
+
+    :telemetry.execute(TelemetryEvents.websocket_upgrade(), %{headers: headers}, %{
+      gun_pid: gun_pid,
+      stream_ref: stream_ref
+    })
+
+    # Flush request buffer
+    Enum.each(state.request_buffer, fn {frame, id, from} ->
+      ConnectionWrapper.send_frame(state.wrapper_pid, stream_ref, frame)
+      # Add to pending_requests if id
+      if id, do: state = %{state | pending_requests: Map.put(state.pending_requests, id, from)}
+    end)
+
+    {:noreply, %{state | ws_stream_ref: stream_ref, request_buffer: []}}
+  end
+
+  # Gun WebSocket frame
+  def handle_info({:gun_ws, gun_pid, stream_ref, frame}, state) do
+    # Delegate to message handler or connection handler as appropriate
+    # (Assume text frames are JSON-RPC responses)
+    case frame do
+      {:text, data} ->
+        case Jason.decode(data) do
+          {:ok, %{"id" => id} = resp} ->
+            case Map.pop(state.pending_requests, id) do
+              {nil, new_pending} ->
+                Logger.warning("No pending request for id #{id}")
+                {:noreply, %{state | pending_requests: new_pending}}
+
+              {from, new_pending} ->
+                send(from, {:reply, {:text, data}})
+                {:noreply, %{state | pending_requests: new_pending}}
+            end
+
+          _ ->
+            {:noreply, state}
+        end
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  # Gun error
+  def handle_info({:gun_error, gun_pid, stream_ref, reason}, state) do
+    Logger.error("Gun error: #{inspect(reason)}")
+    :telemetry.execute(TelemetryEvents.error(), %{reason: reason}, %{gun_pid: gun_pid, stream_ref: stream_ref})
+    {:noreply, state}
+  end
+
+  # Reconnect event
+  def handle_info(:reconnect, state) do
+    Logger.info("Attempting reconnection...")
+    # Use ConnectionManager to initiate connection
+    case ConnectionManager.start_connection(state) do
+      {:ok, new_state} ->
+        {:noreply, new_state}
+
+      {:error, reason, error_state} ->
+        Logger.error("Reconnection failed: #{inspect(reason)}")
+        {:noreply, error_state}
+    end
+  end
+
   # Catch-all for unexpected messages: log and crash (let it crash philosophy)
   @impl true
   def handle_info(msg, state) do
     Logger.error("Unexpected message in WebsockexNova.Connection: #{inspect(msg)} | state: #{inspect(state)}")
     raise "Unexpected message in WebsockexNova.Connection: #{inspect(msg)}"
+  end
+
+  # Buffer outgoing requests if not ready
+  def handle_call({:send_request, frame, id, from}, _from, %{ws_stream_ref: nil} = state) do
+    # Buffer the request
+    {:reply, :buffered, %{state | request_buffer: state.request_buffer ++ [{frame, id, from}]}}
+  end
+
+  def handle_call({:send_request, frame, id, from}, _from, %{ws_stream_ref: stream_ref, wrapper_pid: wrapper_pid} = state) do
+    ConnectionWrapper.send_frame(wrapper_pid, stream_ref, frame)
+    new_pending = if id, do: Map.put(state.pending_requests, id, from), else: state.pending_requests
+    {:reply, :sent, %{state | pending_requests: new_pending}}
   end
 
   @impl true
