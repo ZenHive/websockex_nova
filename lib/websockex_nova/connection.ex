@@ -185,26 +185,6 @@ defmodule WebsockexNova.Connection do
     end
   end
 
-  defp wait_until_connected(wrapper_pid, timeout \\ 2000) do
-    start = System.monotonic_time(:millisecond)
-    do_wait_until_connected(wrapper_pid, start, timeout)
-  end
-
-  defp do_wait_until_connected(wrapper_pid, start, timeout) do
-    state = GenServer.call(wrapper_pid, :get_state)
-
-    if state.status == :connected do
-      :ok
-    else
-      if System.monotonic_time(:millisecond) - start > timeout do
-        {:error, :timeout}
-      else
-        Process.sleep(25)
-        do_wait_until_connected(wrapper_pid, start, timeout)
-      end
-    end
-  end
-
   @doc """
   Starts a connection process in test mode (no real connection is made).
 
@@ -233,10 +213,28 @@ defmodule WebsockexNova.Connection do
     end
   end
 
+  defp wait_until_connected(wrapper_pid, timeout) do
+    start = System.monotonic_time(:millisecond)
+    do_wait_until_connected(wrapper_pid, start, timeout)
+  end
+
+  defp do_wait_until_connected(wrapper_pid, start, timeout) do
+    state = GenServer.call(wrapper_pid, :get_state)
+
+    if state.status == :connected do
+      :ok
+    else
+      if System.monotonic_time(:millisecond) - start > timeout do
+        {:error, :timeout}
+      else
+        Process.sleep(25)
+        do_wait_until_connected(wrapper_pid, start, timeout)
+      end
+    end
+  end
+
   @impl true
   def init(opts) do
-    require Logger
-
     adapter = Keyword.fetch!(opts, :adapter)
     opts_map = Map.new(opts)
 
