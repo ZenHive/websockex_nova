@@ -489,7 +489,17 @@ defmodule WebsockexNova.Gun.ConnectionState do
       "[setup_handler] type: #{inspect(handler_type)}, module: #{inspect(handler_module)}, options: #{inspect(handler_options)}"
     )
 
-    init_fun = String.to_atom("#{handler_type}_init")
+    # Map handler_type to the correct init function name
+    init_fun =
+      case handler_type do
+        :connection_handler -> :connection_init
+        :subscription_handler -> :subscription_init
+        :auth_handler -> :auth_init
+        :message_handler -> :message_handler_init
+        :error_handler -> :error_handler_init
+        :logging_handler -> :logging_handler_init
+        _ -> String.to_atom("#{handler_type}_init")
+      end
 
     if function_exported?(handler_module, init_fun, 1) do
       case apply(handler_module, init_fun, [handler_options]) do
