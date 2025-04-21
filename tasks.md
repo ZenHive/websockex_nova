@@ -804,30 +804,30 @@ Add Deribit-specific usage examples to the guides as you implement.
 
 ### T6.4.1
 
-- **Name**: Refactor Connection Process for Full Gun/WebSocket Lifecycle and Behavior Integration
-- **Description**: Refactor `lib/websockex_nova/connection.ex` to fully implement robust, production-grade WebSocket lifecycle management. This includes:
-  - Initiating the Gun connection and WebSocket upgrade in the connection process (not just in tests or wrappers)
-  - Delegating all connection, error, and message events to the appropriate behaviors (`ConnectionHandler`, `ErrorHandler`, `MessageHandler`, `LoggingHandler`, `MetricsCollector`)
-  - Implementing reconnection logic with backoff, using behavior-driven decisions
-  - Buffering outgoing requests until the WebSocket is ready, then flushing
-  - Correlating JSON-RPC requests and responses by `id`
-  - Emitting telemetry and logging at all major lifecycle events
-  - Letting the process crash for unrecoverable errors (supervision tree restarts)
-  - Comprehensive testing of all lifecycle, error, and recovery paths
+- **Name**: Refactor Connection Process for Testability, Modularity, and Robust Lifecycle Management
+- **Description**: Refactor `lib/websockex_nova/connection.ex` to improve testability, maintainability, and clarity, while preserving robust, production-grade WebSocket lifecycle management. This refactor will:
+  - Extract pure functions for state transitions, request/response correlation, buffer management, and timeout handling into a new `WebsockexNova.Connection.StateHelpers` module.
+  - Move handler invocation logic into a new `WebsockexNova.Connection.HandlerInvoker` module, decoupling handler dispatch from GenServer logic.
+  - Abstract the transport layer (Gun/ConnectionWrapper) behind a `WebsockexNova.Transport` behaviour, allowing for easy mocking and dependency injection in tests.
+  - Improve test mode by allowing injection of mock/fake wrapper_pid and transport modules, and providing helper functions to simulate connection events and state transitions.
+  - Reduce GenServer complexity by moving business logic out of callbacks and into pure/stateless modules. GenServer should focus on message routing and state updates only.
+  - Add a `WebsockexNova.ConnectionTestHelper` module to provide helpers for starting connections in various states, simulating events, and asserting on state transitions and outgoing messages.
+  - Add typespecs and documentation for all state-manipulating functions and transitions.
+  - Add comprehensive unit tests for all new pure modules, using Mox or similar for handler and transport mocks.
 - **Acceptance Criteria**:
-  - [ ] Connection process starts Gun connection and performs WebSocket upgrade using adapter config
-  - [ ] All Gun/WebSocket events are handled and delegated to behaviors
-  - [ ] Reconnection/backoff logic is implemented and behavior-driven
-  - [ ] Outgoing requests are buffered and flushed when ready
-  - [ ] JSON-RPC request/response correlation is robust
-  - [ ] Telemetry and logging are emitted at all key events
-  - [ ] Unrecoverable errors crash the process (let it crash philosophy)
-  - [ ] Tests cover connection, error, reconnection, and recovery flows
+  - [ ] All state transition, buffer, and correlation logic is moved to `StateHelpers` and covered by unit tests.
+  - [ ] Handler invocation is modularized in `HandlerInvoker` and can be tested in isolation.
+  - [ ] Transport layer is abstracted and can be mocked in tests; production code uses Gun/ConnectionWrapper.
+  - [ ] Test mode supports injection of mocks/fakes and provides helpers for simulating events.
+  - [ ] GenServer callbacks in `connection.ex` are thin and delegate to pure/stateless modules.
+  - [ ] `ConnectionTestHelper` provides ergonomic helpers for test setup and assertions.
+  - [ ] Typespecs and documentation are present for all new modules and functions.
+  - [ ] Unit and integration tests cover all lifecycle, error, reconnection, and recovery flows, with high coverage and minimal reliance on process state manipulation.
 - **Priority**: P0
 - **Effort**: 2
 - **Dependencies**: T6.4
 - **Status**: TODO
-- **Notes**: This refactor is foundational for all platform adapters (not just Deribit) and is required for robust, production-ready operation. Reference the Gun integration guide and all relevant behaviors for implementation details.
+- **Notes**: This refactor is foundational for all platform adapters and is required for robust, production-ready operation. Reference the Gun integration guide and all relevant behaviors for implementation details. See also the architecture and behavior customization guides for best practices.
 
 ### T6.5
 

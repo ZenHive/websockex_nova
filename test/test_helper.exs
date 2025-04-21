@@ -13,7 +13,9 @@ Mox.defmock(WebsockexNova.ErrorHandlerMock, for: WebsockexNova.Behaviors.ErrorHa
 Mox.defmock(WebsockexNova.RateLimitHandlerMock, for: WebsockexNova.Behaviors.RateLimitHandler)
 Mox.defmock(WebsockexNova.LoggingHandlerMock, for: WebsockexNova.Behaviors.LoggingHandler)
 Mox.defmock(WebsockexNova.MetricsCollectorMock, for: WebsockexNova.Behaviors.MetricsCollector)
-Mox.set_mox_global()
+Mox.defmock(WebsockexNova.ConnectionManagerMock, for: WebsockexNova.ConnectionManagerBehaviour)
+Mox.defmock(WebsockexNova.ConnectionWrapperMock, for: WebsockexNova.ConnectionWrapperBehaviour)
+# Mox.set_mox_global()
 
 ["#{__DIR__}", "support/**/*.ex"]
 |> Path.join()

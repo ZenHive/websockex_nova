@@ -1,3 +1,8 @@
+defmodule WebsockexNova.ConnectionManagerBehaviour do
+  @moduledoc false
+  @callback start_connection(map()) :: {:ok, map()} | {:error, term(), map()}
+end
+
 defmodule WebsockexNova.Gun.ConnectionManager do
   @moduledoc """
   Manages the WebSocket connection lifecycle using a state machine approach.
@@ -38,6 +43,8 @@ defmodule WebsockexNova.Gun.ConnectionManager do
               └────────────┘
   ```
   """
+
+  @behaviour WebsockexNova.ConnectionManagerBehaviour
 
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionState

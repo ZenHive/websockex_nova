@@ -1,3 +1,8 @@
+defmodule WebsockexNova.ConnectionWrapperBehaviour do
+  @moduledoc false
+  @callback send_frame(pid(), reference(), term()) :: :ok | {:error, term()}
+end
+
 defmodule WebsockexNova.Gun.ConnectionWrapper do
   @moduledoc """
   A thin adapter over Gun's WebSocket implementation, providing a standardized API.
@@ -129,6 +134,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   WebsockexNova.Gun.ConnectionWrapper.receive_ownership(my_wrapper_pid, gun_pid)
   ```
   """
+
+  @behaviour WebsockexNova.ConnectionWrapperBehaviour
 
   use GenServer
 
