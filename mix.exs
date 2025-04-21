@@ -49,7 +49,7 @@ defmodule WebsockexNova.MixProject do
 
       # Documentation
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
-
+      {:mox, "~> 1.0", only: :test},
       # Security scanning
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
 

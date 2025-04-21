@@ -5,6 +5,16 @@
 
 ExUnit.start()
 
+Mox.defmock(WebsockexNova.ConnectionHandlerMock, for: WebsockexNova.Behaviors.ConnectionHandler)
+Mox.defmock(WebsockexNova.MessageHandlerMock, for: WebsockexNova.Behaviors.MessageHandler)
+Mox.defmock(WebsockexNova.SubscriptionHandlerMock, for: WebsockexNova.Behaviors.SubscriptionHandler)
+Mox.defmock(WebsockexNova.AuthHandlerMock, for: WebsockexNova.Behaviors.AuthHandler)
+Mox.defmock(WebsockexNova.ErrorHandlerMock, for: WebsockexNova.Behaviors.ErrorHandler)
+Mox.defmock(WebsockexNova.RateLimitHandlerMock, for: WebsockexNova.Behaviors.RateLimitHandler)
+Mox.defmock(WebsockexNova.LoggingHandlerMock, for: WebsockexNova.Behaviors.LoggingHandler)
+Mox.defmock(WebsockexNova.MetricsCollectorMock, for: WebsockexNova.Behaviors.MetricsCollector)
+Mox.set_mox_global()
+
 ["#{__DIR__}", "support/**/*.ex"]
 |> Path.join()
 |> Path.wildcard()
