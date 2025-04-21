@@ -53,9 +53,13 @@ defmodule WebsockexNova.Client do
   @spec send_json(ClientConn.t(), map(), timeout()) :: {:text, String.t()} | {:error, :timeout}
   def send_json(%ClientConn{pid: pid, stream_ref: stream_ref}, map, timeout \\ 1000) when is_pid(pid) and is_map(map) do
     send(pid, {:platform_message, stream_ref, map, self()})
+    wait_for_reply(timeout)
+  end
 
+  defp wait_for_reply(timeout) do
     receive do
       {:reply, reply} -> reply
+      _other -> wait_for_reply(timeout)
     after
       timeout -> {:error, :timeout}
     end
