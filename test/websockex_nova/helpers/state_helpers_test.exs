@@ -120,7 +120,7 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
     # Define a mock handler module for testing
     defmodule MockHandlerWithInit do
       @moduledoc false
-      def init(options) do
+      def test_handler_init(options) do
         {:ok, Map.put(options, :initialized, true)}
       end
     end
@@ -132,7 +132,7 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
 
     defmodule MockHandlerErrorInit do
       @moduledoc false
-      def init(_options) do
+      def test_handler_init(_options) do
         {:error, :some_error}
       end
     end

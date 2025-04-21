@@ -305,7 +305,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_connection_handler(t(), module(), map()) :: t()
   def setup_connection_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.connection_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state
@@ -361,7 +361,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_message_handler(t(), module(), map()) :: t()
   def setup_message_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.message_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state
@@ -417,7 +417,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_error_handler(t(), module(), map()) :: t()
   def setup_error_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.error_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state
@@ -508,7 +508,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_logging_handler(t(), module(), map()) :: t()
   def setup_logging_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.logging_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state
@@ -545,7 +545,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_subscription_handler(t(), module(), map()) :: t()
   def setup_subscription_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.subscription_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state
@@ -581,7 +581,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_auth_handler(t(), module(), map()) :: t()
   def setup_auth_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.init(handler_options) do
+    case handler_module.auth_init(handler_options) do
       {:ok, handler_state} ->
         %{
           state

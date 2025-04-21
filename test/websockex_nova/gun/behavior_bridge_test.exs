@@ -10,7 +10,7 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
     @behaviour WebsockexNova.Behaviors.ConnectionHandler
 
     @impl true
-    def init(opts) do
+    def connection_init(opts) do
       # Store test process PID for sending messages back
       state = %{
         events: [],
@@ -156,7 +156,7 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
     # Setup initial connection state with test behavior handlers
     test_pid = self()
 
-    {:ok, conn_handler_state} = TestConnectionHandler.init(test_pid: test_pid)
+    {:ok, conn_handler_state} = TestConnectionHandler.connection_init(test_pid: test_pid)
 
     message_handler_state = %{
       test_pid: test_pid,

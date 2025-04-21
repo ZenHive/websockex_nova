@@ -23,7 +23,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   ```elixir
   # Initialize with custom configuration
-  {:ok, state} = WebsockexNova.Defaults.DefaultRateLimitHandler.init(
+  {:ok, state} = WebsockexNova.Defaults.DefaultRateLimitHandler.rate_limit_init(
     capacity: 100,
     refill_rate: 5,
     refill_interval: 1000,

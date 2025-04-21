@@ -6,7 +6,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
     @moduledoc false
     @behaviour WebsockexNova.Behaviors.ConnectionHandler
 
-    def init(opts) do
+    def connection_init(opts) do
       {:ok, opts}
     end
 
@@ -27,9 +27,9 @@ defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
   end
 
   describe "ConnectionHandler behavior" do
-    test "init/1 should initialize state" do
+    test "connection_init/1 should initialize state" do
       initial_state = %{test: "value"}
-      assert {:ok, ^initial_state} = MockConnectionHandler.init(initial_state)
+      assert {:ok, ^initial_state} = MockConnectionHandler.connection_init(initial_state)
     end
 
     test "handle_connect/2 should process connection info" do

@@ -11,7 +11,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(opts) do
+    def rate_limit_init(opts) do
       mode =
         cond do
           is_map(opts) and Map.has_key?(opts, :mode) -> Map.get(opts, :mode)
@@ -75,7 +75,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(_opts), do: {:ok, %{queue: :queue.new(), queue_limit: 1}}
+    def rate_limit_init(_opts), do: {:ok, %{queue: :queue.new(), queue_limit: 1}}
     @impl true
     def check_rate_limit(_req, state) do
       if :queue.len(state.queue) < state.queue_limit do
@@ -94,7 +94,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(_opts), do: {:ok, %{bucket: %{tokens: 1, refill_rate: -1, refill_interval: 0}}}
+    def rate_limit_init(_opts), do: {:ok, %{bucket: %{tokens: 1, refill_rate: -1, refill_interval: 0}}}
     @impl true
     def check_rate_limit(_req, state) do
       tokens = state.bucket.tokens + max(state.bucket.refill_rate, 0)
@@ -110,7 +110,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(_opts), do: {:ok, %{bucket: %{tokens: 1}, cost_map: %{}}}
+    def rate_limit_init(_opts), do: {:ok, %{bucket: %{tokens: 1}, cost_map: %{}}}
     @impl true
     def check_rate_limit(req, state) do
       cost = Map.get(state.cost_map, req.type, 1)
@@ -129,7 +129,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(_opts), do: {:ok, %{}}
+    def rate_limit_init(_opts), do: {:ok, %{}}
     @impl true
     def check_rate_limit(_req, _state), do: :unexpected
     @impl true
@@ -141,7 +141,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(_opts), do: {:ok, %{}}
+    def rate_limit_init(_opts), do: {:ok, %{}}
     @impl true
     def check_rate_limit(_req, state), do: {:queue, state}
     @impl true
@@ -153,7 +153,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def init(opts) do
+    def rate_limit_init(opts) do
       state = %{
         bucket: %{
           capacity: opts[:capacity] || 5,

@@ -9,7 +9,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandlerTest do
     @behaviour WebsockexNova.Behaviors.RateLimitHandler
 
     @impl true
-    def init(opts) do
+    def rate_limit_init(opts) do
       {:ok, opts}
     end
 
@@ -53,7 +53,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandlerTest do
 
   describe "TestRateLimitHandler implementation" do
     test "init/1 returns state" do
-      assert {:ok, %{test: :value}} = TestRateLimitHandler.init(%{test: :value})
+      assert {:ok, %{test: :value}} = TestRateLimitHandler.rate_limit_init(%{test: :value})
     end
 
     test "check_rate_limit/2 returns :allow for allowed requests" do

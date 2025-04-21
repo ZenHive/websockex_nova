@@ -19,7 +19,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @moduledoc false
     @behaviour ConnectionHandler
 
-    def init(opts) do
+    def connection_init(opts) do
       # Store received options and add test flag
       if test_pid = Map.get(opts, :test_pid) do
         send(test_pid, {:handler_init, opts})
@@ -119,7 +119,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @moduledoc false
     @behaviour SubscriptionHandler
 
-    def init(_opts), do: {:ok, %{}}
+    def subscription_init(_opts), do: {:ok, %{}}
     def subscribe(channel, params, state), do: {:subscribed, channel, params, state}
     def unsubscribe(channel, state), do: {:unsubscribed, channel, state}
   end
@@ -128,7 +128,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @moduledoc false
     @behaviour AuthHandler
 
-    def init(_opts), do: {:ok, %{}}
+    def auth_init(_opts), do: {:ok, %{}}
     def generate_auth_data(state), do: {:ok, %{token: "t"}, state}
     def handle_auth_response(_resp, state), do: {:ok, state}
     def needs_reauthentication?(_state), do: false

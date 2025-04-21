@@ -5,7 +5,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
 
   describe "init/1" do
     test "initializes state with default values when no options provided" do
-      {:ok, state} = DefaultRateLimitHandler.init([])
+      {:ok, state} = DefaultRateLimitHandler.rate_limit_init([])
 
       assert state.bucket.capacity == 60
       assert state.bucket.tokens == 60
@@ -25,7 +25,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
       }
 
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 100,
           refill_rate: 5,
           refill_interval: 500,
@@ -46,7 +46,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     setup do
       # Create a state with a limited number of tokens for testing
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 5,
           refill_rate: 1,
@@ -88,7 +88,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "rejects request when queue is full" do
       # Create a state with a very small queue limit
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 1,
           queue_limit: 1,
@@ -109,7 +109,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
 
     test "handles request priorities correctly" do
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 5,
           tokens: 1,
           cost_map: %{
@@ -138,7 +138,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "refills tokens based on elapsed time" do
       # Set up initial state with no tokens
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 0,
           refill_rate: 1,
@@ -160,7 +160,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "doesn't exceed capacity when refilling" do
       # Set up initial state with max tokens
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 10,
           refill_rate: 1,
@@ -183,7 +183,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "processes queued requests when tokens available" do
       # Create a state with a queued request
       {:ok, initial_state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           # Start with no tokens
           tokens: 0,
@@ -213,7 +213,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "returns :ok when no requests can be processed" do
       # Create a state with a queued request but no tokens
       {:ok, initial_state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 0,
           cost_map: %{
@@ -237,7 +237,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     end
 
     test "returns :ok when queue is empty" do
-      {:ok, state} = DefaultRateLimitHandler.init([])
+      {:ok, state} = DefaultRateLimitHandler.rate_limit_init([])
 
       # Should return :ok because queue is empty
       {:ok, _new_state} = DefaultRateLimitHandler.handle_tick(state)
@@ -248,7 +248,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
     test "allows burst of requests up to token capacity" do
       # Set up state with full token bucket
       {:ok, state} =
-        DefaultRateLimitHandler.init(
+        DefaultRateLimitHandler.rate_limit_init(
           capacity: 10,
           tokens: 10,
           refill_rate: 1,

@@ -102,6 +102,7 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   * `handler_type` - The type of handler (must be an atom, e.g., :auth_handler, :error_handler)
   * `handler_module` - The module that implements the handler behavior
   * `handler_options` - Options to pass to the handler's init function (if it has one)
+  * `callback_name` - The name of the callback function to call for initializing the handler
 
   ## Returns
 
@@ -111,14 +112,14 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   `handler_type` must be an atom. The handler state will be stored under the key `{handler_type, :state}` in the handlers map (e.g., `{:auth_handler, :state}`).
   This avoids dynamic atom creation and is safe for all inputs.
   """
-  @spec setup_handler(map(), atom(), module(), term()) :: map()
-  def setup_handler(state, handler_type, handler_module, handler_options \\ %{}) when is_atom(handler_type) do
+  @spec setup_handler(map(), atom(), module(), term(), atom()) :: map()
+  def setup_handler(state, handler_type, handler_module, handler_options \\ %{}, callback_name)
+      when is_atom(handler_type) and is_atom(callback_name) do
     handlers = Map.get(state, :handlers, %{})
 
-    # Try to initialize handler with options if it has an init function
     handler_state =
-      if function_exported?(handler_module, :init, 1) do
-        case handler_module.init(handler_options) do
+      if function_exported?(handler_module, callback_name, 1) do
+        case apply(handler_module, callback_name, [handler_options]) do
           {:ok, init_state} -> init_state
           _ -> handler_options
         end
@@ -126,13 +127,11 @@ defmodule WebsockexNova.Helpers.StateHelpers do
         handler_options
       end
 
-    # Update both handler module and state (state is now stored under a tuple key)
     updated_handlers =
       handlers
       |> Map.put(handler_type, handler_module)
       |> Map.put({handler_type, :state}, handler_state)
 
-    # Handle case when state doesn't have a handlers map
     Map.put(state, :handlers, updated_handlers)
   end
 

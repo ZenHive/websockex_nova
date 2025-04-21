@@ -3,7 +3,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
   alias WebsockexNova.Defaults.DefaultAuthHandler
 
-  describe "DefaultAuthHandler.init/1" do
+  describe "DefaultAuthHandler.auth_init/1" do
     test "initializes with valid credentials" do
       options = %{
         credentials: %{
@@ -12,7 +12,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:ok, state} = DefaultAuthHandler.init(options)
+      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
       assert state.auth_status == :unauthenticated
       assert state.auth_refresh_threshold == 60
     end
@@ -24,7 +24,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:ok, state} = DefaultAuthHandler.init(options)
+      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
       assert state.auth_status == :unauthenticated
     end
 
@@ -36,7 +36,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:error, :invalid_credentials} = DefaultAuthHandler.init(options)
+      assert {:error, :invalid_credentials} = DefaultAuthHandler.auth_init(options)
     end
 
     test "fails initialization with empty credentials" do
@@ -47,7 +47,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:error, :invalid_credentials} = DefaultAuthHandler.init(options)
+      assert {:error, :invalid_credentials} = DefaultAuthHandler.auth_init(options)
     end
 
     test "accepts list options" do
@@ -58,7 +58,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       ]
 
-      assert {:ok, state} = DefaultAuthHandler.init(options)
+      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
       assert state.auth_status == :unauthenticated
     end
   end

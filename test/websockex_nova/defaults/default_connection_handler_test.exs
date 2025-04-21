@@ -3,16 +3,16 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandlerTest do
 
   alias WebsockexNova.Defaults.DefaultConnectionHandler
 
-  describe "DefaultConnectionHandler.init/1" do
+  describe "DefaultConnectionHandler.connection_init/1" do
     test "initializes with empty options" do
-      assert {:ok, state} = DefaultConnectionHandler.init([])
+      assert {:ok, state} = DefaultConnectionHandler.connection_init([])
       assert is_map(state)
       assert map_size(state) == 0
     end
 
     test "keeps provided state intact" do
       initial_state = %{user_data: "test", custom_field: 123}
-      assert {:ok, ^initial_state} = DefaultConnectionHandler.init(initial_state)
+      assert {:ok, ^initial_state} = DefaultConnectionHandler.connection_init(initial_state)
     end
   end
 
