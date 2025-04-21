@@ -54,8 +54,8 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
 
   `{:ok, state}` or `{:error, reason}`
   """
-  @spec init(map()) :: {:ok, map()} | {:error, atom() | String.t()}
-  def init(options) when is_map(options) do
+  @spec auth_init(map()) :: {:ok, map()} | {:error, atom() | String.t()}
+  def auth_init(options) when is_map(options) do
     # Add default values if not present
     state =
       options
@@ -69,8 +69,8 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     end
   end
 
-  def init(options) when is_list(options) do
-    init(Map.new(options))
+  def auth_init(options) when is_list(options) do
+    auth_init(Map.new(options))
   end
 
   @impl true

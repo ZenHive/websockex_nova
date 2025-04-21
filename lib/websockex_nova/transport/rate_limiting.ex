@@ -202,7 +202,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
         handler_opts
       end
 
-    {:ok, handler_state} = handler_module.init(handler_opts)
+    {:ok, handler_state} = handler_module.rate_limit_init(handler_opts)
     timer_ref = Process.send_after(self(), :process_queue, process_interval)
 
     state = %State{

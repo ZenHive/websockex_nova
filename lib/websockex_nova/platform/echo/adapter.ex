@@ -27,20 +27,18 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   This module is a minimal, idiomatic example of a platform adapter.
   """
 
+  ## note the use of Platform.Adapter, not Adapter
   use WebsockexNova.Platform.Adapter
-
-  alias WebsockexNova.Platform.Adapter
 
   @default_host "echo.websocket.org"
   @default_port 443
   @default_path "/"
 
-  @impl true
   @doc """
   Initializes the Echo adapter state.
   Accepts options and merges with defaults.
   """
-  def init(opts) do
+  def connection_init(opts) do
     opts =
       opts
       |> Map.new()
@@ -56,24 +54,24 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   - If the message is a binary, echoes as text.
   - If the message is a map, encodes as JSON and echoes as text.
   """
-  @impl Adapter
+  @impl true
   def handle_platform_message(message, state) when is_binary(message), do: {:reply, {:text, message}, state}
   def handle_platform_message(message, state) when is_map(message), do: {:reply, {:text, Jason.encode!(message)}, state}
   def handle_platform_message(message, state), do: {:reply, {:text, to_string(message)}, state}
 
-  @impl Adapter
+  @impl true
   @doc """
   Echo adapter does not support authentication requests via this callback.
   """
   def encode_auth_request(_credentials), do: {:text, ""}
 
-  @impl Adapter
+  @impl true
   @doc """
   Echo adapter does not support subscription requests via this callback.
   """
   def encode_subscription_request(_channel, _params), do: {:text, ""}
 
-  @impl Adapter
+  @impl true
   @doc """
   Echo adapter does not support unsubscription requests via this callback.
   """

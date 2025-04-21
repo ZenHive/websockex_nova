@@ -120,7 +120,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandler do
 
   ## Callbacks
 
-  * `init/1` - Initialize the rate limiting state
+  * `rate_limit_init/1` - Initialize the rate limiting state
   * `check_rate_limit/2` - Check if a request can proceed based on rate limits
   * `handle_tick/1` - (Optional) Process any queued requests when called periodically
   """
@@ -181,7 +181,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandler do
 
   * `{:ok, state}` - The initialized state
   """
-  @callback init(opts :: keyword()) :: {:ok, state()}
+  @callback rate_limit_init(opts :: keyword()) :: {:ok, state()}
 
   @doc """
   Check if a request can proceed based on current rate limits.

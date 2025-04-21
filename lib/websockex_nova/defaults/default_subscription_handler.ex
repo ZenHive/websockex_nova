@@ -62,7 +62,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @type subscription_response :: SubscriptionHandler.subscription_response()
 
   @impl true
-  def init(opts \\ %{}) do
+  def subscription_init(opts \\ %{}) do
     state =
       opts
       |> Map.new()

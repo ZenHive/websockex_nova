@@ -40,7 +40,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   @allowed_statuses Enum.map(~w(subscribed unsubscribed), &String.to_atom/1)
 
   @impl true
-  def init(opts \\ %{}) do
+  def message_init(opts \\ %{}) do
     # Initialize state with optional processed_count and subscriptions
     state =
       opts

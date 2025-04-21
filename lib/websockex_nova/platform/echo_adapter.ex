@@ -50,7 +50,7 @@ defmodule WebsockexNova.Platform.EchoAdapter do
   Initializes the adapter's state with echo defaults.
   """
   @impl ConnectionHandler
-  def init(opts) do
+  def connection_init(opts) do
     opts = Map.new(opts)
 
     state =
@@ -65,7 +65,7 @@ defmodule WebsockexNova.Platform.EchoAdapter do
       |> Map.put_new(:mode, @default_mode)
       |> Map.put_new(:cost_map, @default_cost_map)
 
-    DefaultConnectionHandler.init(state)
+    DefaultConnectionHandler.connection_init(state)
   end
 
   @doc """
@@ -264,4 +264,16 @@ defmodule WebsockexNova.Platform.EchoAdapter do
   """
   @impl Adapter
   def encode_unsubscription_request(_channel), do: {:text, ""}
+
+  @impl MessageHandler
+  def message_init(opts), do: DefaultMessageHandler.message_init(opts)
+
+  @impl ErrorHandler
+  def error_init(opts), do: DefaultErrorHandler.error_init(opts)
+
+  @impl RateLimitHandler
+  def rate_limit_init(opts), do: DefaultRateLimitHandler.rate_limit_init(opts)
+
+  @impl SubscriptionHandler
+  def subscription_init(opts), do: DefaultSubscriptionHandler.subscription_init(opts)
 end

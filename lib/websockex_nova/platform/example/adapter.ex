@@ -47,7 +47,7 @@ defmodule WebsockexNova.Platform.Example.Adapter do
   Override to add platform-specific state or configuration.
   """
   @impl WebsockexNova.Behaviors.ConnectionHandler
-  def init(opts) do
+  def connection_init(opts) do
     opts = Map.new(opts)
 
     state =
@@ -62,8 +62,20 @@ defmodule WebsockexNova.Platform.Example.Adapter do
       |> Map.put_new(:mode, @default_mode)
       |> Map.put_new(:cost_map, @default_cost_map)
 
-    DefaultConnectionHandler.init(state)
+    DefaultConnectionHandler.connection_init(state)
   end
+
+  @impl MessageHandler
+  def message_init(opts), do: DefaultMessageHandler.message_init(opts)
+
+  @impl ErrorHandler
+  def error_init(opts), do: DefaultErrorHandler.error_init(opts)
+
+  @impl RateLimitHandler
+  def rate_limit_init(opts), do: DefaultRateLimitHandler.rate_limit_init(opts)
+
+  @impl SubscriptionHandler
+  def subscription_init(opts), do: DefaultSubscriptionHandler.subscription_init(opts)
 
   @doc """
   Handles a successful connection. Override to send a handshake or perform setup.

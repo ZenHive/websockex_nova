@@ -63,6 +63,6 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
 
   Returns {:ok, opts} where opts is the options map (or empty map).
   """
-  @spec init(map()) :: {:ok, map()}
-  def init(opts) when is_map(opts), do: {:ok, opts}
+  @spec logging_init(map()) :: {:ok, map()}
+  def logging_init(opts) when is_map(opts), do: {:ok, opts}
 end

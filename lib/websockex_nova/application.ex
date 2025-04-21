@@ -16,7 +16,16 @@ defmodule WebsockexNova.Application do
       # Starts a worker by calling: WebsockexNova.Worker.start_link(arg)
       # {WebsockexNova.Worker, arg}
 
-      # Start the rate limiter
+      # config :websockex_nova, :rate_limiting,
+      #   handler: MyApp.CustomRateLimitHandler,
+      #   capacity: 100,
+      #   refill_rate: 5,
+      #   refill_interval: 1000,
+      #   queue_limit: 200,
+      #   process_interval: 100,
+      #   cost_map: %{subscription: 5, auth: 10, query: 1}
+
+      # Start the global/shared rate limiter
       {RateLimiting, get_rate_limiting_opts()}
     ]
 

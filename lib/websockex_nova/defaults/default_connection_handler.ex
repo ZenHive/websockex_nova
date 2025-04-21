@@ -38,11 +38,11 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   @default_max_reconnect_attempts 5
 
   @impl true
-  def init(opts) when is_list(opts) do
+  def connection_init(opts) when is_list(opts) do
     {:ok, Map.new(opts)}
   end
 
-  def init(state) when is_map(state) do
+  def connection_init(state) when is_map(state) do
     {:ok, state}
   end
 

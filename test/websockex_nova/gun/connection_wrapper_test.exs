@@ -401,7 +401,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   describe "custom handler invocation" do
     defmodule CustomHandler do
       @moduledoc false
-      def init(opts), do: {:ok, opts}
+      def custom_handler_init(opts), do: {:ok, opts}
 
       def handle_frame(_type, _data, state) do
         send(state[:test_pid], :custom_handler_invoked)

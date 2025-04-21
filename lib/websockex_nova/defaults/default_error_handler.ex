@@ -44,7 +44,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   @default_max_delay 30_000
 
   @impl true
-  def init(opts \\ %{}) do
+  def error_init(opts \\ %{}) do
     state =
       opts
       |> Map.new()

@@ -86,7 +86,7 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
 
   ## Callbacks
 
-  * `init/1` - Initialize the handler's state
+  * `message_init/1` - Initialize the handler's state
   * `handle_message/2` - Process an incoming message
   * `validate_message/1` - Validate message format and content
   * `message_type/1` - Extract or determine the message type
@@ -163,7 +163,7 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   * `{:ok, state}` - The initialized state
   * `{:error, reason}` - Initialization failed
   """
-  @callback init(opts :: term()) :: {:ok, state()} | {:error, term()}
+  @callback message_init(opts :: term()) :: {:ok, state()} | {:error, term()}
 
   @doc """
   Process an incoming message.

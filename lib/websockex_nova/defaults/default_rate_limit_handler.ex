@@ -57,7 +57,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   @modes [:normal, :always_allow, :always_queue, :always_reject]
 
   @impl true
-  def init(opts) do
+  def rate_limit_init(opts) do
     # Extract rate limiting mode
     mode = extract_mode(opts)
     Logger.debug("Default rate limiter initialized with mode: #{inspect(mode)}")
