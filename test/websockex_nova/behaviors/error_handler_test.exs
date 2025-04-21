@@ -6,6 +6,11 @@ defmodule WebsockexNova.Behaviors.ErrorHandlerTest do
     @moduledoc false
     @behaviour WebsockexNova.Behaviors.ErrorHandler
 
+    def error_init(opts) do
+      send(opts[:test_pid], {:error_init, opts})
+      {:ok, opts}
+    end
+
     def handle_error(:connection_closed, _context, state) do
       send(self(), {:handle_error, :connection_closed})
       {:reconnect, state}

@@ -869,13 +869,22 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         state
 
       handler_module when is_atom(handler_module) ->
-        # Filter options to pass to the handler, removing Gun-specific options
+        # Always include :test_pid if present in options
         handler_options =
           options
           |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
           |> Map.put(:connection_wrapper_pid, self())
+          |> maybe_put_test_pid(options)
 
+        Logger.debug("[init_conn_handler] handler_options: #{inspect(handler_options)}")
         ConnectionState.setup_connection_handler(state, handler_module, handler_options)
+    end
+  end
+
+  defp maybe_put_test_pid(opts, original_opts) do
+    case Map.get(original_opts, :test_pid) do
+      nil -> opts
+      test_pid -> Map.put(opts, :test_pid, test_pid)
     end
   end
 

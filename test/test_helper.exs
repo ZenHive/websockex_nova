@@ -1,5 +1,5 @@
 ## Configure Logger to only show warnings and errors
-Logger.configure(level: :none)
+# Logger.configure(level: :none)
 # Logger.configure(level: :warning)
 # Logger.configure(level: :debug)
 
@@ -17,7 +17,7 @@ Mox.defmock(WebsockexNova.ConnectionManagerMock, for: WebsockexNova.ConnectionMa
 Mox.defmock(WebsockexNova.ConnectionWrapperMock, for: WebsockexNova.ConnectionWrapperBehaviour)
 # Mox.set_mox_global()
 
-["#{__DIR__}", "support/**/*.ex"]
-|> Path.join()
-|> Path.wildcard()
-|> Enum.each(&Code.require_file/1)
+# ["#{__DIR__}", "support/**/*.ex"]
+# |> Path.join()
+# |> Path.wildcard()
+# |> Enum.each(&Code.require_file/1)

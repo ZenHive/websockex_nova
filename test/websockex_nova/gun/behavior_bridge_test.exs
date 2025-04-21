@@ -21,6 +21,11 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
     end
 
     @impl true
+    def status(stream_ref, state) do
+      {:status, stream_ref, state}
+    end
+
+    @impl true
     def handle_connect(conn_info, state) do
       # Record the event and notify the test process
       state = Map.update!(state, :events, &[{:connect, conn_info} | &1])

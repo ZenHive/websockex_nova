@@ -8,6 +8,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   alias WebsockexNova.Gun.ConnectionWrapper
 
+  require Logger
+
   @typedoc "Connection state structure"
   @type t :: %__MODULE__{
           gun_pid: pid() | nil,
@@ -305,6 +307,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_connection_handler(t(), module(), map()) :: t()
   def setup_connection_handler(state, handler_module, handler_options) do
+    Logger.debug("[setup_connection_handler] module: #{inspect(handler_module)}, options: #{inspect(handler_options)}")
     setup_handler(state, handler_module, :connection_handler, handler_options)
   end
 
@@ -482,6 +485,10 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   # Generic handler setup function
   defp setup_handler(state, handler_module, handler_type, handler_options) when is_atom(handler_module) do
+    Logger.debug(
+      "[setup_handler] type: #{inspect(handler_type)}, module: #{inspect(handler_module)}, options: #{inspect(handler_options)}"
+    )
+
     init_fun = String.to_atom("#{handler_type}_init")
 
     if function_exported?(handler_module, init_fun, 1) do

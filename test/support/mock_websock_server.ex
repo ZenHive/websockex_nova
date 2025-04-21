@@ -563,10 +563,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   defp echo_message(client_pid, :text, message, state), do: send_text(client_pid, message, state)
   defp echo_message(client_pid, :binary, message, state), do: send_binary(client_pid, message, state)
 
-  defp random_chance(successes, total) do
-    :rand.uniform(total) <= successes
-  end
-
   # Helper functions
 
   defp send_text(client_pid, text, _state) do

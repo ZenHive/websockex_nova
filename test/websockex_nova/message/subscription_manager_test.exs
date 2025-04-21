@@ -9,6 +9,11 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
     @moduledoc false
     @behaviour SubscriptionHandler
 
+    def subscription_init(opts) do
+      send(opts[:test_pid], {:subscription_init, opts})
+      {:ok, opts}
+    end
+
     @impl true
     def subscribe(channel, params, state) do
       subscription_id = "sub_#{System.unique_integer([:positive, :monotonic])}"

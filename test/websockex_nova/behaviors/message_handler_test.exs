@@ -6,6 +6,11 @@ defmodule WebsockexNova.Behaviors.MessageHandlerTest do
     @moduledoc false
     @behaviour WebsockexNova.Behaviors.MessageHandler
 
+    def message_init(opts) do
+      send(opts[:test_pid], {:message_init, opts})
+      {:ok, opts}
+    end
+
     def handle_message(%{"type" => type} = message, state) do
       send(self(), {:handled, type, message})
       {:ok, state}
