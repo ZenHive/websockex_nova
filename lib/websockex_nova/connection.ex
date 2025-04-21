@@ -196,6 +196,7 @@ defmodule WebsockexNova.Connection do
     rate_limit_handler = Keyword.get(opts, :rate_limit_handler, WebsockexNova.Defaults.DefaultRateLimitHandler)
     logging_handler = Keyword.get(opts, :logging_handler, WebsockexNova.Defaults.DefaultLoggingHandler)
     metrics_collector = Keyword.get(opts, :metrics_collector, WebsockexNova.Defaults.DefaultMetricsCollector)
+    callback_pid = Keyword.get(opts, :callback_pid, self())
 
     Logger.debug("Handler injection at runtime:")
     Logger.debug("  connection_handler: #{inspect(connection_handler)}")
@@ -224,7 +225,7 @@ defmodule WebsockexNova.Connection do
         }
       end
 
-    # Start Gun connection using ConnectionWrapper
+    # Start Gun connection using ConnectionWrapper, ensuring callback_pid is set
     {:ok, wrapper_pid} =
       ConnectionWrapper.open(
         to_string(gun_config.host),
@@ -232,6 +233,7 @@ defmodule WebsockexNova.Connection do
         %{
           transport: gun_config.transport,
           ws_opts: gun_config.ws_opts,
+          callback_pid: callback_pid,
           callback_handler: connection_handler,
           message_handler: message_handler,
           error_handler: error_handler
@@ -286,24 +288,43 @@ defmodule WebsockexNova.Connection do
 
   @impl true
   def handle_info(
-        {:platform_message, _stream_ref, message, from},
-        %{adapter: adapter, adapter_state: adapter_state} = state
-      ) do
-    # Call the adapter's handle_platform_message/2
-    case adapter.handle_platform_message(message, adapter_state) do
-      {:reply, reply, new_adapter_state} ->
-        if from, do: send(from, {:reply, reply})
-        {:noreply, %{state | adapter_state: new_adapter_state}}
+        {:platform_message, stream_ref, message, from},
+        %{wrapper_pid: wrapper_pid, pending_requests: pending} = state
+      )
+      when is_map(message) do
+    Logger.debug(
+      "[DEBUG] platform_message: message=#{inspect(message)}, from=#{inspect(from)}, pending_requests=#{inspect(pending)}"
+    )
 
-      {:ok, new_adapter_state} ->
-        {:noreply, %{state | adapter_state: new_adapter_state}}
+    id = Map.get(message, "id") || Map.get(message, :id)
 
-      {:noreply, new_adapter_state} ->
-        {:noreply, %{state | adapter_state: new_adapter_state}}
+    if id do
+      Logger.debug("[DEBUG] JSON-RPC correlation: id=#{inspect(id)}")
+      {:ok, json} = Jason.encode(message)
+      :ok = ConnectionWrapper.send_frame(wrapper_pid, stream_ref, {:text, json})
+      new_pending = Map.put(pending || %{}, id, from)
+      Logger.debug("[DEBUG] Added pending request: id=#{inspect(id)}, from=#{inspect(from)}")
+      {:noreply, %{state | pending_requests: new_pending}}
+    else
+      adapter = state.adapter
+      adapter_state = state.adapter_state
+      Logger.debug("[DEBUG] platform_message fallback: message=#{inspect(message)}")
 
-      {:error, reason, new_adapter_state} ->
-        if from, do: send(from, {:error, reason})
-        {:noreply, %{state | adapter_state: new_adapter_state}}
+      case adapter.handle_platform_message(message, adapter_state) do
+        {:reply, reply, new_adapter_state} ->
+          if from, do: send(from, {:reply, reply})
+          {:noreply, %{state | adapter_state: new_adapter_state}}
+
+        {:ok, new_adapter_state} ->
+          {:noreply, %{state | adapter_state: new_adapter_state}}
+
+        {:noreply, new_adapter_state} ->
+          {:noreply, %{state | adapter_state: new_adapter_state}}
+
+        {:error, reason, new_adapter_state} ->
+          if from, do: send(from, {:error, reason})
+          {:noreply, %{state | adapter_state: new_adapter_state}}
+      end
     end
   end
 

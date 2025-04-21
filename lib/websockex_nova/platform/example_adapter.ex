@@ -7,7 +7,7 @@ defmodule WebsockexNova.Platform.ExampleAdapter do
   use WebsockexNova.Adapter
 
   @impl WebsockexNova.Behaviors.ConnectionHandler
-  def handle_connect(conn_info, state) do
+  def handle_connect(_conn_info, state) do
     # Custom connection logic here
     {:ok, state}
   end

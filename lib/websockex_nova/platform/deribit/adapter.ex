@@ -2,13 +2,41 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
   @moduledoc """
   WebsockexNova adapter for the Deribit exchange (testnet).
 
-  Implements the WebsockexNova.Adapter contract for Deribit, supporting:
-  - Authentication (public/auth)
-  - Public and private JSON-RPC 2.0 requests
-  - Subscriptions to public channels
-  - Error handling for Deribit-specific responses
+  Demonstrates how to use the `WebsockexNova.Adapter` macro and delegate to default behaviors.
+  Only Deribit-specific logic is implemented; all other events use robust defaults.
 
-  ## Usage
+  ## Quick Start
+
+      # Start a connection to Deribit testnet using all defaults
+      {:ok, conn} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Deribit.Adapter)
+
+      # Send a JSON-RPC message (echoed back by default handler)
+      WebsockexNova.Client.send_json(conn, %{jsonrpc: "2.0", method: "public/ping", params: %{}})
+
+      # Subscribe to a channel (uses default subscription handler)
+      WebsockexNova.Client.subscribe(conn, "ticker.BTC-PERPETUAL.raw", %{})
+
+  ## Customizing Handlers
+
+  You can override any handler by passing it to `start_link/1`:
+
+      {:ok, conn} = WebsockexNova.Connection.start_link(
+        adapter: WebsockexNova.Platform.Deribit.Adapter,
+        message_handler: MyApp.CustomMessageHandler,
+        error_handler: MyApp.CustomErrorHandler
+      )
+
+  ## Advanced: Custom Platform Logic
+
+  To implement Deribit-specific message routing, override `handle_platform_message/2`:
+
+      def handle_platform_message(message, state) do
+        # Custom logic here
+        ...
+      end
+
+  ## Default Configuration
+
       adapter: WebsockexNova.Platform.Deribit.Adapter
       host: "test.deribit.com"
       port: 443
@@ -19,18 +47,15 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
 
   use WebsockexNova.Adapter
 
+  alias WebsockexNova.Defaults.DefaultMessageHandler
+
   require Logger
 
   @default_host "test.deribit.com"
   @default_port 443
   @default_path "/ws/api/v2"
 
-  @impl true
-  @doc """
-  Initializes the Deribit adapter state.
-  Accepts options and merges with defaults.
-  Sets TLS options for Deribit testnet wildcard SSL certificate.
-  """
+  @impl WebsockexNova.Behaviors.ConnectionHandler
   def init(opts) do
     state =
       opts
@@ -51,69 +76,12 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
     {:ok, state}
   end
 
-  @impl true
-  @doc """
-  Handles platform messages (JSON-RPC 2.0 requests and notifications).
-  """
-  def handle_platform_message(message, state) when is_map(message), do: {:reply, {:text, Jason.encode!(message)}, state}
-  def handle_platform_message(message, state) when is_binary(message), do: {:reply, {:text, message}, state}
-  def handle_platform_message(_other, state), do: {:error, %{reason: :invalid_message}, state}
-
-  @impl true
-  @doc """
-  Encodes an authentication request for Deribit (public/auth).
-  Expects credentials map with :api_key and :api_secret.
-  """
-  def encode_auth_request(%{api_key: key, api_secret: secret}) do
-    id = :os.system_time(:millisecond)
-
-    req = %{
-      "jsonrpc" => "2.0",
-      "id" => id,
-      "method" => "public/auth",
-      "params" => %{
-        "grant_type" => "client_credentials",
-        "client_id" => key,
-        "client_secret" => secret
-      }
-    }
-
-    {:text, Jason.encode!(req)}
+  @impl WebsockexNova.Platform.Adapter
+  def handle_platform_message(message, state) do
+    # Pass the raw message directly to the default message handler
+    DefaultMessageHandler.handle_message(message, state)
   end
 
-  @impl true
-  @doc """
-  Encodes a subscription request for Deribit public channels.
-  """
-  def encode_subscription_request(channel, params) do
-    id = :os.system_time(:millisecond)
-
-    req = %{
-      "jsonrpc" => "2.0",
-      "id" => id,
-      "method" => "public/subscribe",
-      "params" => Map.merge(%{"channels" => [channel]}, params)
-    }
-
-    {:text, Jason.encode!(req)}
-  end
-
-  @impl true
-  @doc """
-  Encodes an unsubscription request for Deribit public channels.
-  """
-  def encode_unsubscription_request(channel) do
-    id = :os.system_time(:millisecond)
-
-    req = %{
-      "jsonrpc" => "2.0",
-      "id" => id,
-      "method" => "public/unsubscribe",
-      "params" => %{"channels" => [channel]}
-    }
-
-    {:text, Jason.encode!(req)}
-  end
-
-  # TODO: Add advanced stateful handling for session, token refresh, etc.
+  # All other events (connection, subscription, auth, error, etc.)
+  # use the robust defaults provided by the macro.
 end

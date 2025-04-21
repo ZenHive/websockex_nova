@@ -23,12 +23,10 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   The adapter always connects to the public echo server (wss://echo.websocket.org).
 
   ## Purpose
-
-  This module is a minimal, idiomatic example of a platform adapter. Use it as a starting point
-  for implementing real adapters that support authentication, subscriptions, and other features.
+  This module is a minimal, idiomatic example of a platform adapter.
   """
 
-  use WebsockexNova.Adapter
+  use WebsockexNova.Platform.Adapter
 
   @default_host "echo.websocket.org"
   @default_port 443
@@ -50,31 +48,13 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
     {:ok, opts}
   end
 
-  @impl true
   @doc """
   Handles platform messages by echoing them back as text frames.
   - If the message is a binary, echoes as text.
   - If the message is a map, encodes as JSON and echoes as text.
   """
+  @impl WebsockexNova.Platform.Adapter
   def handle_platform_message(message, state) when is_binary(message), do: {:reply, {:text, message}, state}
   def handle_platform_message(message, state) when is_map(message), do: {:reply, {:text, Jason.encode!(message)}, state}
   def handle_platform_message(message, state), do: {:reply, {:text, to_string(message)}, state}
-
-  @impl true
-  @doc """
-  Stub: The Echo adapter does not require authentication. Returns an inert value to satisfy the behaviour; never used.
-  """
-  def encode_auth_request(_credentials), do: {:text, ""}
-
-  @impl true
-  @doc """
-  Stub: The Echo adapter does not support subscriptions. Returns an inert value to satisfy the behaviour; never used.
-  """
-  def encode_subscription_request(_channel, _params), do: {:text, ""}
-
-  @impl true
-  @doc """
-  Stub: The Echo adapter does not support unsubscriptions. Returns an inert value to satisfy the behaviour; never used.
-  """
-  def encode_unsubscription_request(_channel), do: {:text, ""}
 end
