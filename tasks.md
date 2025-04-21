@@ -804,17 +804,79 @@ Add Deribit-specific usage examples to the guides as you implement.
 
 ### T6.4.1
 
-- **Name**: Refactor Connection Process for Testability, Modularity, and Robust Lifecycle Management
-- **Description**: Refactor `lib/websockex_nova/connection.ex` to improve testability, maintainability, and clarity, while preserving robust, production-grade WebSocket lifecycle management. This refactor will:
-  - Extract pure functions for state transitions, request/response correlation, buffer management, and timeout handling into a new `WebsockexNova.Connection.StateHelpers` module.
-  - Move handler invocation logic into a new `WebsockexNova.Connection.HandlerInvoker` module, decoupling handler dispatch from GenServer logic.
-  - Abstract the transport layer (Gun/ConnectionWrapper) behind a `WebsockexNova.Transport` behaviour, allowing for easy mocking and dependency injection in tests.
-  - Improve test mode by allowing injection of mock/fake wrapper_pid and transport modules, and providing helper functions to simulate connection events and state transitions.
-  - Reduce GenServer complexity by moving business logic out of callbacks and into pure/stateless modules. GenServer should focus on message routing and state updates only.
-  - Add a `WebsockexNova.ConnectionTestHelper` module to provide helpers for starting connections in various states, simulating events, and asserting on state transitions and outgoing messages.
-  - Add typespecs and documentation for all state-manipulating functions and transitions.
-  - Add comprehensive unit tests for all new pure modules, using Mox or similar for handler and transport mocks.
+- **Name**: Refactor Connection Process for Testability, Modularity, and Robust Lifecycle Management (TDD)
+- **Description**: Refactor `lib/websockex_nova/connection.ex` to improve testability, maintainability, and clarity, while preserving robust, production-grade WebSocket lifecycle management. **This refactor must be performed using Test-Driven Development (TDD): write failing tests for all new modules and refactored logic before implementation, and use tests to drive the design.**
+
+#### **TDD Red/Green Cycles for Each Module**
+
+**Order:**
+
+1. StateHelpers
+2. HandlerInvoker
+3. Transport Behaviour
+4. ConnectionTestHelper
+5. Refactor GenServer callbacks
+
+---
+
+#### 1. StateHelpers
+
+- **Red:** Write failing unit tests for:
+  - `pop_pending_request/2` (removes a pending request by id, returns {from, new_pending, new_timeouts})
+  - `buffer_request/4` (adds a request to the buffer)
+  - `flush_buffer/2` (moves buffered requests to pending, returns new state)
+  - `cancel_timeout/2` (removes and cancels a timeout by id)
+- **Green:** Implement minimal functions to make tests pass.
+- **Example Test Cases:**
+  - Pops the correct request and updates state
+  - Buffers a request and returns updated buffer
+  - Flushes buffer and sets timeouts
+  - Cancels a timeout and updates state
+
+#### 2. HandlerInvoker
+
+- **Red:** Write failing unit tests for:
+  - `invoke/3` (dispatches to the correct handler and returns the result)
+  - Handles all handler types (connection, message, subscription, auth, error, etc.)
+- **Green:** Implement minimal dispatcher logic to make tests pass.
+- **Example Test Cases:**
+  - Invokes the correct handler for a message event
+  - Handles missing/optional handlers gracefully
+
+#### 3. Transport Behaviour
+
+- **Red:** Write failing tests for:
+  - `send_frame/3`, `upgrade_to_websocket/3`, etc. (ensure the behaviour is enforced)
+  - Mock transport in a test and assert calls are routed correctly
+- **Green:** Define the behaviour and provide a mock implementation for tests.
+- **Example Test Cases:**
+  - Calls to transport functions are routed to the mock
+  - Errors in transport are handled as expected
+
+#### 4. ConnectionTestHelper
+
+- **Red:** Write failing tests for:
+  - `start_connection_in_state/2` (starts a connection in a given state)
+  - `simulate_event/2` (simulates a Gun or platform event)
+  - `assert_state_transition/3` (asserts state changes after an event)
+- **Green:** Implement helpers to make tests pass.
+- **Example Test Cases:**
+  - Can start a connection in :connected, :disconnected, etc.
+  - Can simulate a :gun_down event and assert the correct state
+
+#### 5. Refactor GenServer callbacks
+
+- **Red:** Write integration tests that expect the GenServer to delegate to the new modules (using Mox/mocks as needed).
+- **Green:** Refactor callbacks to use the new modules, make tests pass.
+- **Example Test Cases:**
+  - GenServer delegates state transitions to StateHelpers
+  - GenServer delegates handler calls to HandlerInvoker
+  - GenServer uses injected Transport
+
+---
+
 - **Acceptance Criteria**:
+  - [ ] All new modules and refactored logic are developed using TDD: failing tests are written first, and tests drive the design and implementation.
   - [ ] All state transition, buffer, and correlation logic is moved to `StateHelpers` and covered by unit tests.
   - [ ] Handler invocation is modularized in `HandlerInvoker` and can be tested in isolation.
   - [ ] Transport layer is abstracted and can be mocked in tests; production code uses Gun/ConnectionWrapper.
@@ -828,6 +890,23 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Dependencies**: T6.4
 - **Status**: TODO
 - **Notes**: This refactor is foundational for all platform adapters and is required for robust, production-ready operation. Reference the Gun integration guide and all relevant behaviors for implementation details. See also the architecture and behavior customization guides for best practices.
+
+#### **Plug/Router Test Infrastructure Note**
+
+- The project already uses Plug and Plug.Router in the test infrastructure (see `test/support/mock_websock_server/router.ex`).
+- This enables:
+  - Injection of test-specific state or mocks into the connection via assigns or custom plugs.
+  - Easy extension of the router with new test endpoints or behaviors.
+  - Simulation of authentication, rate limiting, error injection, or network scenarios by adding plugs.
+  - Use of assigns to pass test context or control flags to handlers.
+  - Addition of endpoints for test control (e.g., `/test/trigger_error`, `/test/set_state`).
+  - Realistic, production-like test infrastructure, mirroring Phoenix/Plug usage in production.
+- **Suggestions for future use:**
+  - Add custom plugs to simulate complex scenarios or inject dependencies for integration tests.
+  - Use plugs to inject mock transports, handlers, or state into the connection process for end-to-end or integration tests.
+  - Extend the router to provide test hooks or control endpoints as needed.
+
+Keep this in mind when designing new tests or integration scenarios, as it provides a flexible and idiomatic foundation for advanced testability and modularity.
 
 ### T6.5
 
