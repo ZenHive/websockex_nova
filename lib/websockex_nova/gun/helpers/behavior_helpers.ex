@@ -8,6 +8,7 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   """
 
   alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Helpers.StateHelpers
 
   require Logger
 
@@ -170,8 +171,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
   defp build_conn_info(state, extra_info) do
     %{
-      host: state.host,
-      port: state.port,
+      host: StateHelpers.get_host(state),
+      port: StateHelpers.get_port(state),
       path: Map.get(extra_info, :path, "/"),
       protocol: Map.get(extra_info, :protocol),
       transport: Map.get(state.options, :transport, :tcp)

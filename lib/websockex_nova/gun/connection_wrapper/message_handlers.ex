@@ -10,6 +10,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.Helpers.BehaviorHelpers
+  alias WebsockexNova.Helpers.StateHelpers
   alias WebsockexNova.Telemetry.TelemetryEvents
 
   require Logger
@@ -77,7 +78,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     :telemetry.execute(
       TelemetryEvents.connection_open(),
       %{},
-      %{connection_id: gun_pid, host: state.host, port: state.port, protocol: protocol}
+      %{
+        connection_id: gun_pid,
+        host: StateHelpers.get_host(state),
+        port: StateHelpers.get_port(state),
+        protocol: protocol
+      }
     )
 
     log_event(:connection, :connection_up, %{protocol: protocol}, state)
@@ -168,7 +174,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     :telemetry.execute(
       TelemetryEvents.connection_close(),
       %{},
-      %{connection_id: state.gun_pid, host: state.host, port: state.port, reason: reason, protocol: protocol}
+      %{
+        connection_id: state.gun_pid,
+        host: StateHelpers.get_host(state),
+        port: StateHelpers.get_port(state),
+        reason: reason,
+        protocol: protocol
+      }
     )
 
     log_event(:connection, :connection_down, %{protocol: protocol, reason: reason}, state)
@@ -404,7 +416,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
         connection_id: state.gun_pid,
         stream_ref: stream_ref,
         reason: reason,
-        context: %{host: state.host, port: state.port}
+        context: %{host: StateHelpers.get_host(state), port: StateHelpers.get_port(state)}
       }
     )
 

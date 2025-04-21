@@ -143,6 +143,11 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   @spec get_host(map()) :: String.t() | nil
   def get_host(%{host: host}) when is_binary(host), do: host
   def get_host(%{adapter_state: %{host: host}}) when is_binary(host), do: host
+
+  def get_host(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+    get_host(config)
+  end
+
   def get_host(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_host(adapter_state)
   def get_host(%{config: %{host: host}}) when is_binary(host), do: host
   def get_host(%{config: config}) when is_map(config), do: get_host(config)
@@ -155,6 +160,11 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   @spec get_port(map()) :: non_neg_integer() | nil
   def get_port(%{port: port}) when is_integer(port), do: port
   def get_port(%{adapter_state: %{port: port}}) when is_integer(port), do: port
+
+  def get_port(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+    get_port(config)
+  end
+
   def get_port(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_port(adapter_state)
   def get_port(%{config: %{port: port}}) when is_integer(port), do: port
   def get_port(%{config: config}) when is_map(config), do: get_port(config)
@@ -167,8 +177,20 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   @spec get_status(map()) :: atom() | nil
   def get_status(%{status: status}) when is_atom(status), do: status
   def get_status(%{adapter_state: %{status: status}}) when is_atom(status), do: status
+
+  def get_status(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+    get_status(config)
+  end
+
   def get_status(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_status(adapter_state)
   def get_status(%{config: %{status: status}}) when is_atom(status), do: status
   def get_status(%{config: config}) when is_map(config), do: get_status(config)
   def get_status(_), do: nil
+
+  @doc """
+  Stub for handle_ownership_transfer/2. Not yet implemented.
+  """
+  def handle_ownership_transfer(_state, _info) do
+    raise "handle_ownership_transfer/2 is not implemented. Please implement this function in the appropriate module."
+  end
 end

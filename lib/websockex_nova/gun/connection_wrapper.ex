@@ -137,7 +137,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   alias WebsockexNova.Gun.ConnectionState
   alias WebsockexNova.Gun.ConnectionWrapper.ErrorHandler
   alias WebsockexNova.Gun.ConnectionWrapper.MessageHandlers
-  alias WebsockexNova.Gun.Helpers.StateHelpers
+  alias WebsockexNova.Gun.Helpers
+  alias WebsockexNova.Helpers.StateHelpers
   alias WebsockexNova.Telemetry.TelemetryEvents
   alias WebsockexNova.Transport.RateLimiting
 
@@ -506,7 +507,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_call({:upgrade_to_websocket, path, headers}, _from, state) do
-    if state.gun_pid && state.status == :connected do
+    if state.gun_pid && StateHelpers.get_status(state) == :connected do
       stream_ref =
         :gun.ws_upgrade(
           state.gun_pid,
@@ -549,7 +550,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_call(:get_port, _from, state) do
-    {:reply, state.port, state}
+    {:reply, StateHelpers.get_port(state), state}
   end
 
   @impl true
@@ -674,7 +675,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
-        ErrorHandler.handle_transition_error(state.status, :websocket_connected, reason, state)
+        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
     end
   end
 
@@ -719,7 +720,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   def handle_info({:gun_info, info}, state) do
     # Use StateHelpers to handle the ownership transfer
-    final_state = StateHelpers.handle_ownership_transfer(state, info)
+    final_state = Helpers.StateHelpers.handle_ownership_transfer(state, info)
     {:noreply, final_state}
   end
 
@@ -800,7 +801,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
-        ErrorHandler.handle_transition_error(state.status, :websocket_connected, reason, state)
+        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
     end
   end
 
@@ -950,7 +951,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
-        ErrorHandler.handle_transition_error(state.status, :disconnected, transition_reason, state)
+        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :disconnected, transition_reason, state)
     end
   end
 

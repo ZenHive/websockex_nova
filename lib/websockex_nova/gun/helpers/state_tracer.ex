@@ -14,6 +14,7 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
   """
 
   alias WebsockexNova.Gun.ConnectionState
+  alias WebsockexNova.Helpers.StateHelpers
 
   require Logger
 
@@ -156,8 +157,8 @@ defmodule WebsockexNova.Gun.Helpers.StateTracer do
       stats = get_statistics(state)
 
       export_data = %{
-        host: state.host,
-        port: state.port,
+        host: StateHelpers.get_host(state),
+        port: StateHelpers.get_port(state),
         statistics: stats,
         events: history
       }

@@ -24,7 +24,7 @@ defmodule WebsockexNova.Connection.State do
     :wrapper_pid,
     :ws_stream_ref,
     # :connecting | :connected | :disconnected | :reconnecting | :closed
-    :ws_status,
+    :status,
     :connection_handler,
     :message_handler,
     :subscription_handler,

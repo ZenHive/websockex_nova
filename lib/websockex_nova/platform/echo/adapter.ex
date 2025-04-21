@@ -9,7 +9,8 @@ defmodule WebsockexNova.Platform.Echo.Adapter do
   ## Features
 
   - Echoes text and JSON messages as text frames.
-  - All advanced features (subscriptions, authentication, ping, status, etc.) are not supported and return inert values.
+  - All advanced features (subscriptions, authentication, ping, status, etc.) are not supported
+    and return inert values.
   - No state is tracked or mutated beyond the initial connection.
 
   ## Usage

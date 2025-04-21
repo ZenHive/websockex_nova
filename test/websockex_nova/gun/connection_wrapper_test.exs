@@ -9,6 +9,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   import ExUnit.CaptureLog
 
   alias WebsockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Helpers.StateHelpers
   alias WebsockexNova.Telemetry.TelemetryEvents
   alias WebsockexNova.Test.Support.MockWebSockServer
   alias WebsockexNova.TestSupport.RateLimitHandlers

@@ -193,7 +193,7 @@ defmodule WebsockexNova.Client do
 
   defp do_wait_until_connected(pid, start, timeout, interval) do
     case :sys.get_state(pid) do
-      %{ws_status: :connected} ->
+      %{status: :connected} ->
         :ok
 
       _ ->

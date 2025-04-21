@@ -29,7 +29,7 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
       )
 
     # Wait for websocket upgrade before sending messages
-    assert_receive {:websockex_nova, {:websocket_upgrade, _stream_ref, _headers}}, @timeout
+    assert_receive {:websockex_nova, {:connection_websocket_upgrade, _stream_ref, _headers}}, @timeout
     flush_mailbox()
 
     # Print all messages currently in the mailbox before sending
@@ -79,7 +79,7 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
       )
 
     # Match on connection events (no longer wrapped in :notification)
-    assert_receive {:websockex_nova, {:websocket_upgrade, _stream_ref, _headers}}, @timeout
+    assert_receive {:websockex_nova, {:connection_websocket_upgrade, _stream_ref, _headers}}, @timeout
     flush_mailbox()
 
     # Send a public/ping JSON-RPC message and assert reply is received by this process
