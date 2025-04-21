@@ -335,9 +335,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     client_count = map_size(state.clients)
     Logger.debug("Broadcasting text to #{client_count} clients: #{inspect(text)}")
 
-    for client_pid <- Map.keys(state.clients) do
+    Enum.each(Map.keys(state.clients), fn client_pid ->
       send_text(client_pid, text, state)
-    end
+    end)
 
     {:noreply, state}
   end
@@ -347,9 +347,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     client_count = map_size(state.clients)
     Logger.debug("Broadcasting binary to #{client_count} clients: #{byte_size(data)} bytes")
 
-    for client_pid <- Map.keys(state.clients) do
+    Enum.each(Map.keys(state.clients), fn client_pid ->
       send_binary(client_pid, data, state)
-    end
+    end)
 
     {:noreply, state}
   end
@@ -359,9 +359,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     client_count = map_size(state.clients)
     Logger.debug("Disconnecting #{client_count} clients with code: #{code}, reason: #{reason}")
 
-    for client_pid <- Map.keys(state.clients) do
+    Enum.each(Map.keys(state.clients), fn client_pid ->
       send(client_pid, {:disconnect, code, reason})
-    end
+    end)
 
     {:noreply, state}
   end
@@ -437,16 +437,13 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   # Start server with appropriate protocol
   defp start_server(:http, server_name, port, _certfile, _keyfile) do
     Logger.debug("Starting HTTP server (ws://) on port #{port}")
-    plug_args = [server_pid: self()]
-    Plug.Cowboy.http(Router, plug_args, port: port, ref: server_name)
+    Plug.Cowboy.http(Router, [server_pid: self()], port: port, ref: server_name)
   end
 
   defp start_server(:http2, server_name, port, _certfile, _keyfile) do
     Logger.debug("Starting HTTP/2 server (h2c://) on port #{port}")
     # HTTP/2 cleartext (h2c) with fallback to HTTP/1.1
-    plug_args = [server_pid: self()]
-
-    Plug.Cowboy.http(Router, plug_args,
+    Plug.Cowboy.http(Router, [server_pid: self()],
       port: port,
       ref: server_name,
       protocol_options: [versions: [:h2, :"http/1.1"]]
@@ -456,9 +453,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   defp start_server(:tls, server_name, port, certfile, keyfile) do
     Logger.debug("Starting HTTPS server (wss://) on port #{port}")
     # HTTPS with TLS
-    plug_args = [server_pid: self()]
-
-    Plug.Cowboy.https(Router, plug_args,
+    Plug.Cowboy.https(Router, [server_pid: self()],
       port: port,
       ref: server_name,
       keyfile: keyfile,
@@ -469,9 +464,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   defp start_server(:https2, server_name, port, certfile, keyfile) do
     Logger.debug("Starting HTTP/2 over TLS server (h2://) on port #{port}")
     # HTTP/2 over TLS (h2) with fallback to HTTP/1.1
-    plug_args = [server_pid: self()]
-
-    Plug.Cowboy.https(Router, plug_args,
+    Plug.Cowboy.https(Router, [server_pid: self()],
       port: port,
       ref: server_name,
       keyfile: keyfile,
@@ -499,14 +492,12 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   # Handle scenarios based on the configuration
   defp handle_scenario(:normal, client_pid, type, message, state) do
-    Logger.debug("Executing scenario: :normal")
     # Echo the message back after any configured delay
     maybe_delay_response(client_pid, type, message, state)
     :echo
   end
 
   defp handle_scenario(:delayed_response, client_pid, type, message, state) do
-    Logger.debug("Executing scenario: :delayed_response")
     # Always delay by the configured amount
     if state.response_delay > 0 do
       Process.send_after(self(), {:delayed_echo, client_pid, type, message}, state.response_delay)
@@ -518,13 +509,11 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   defp handle_scenario(:drop_messages, _client_pid, _type, _message, _state) do
-    Logger.debug("Executing scenario: :drop_messages")
     # Don't respond at all
     :drop
   end
 
   defp handle_scenario(:echo_with_error, client_pid, type, message, state) do
-    Logger.debug("Executing scenario: :echo_with_error")
     # Randomly send an error message instead of echo
     if :rand.uniform(10) <= 3 do
       # 30% chance of error
@@ -537,7 +526,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   defp handle_scenario(:unstable, client_pid, _type, _message, _state) do
-    Logger.debug("Executing scenario: :unstable")
     # Randomly disconnect
     if :rand.uniform(10) <= 2 do
       # 20% chance of disconnect
@@ -551,7 +539,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   defp handle_scenario(:custom, client_pid, type, message, state) do
-    Logger.debug("Executing scenario: :custom")
     # Use the custom handler if defined
     if is_function(state.custom_handler, 3) do
       state.custom_handler.(client_pid, type, message)
@@ -564,7 +551,6 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   defp handle_scenario(other, client_pid, type, message, state) do
-    Logger.debug("Executing scenario: #{inspect(other)} (unknown)")
     Logger.warning("Unknown scenario #{inspect(other)}, falling back to normal")
     maybe_delay_response(client_pid, type, message, state)
     :echo
