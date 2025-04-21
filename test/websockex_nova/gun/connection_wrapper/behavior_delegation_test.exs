@@ -20,7 +20,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @behaviour ConnectionHandler
 
     def connection_init(opts) do
-      # Store received options and add test flag
       if test_pid = Map.get(opts, :test_pid) do
         send(test_pid, {:handler_init, opts})
       end
@@ -29,13 +28,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     end
 
     def handle_connect(conn_info, state) do
-      # Update state to track that handle_connect was called
       updated_state =
         state
         |> Map.put(:handle_connect_called, true)
         |> Map.put(:connection_info, conn_info)
 
-      # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
         send(test_pid, {:handler_connect, conn_info, state})
       end
@@ -44,23 +41,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     end
 
     def handle_disconnect(reason, state) do
-      # Update state to track that handle_disconnect was called
       updated_state =
         state
         |> Map.put(:handle_disconnect_called, true)
         |> Map.put(:disconnect_reason, reason)
 
-      # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
-        # Debugging logs
         Logger.debug("TestConnectionHandler - Sending handler_disconnect message to #{inspect(test_pid)}")
-
         send(test_pid, {:handler_disconnect, reason, state})
       else
         Logger.debug("TestConnectionHandler - No test PID available for disconnect notification")
       end
 
-      # For testing, we'll attempt reconnect only if explicitly specified
       if Map.get(state, :should_reconnect, false) do
         {:reconnect, updated_state}
       else
@@ -69,25 +61,20 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     end
 
     def handle_frame(frame_type, frame_data, state) do
-      # Debug logging
       Logger.debug("TestConnectionHandler - handle_frame called with #{inspect(frame_type)}")
 
-      # Update state to track frame handling
       updated_state =
         Map.update(state, :frames_received, [{frame_type, frame_data}], fn frames ->
           [{frame_type, frame_data} | frames]
         end)
 
-      # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
         Logger.debug("TestConnectionHandler - Sending handler_frame message to #{inspect(test_pid)}")
-
         send(test_pid, {:handler_frame, frame_type, frame_data, state})
       else
         Logger.debug("TestConnectionHandler - No test PID available for frame notification")
       end
 
-      # For ping frames, reply with a pong
       case frame_type do
         :ping -> {:reply, :pong, frame_data, updated_state}
         _ -> {:ok, updated_state}
@@ -95,10 +82,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     end
 
     def handle_timeout(state) do
-      # Update state to track that handle_timeout was called
       updated_state = Map.put(state, :handle_timeout_called, true)
 
-      # Send a message to the test process if configured
       if test_pid = Map.get(state, :test_pid) do
         send(test_pid, {:handler_timeout, state})
       end
@@ -106,13 +91,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
       {:ok, updated_state}
     end
 
-    def ping(stream_ref, state) do
-      {:pinged, stream_ref, state}
-    end
-
-    def status(stream_ref, state) do
-      {:status, stream_ref, state}
-    end
+    def ping(stream_ref, state), do: {:pinged, stream_ref, state || %{}}
+    def status(stream_ref, state), do: {:status, stream_ref, state || %{}}
 
     def subscription_init(opts), do: {:ok, opts}
     def active_subscriptions(_state), do: []
@@ -126,20 +106,37 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @moduledoc false
     @behaviour SubscriptionHandler
 
-    def subscription_init(_opts), do: {:ok, %{}}
-    def subscribe(channel, params, state), do: {:subscribed, channel, params, state}
-    def unsubscribe(channel, state), do: {:unsubscribed, channel, state}
+    def subscription_init(opts) do
+      if test_pid = Map.get(opts, :test_pid) do
+        send(test_pid, {:handler_init, opts})
+      end
+
+      {:ok, %{}}
+    end
+
+    def subscribe(channel, params, state), do: {:subscribed, channel, params, state || %{}}
+    def unsubscribe(channel, state), do: {:unsubscribed, channel, state || %{}}
+    def active_subscriptions(_state), do: %{}
+    def find_subscription_by_channel(_channel, _state), do: nil
+    def handle_subscription_response(_resp, state), do: {:ok, state || %{}}
   end
 
   defmodule TestAuthHandler do
     @moduledoc false
     @behaviour AuthHandler
 
-    def auth_init(_opts), do: {:ok, %{}}
-    def generate_auth_data(state), do: {:ok, %{token: "t"}, state}
-    def handle_auth_response(_resp, state), do: {:ok, state}
+    def auth_init(opts) do
+      if test_pid = Map.get(opts, :test_pid) do
+        send(test_pid, {:handler_init, opts})
+      end
+
+      {:ok, %{}}
+    end
+
+    def generate_auth_data(state), do: {:ok, %{token: "t"}, state || %{}}
+    def handle_auth_response(_resp, state), do: {:ok, state || %{}}
     def needs_reauthentication?(_state), do: false
-    def authenticate(stream_ref, credentials, state), do: {:authenticated, stream_ref, credentials, state}
+    def authenticate(stream_ref, credentials, state), do: {:authenticated, stream_ref, credentials, state || %{}}
   end
 
   describe "behavior delegation" do
