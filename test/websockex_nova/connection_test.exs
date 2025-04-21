@@ -3,9 +3,6 @@ defmodule WebsockexNova.ConnectionTest do
 
   import Mox
 
-  alias WebsockexNova.Connection
-  alias WebsockexNova.Connection.State
-
   setup :verify_on_exit!
 
   setup do

@@ -375,6 +375,25 @@ defmodule WebsockexNova.Connection do
     end
   end
 
+  # Buffer outgoing requests if not ready
+  def handle_call({:send_request, frame, id, from}, _from, state) do
+    state = Map.put_new(state, :pending_timeouts, %{})
+
+    if is_nil(state.ws_stream_ref) do
+      # Buffer the request if the WebSocket is not ready
+      {:reply, :buffered, %{state | request_buffer: state.request_buffer ++ [{frame, id, from}]}}
+    else
+      # Send the request immediately if the WebSocket is ready
+      ConnectionWrapper.send_frame(state.wrapper_pid, state.ws_stream_ref, frame)
+      # Track the pending request for JSON-RPC correlation
+      new_pending = if id, do: Map.put(state.pending_requests, id, from), else: state.pending_requests
+      # Start a timeout for the request (TODO: configurable timeout duration)
+      timer_ref = if id, do: Process.send_after(self(), {:request_timeout, id}, 10_000)
+      new_timeouts = if id, do: Map.put(state.pending_timeouts, id, timer_ref), else: state.pending_timeouts
+      {:reply, :sent, %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}}
+    end
+  end
+
   @impl true
   def handle_info(
         {:platform_message, stream_ref, message, from},
@@ -746,7 +765,7 @@ defmodule WebsockexNova.Connection do
   end
 
   # Gun connection down
-  def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams}, state) do
+  def handle_info({:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams}, state) do
     Logger.warning("Gun connection down: #{inspect(reason)}")
     :telemetry.execute(TelemetryEvents.connection_close(), %{protocol: protocol, reason: reason}, %{gun_pid: gun_pid})
     # Cancel all pending request timeouts
@@ -796,8 +815,8 @@ defmodule WebsockexNova.Connection do
   end
 
   # On WebSocket upgrade failure, fail all buffered requests and transition to safe state
-  def handle_info({:gun_upgrade, _gun_pid, _stream_ref, _headers}, state)
-      when not is_list(_headers) or _headers != ["websocket"] do
+  def handle_info({:gun_upgrade, _gun_pid, _stream_ref, headers}, state)
+      when not is_list(headers) or headers != ["websocket"] do
     Logger.error("WebSocket upgrade failed. Failing all buffered requests.")
     Enum.each(state.request_buffer, fn {_frame, _id, from} -> send(from, {:error, :websocket_upgrade_failed}) end)
     :telemetry.execute(TelemetryEvents.error_occurred(), %{reason: :websocket_upgrade_failed}, %{})
@@ -805,14 +824,14 @@ defmodule WebsockexNova.Connection do
   end
 
   # Gun WebSocket frame
-  def handle_info({:gun_ws, gun_pid, stream_ref, frame}, state) do
+  def handle_info({:gun_ws, _gun_pid, _stream_ref, frame}, state) do
     pending = Map.get(state, :pending_requests, %{})
     timeouts = Map.get(state, :pending_timeouts, %{})
 
     case frame do
       {:text, data} ->
         case Jason.decode(data) do
-          {:ok, %{"id" => id} = resp} ->
+          {:ok, %{"id" => id} = _resp} ->
             {from, new_pending} = Map.pop(pending, id)
             # Cancel the timeout
             timer_ref = Map.get(timeouts, id)
@@ -876,44 +895,25 @@ defmodule WebsockexNova.Connection do
     raise "Unexpected message in WebsockexNova.Connection: #{inspect(msg)}"
   end
 
-  # Buffer outgoing requests if not ready
-  def handle_call({:send_request, frame, id, from}, _from, state) do
-    state = Map.put_new(state, :pending_timeouts, %{})
-
-    if is_nil(state.ws_stream_ref) do
-      # Buffer the request if the WebSocket is not ready
-      {:reply, :buffered, %{state | request_buffer: state.request_buffer ++ [{frame, id, from}]}}
-    else
-      # Send the request immediately if the WebSocket is ready
-      ConnectionWrapper.send_frame(state.wrapper_pid, state.ws_stream_ref, frame)
-      # Track the pending request for JSON-RPC correlation
-      new_pending = if id, do: Map.put(state.pending_requests, id, from), else: state.pending_requests
-      # Start a timeout for the request (TODO: configurable timeout duration)
-      timer_ref = if id, do: Process.send_after(self(), {:request_timeout, id}, 10_000)
-      new_timeouts = if id, do: Map.put(state.pending_timeouts, id, timer_ref), else: state.pending_timeouts
-      {:reply, :sent, %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}}
-    end
-  end
-
   # Handler return value compliance for {:reconnect, new_state} and {:stop, reason, new_state}
-  defp handle_handler_result({:reconnect, new_state}, state) do
-    Logger.info("Handler requested reconnect. Scheduling reconnection.")
-    reconnect_callback = fn delay, _attempt -> Process.send_after(self(), :reconnect, delay) end
-    new_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
-    {:noreply, new_state}
-  end
+  # defp handle_handler_result({:reconnect, new_state}, state) do
+  #   Logger.info("Handler requested reconnect. Scheduling reconnection.")
+  #   reconnect_callback = fn delay, _attempt -> Process.send_after(self(), :reconnect, delay) end
+  #   new_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
+  #   {:noreply, new_state}
+  # end
 
-  defp handle_handler_result({:stop, reason, new_state}, _state) do
-    {:stop, reason, new_state}
-  end
+  # defp handle_handler_result({:stop, reason, new_state}, _state) do
+  #   {:stop, reason, new_state}
+  # end
 
-  defp handle_handler_result({:ok, new_state}, _state), do: {:noreply, new_state}
-  defp handle_handler_result({:reply, _type, _data, new_state}, _state), do: {:noreply, new_state}
+  # defp handle_handler_result({:ok, new_state}, _state), do: {:noreply, new_state}
+  # defp handle_handler_result({:reply, _type, _data, new_state}, _state), do: {:noreply, new_state}
 
-  defp handle_handler_result(other, state) do
-    Logger.warning("Unexpected handler result: #{inspect(other)}")
-    {:noreply, state}
-  end
+  # defp handle_handler_result(other, state) do
+  #   Logger.warning("Unexpected handler result: #{inspect(other)}")
+  #   {:noreply, state}
+  # end
 
   # On terminate, cancel all timers and fail all pending requests
   @impl true
