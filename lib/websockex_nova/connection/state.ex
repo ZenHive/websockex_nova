@@ -44,6 +44,8 @@ defmodule WebsockexNova.Connection.State do
     # [{frame, id, from}]
     request_buffer: [],
     # %{id => from}
-    pending_requests: %{}
+    pending_requests: %{},
+    # %{id => timer_ref}
+    pending_timeouts: %{}
   ]
 end

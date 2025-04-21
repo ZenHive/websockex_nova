@@ -4,3 +4,8 @@
 # Logger.configure(level: :debug)
 
 ExUnit.start()
+
+["#{__DIR__}", "support/**/*.ex"]
+|> Path.join()
+|> Path.wildcard()
+|> Enum.each(&Code.require_file/1)

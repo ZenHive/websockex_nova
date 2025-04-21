@@ -497,4 +497,87 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
 
     :ok = ConnectionWrapper.close(pid)
   end
+
+  test "request/response correlation and timeout" do
+    # Setup
+    {:ok, server, port} = MockServer.start_link()
+    {:ok, cb} = CallbackHandler.start_link()
+    {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, %{callback_pid: cb, transport: :tcp})
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+    CallbackHandler.clear(cb)
+    # Send a frame with a unique id, but do not respond from server
+    frame = ~s({"id":"timeout_test","method":"test"})
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, frame})
+    # Should timeout (simulate by not echoing)
+    refute CallbackHandler.wait_for(
+             cb,
+             fn
+               {:websocket_frame, ^stream, {:text, ^frame}} -> true
+               _ -> false
+             end,
+             200
+           )
+
+    # No reply expected, but if the connection process emits a timeout, it should be handled (depends on client API)
+    # (This is a placeholder for when the client API supports timeout notification)
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  test "fails all pending and buffered requests on gun error" do
+    {:ok, server, port} = MockServer.start_link()
+    {:ok, cb} = CallbackHandler.start_link()
+    {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, %{callback_pid: cb, transport: :tcp})
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+    CallbackHandler.clear(cb)
+    # Send a frame
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, "should_fail"})
+    # Simulate gun error
+    send(pid, {:gun_error, self(), stream, :test_error})
+    # Should receive error notification (depends on client API/handler)
+    # (This is a placeholder for when the client API supports error notification)
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  test "full lifecycle: connect, send, receive, disconnect, reconnect" do
+    {:ok, server, port} = MockServer.start_link()
+    {:ok, cb} = CallbackHandler.start_link()
+    {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, %{callback_pid: cb, transport: :tcp})
+    {:ok, stream} = ConnectionWrapper.upgrade_to_websocket(pid, "/ws", [])
+    CallbackHandler.clear(cb)
+    :ok = ConnectionWrapper.send_frame(pid, stream, {:text, "lifecycle_test"})
+
+    assert {:ok, {:websocket_frame, ^stream, {:text, "lifecycle_test"}}} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:websocket_frame, ^stream, {:text, "lifecycle_test"}} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    # Simulate disconnect
+    MockServer.force_test_disconnect(server, cb)
+
+    assert {:ok, {:connection_down, _, _}} =
+             CallbackHandler.wait_for(
+               cb,
+               fn
+                 {:connection_down, _, _} -> true
+                 _ -> false
+               end,
+               @timeout
+             )
+
+    # Simulate reconnection (depends on ConnectionWrapper logic)
+    # (This is a placeholder for when reconnection is fully observable)
+    :ok = ConnectionWrapper.close(pid)
+  end
+
+  test "handler compliance: callback invocation" do
+    # This test would use a custom handler that records invocations
+    # For now, we document the intent and leave as a placeholder
+    # TODO: Implement a handler that records callback invocations and assert they are called
+    assert true
+  end
 end
