@@ -924,6 +924,4 @@ defmodule WebsockexNova.Connection do
     Enum.each(state.request_buffer || [], fn {_frame, _id, from} -> send(from, {:error, :terminated}) end)
     :ok
   end
-
-  # TODO: Add more robust error propagation for handler edge cases and adapter-specific errors.
 end

@@ -273,6 +273,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `:ok` on success
   * `{:error, reason}` on failure
   """
+  @impl WebsockexNova.ConnectionWrapperBehaviour
   @spec send_frame(pid(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
   def send_frame(pid, stream_ref, frame) do
     GenServer.call(pid, {:send_frame, stream_ref, frame})

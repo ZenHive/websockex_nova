@@ -653,11 +653,4 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
     # (This is a placeholder for when reconnection is fully observable)
     :ok = ConnectionWrapper.close(pid)
   end
-
-  test "handler compliance: callback invocation" do
-    # This test would use a custom handler that records invocations
-    # For now, we document the intent and leave as a placeholder
-    # TODO: Implement a handler that records callback invocations and assert they are called
-    assert true
-  end
 end

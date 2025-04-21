@@ -20,6 +20,7 @@ defmodule WebsockexNova.Adapter do
 
   defmacro __using__(_opts) do
     quote do
+      @behaviour WebsockexNova.Platform.Adapter
       @behaviour WebsockexNova.Behaviors.ConnectionHandler
       @behaviour WebsockexNova.Behaviors.MessageHandler
       @behaviour WebsockexNova.Behaviors.SubscriptionHandler
