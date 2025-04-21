@@ -407,6 +407,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
         send(state[:test_pid], :custom_handler_invoked)
         {:ok, state}
       end
+
+      def connection_init(opts), do: {:ok, opts}
+      def subscription_init(opts), do: {:ok, opts}
+      def auth_init(opts), do: {:ok, opts}
     end
 
     test "invokes custom callback handler", %{port: port} do

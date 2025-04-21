@@ -113,6 +113,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     def status(stream_ref, state) do
       {:status, stream_ref, state}
     end
+
+    def subscription_init(opts), do: {:ok, opts}
+    def active_subscriptions(state), do: []
+    def find_subscription_by_channel(_channel, _state), do: nil
+    def handle_subscription_response(_resp, state), do: {:ok, state}
+
+    def auth_init(opts), do: {:ok, opts}
   end
 
   defmodule TestSubscriptionHandler do

@@ -81,6 +81,12 @@ defmodule WebsockexNova.Platform.Deribit.Adapter do
     query: 1
   }
 
+  @impl Adapter
+  def init(opts) do
+    # You can delegate to connection_init/1 or just return {:ok, opts}
+    connection_init(opts)
+  end
+
   @doc """
   Initializes the adapter's state with Deribit and rate limit defaults.
   """
