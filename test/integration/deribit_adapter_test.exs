@@ -106,7 +106,7 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
 
   defp flush_mailbox do
     receive do
-      msg ->
+      _msg ->
         # IO.inspect(msg, label: "mailbox message")
         flush_mailbox()
     after
@@ -114,21 +114,21 @@ defmodule WebsockexNova.Integration.DeribitAdapterTest do
     end
   end
 
-  defp receive_response(timeout) do
-    receive do
-      {:websockex_nova, {:websocket_frame, _stream_ref, {:text, msg}}} ->
-        Jason.decode!(msg)
+  # defp receive_response(timeout) do
+  #   receive do
+  #     {:websockex_nova, {:websocket_frame, _stream_ref, {:text, msg}}} ->
+  #       Jason.decode!(msg)
 
-      {:websockex_nova, {:websocket_frame, {:text, msg}}} ->
-        Jason.decode!(msg)
+  #     {:websockex_nova, {:websocket_frame, {:text, msg}}} ->
+  #       Jason.decode!(msg)
 
-      {:websockex_nova, {:text, msg}} ->
-        Jason.decode!(msg)
+  #     {:websockex_nova, {:text, msg}} ->
+  #       Jason.decode!(msg)
 
-      msg ->
-        flunk("Unexpected message: #{inspect(msg)}")
-    after
-      timeout -> flunk("No response from Deribit API")
-    end
-  end
+  #     msg ->
+  #       flunk("Unexpected message: #{inspect(msg)}")
+  #   after
+  #     timeout -> flunk("No response from Deribit API")
+  #   end
+  # end
 end

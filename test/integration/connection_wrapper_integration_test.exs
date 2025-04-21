@@ -560,7 +560,7 @@ defmodule WebsockexNova.Integration.ConnectionWrapperIntegrationTest do
   # This behavior is tested at the Connection level.@tag skip
   @tag :skip
   test "fails all pending and buffered requests on gun error" do
-    {:ok, server, port} = MockServer.start_link()
+    {:ok, _server, port} = MockServer.start_link()
     {:ok, cb} = CallbackHandler.start_link()
     {:ok, pid} = ConnectionWrapper.open("127.0.0.1", port, %{callback_pid: cb, transport: :tcp})
 

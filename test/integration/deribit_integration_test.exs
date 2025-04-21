@@ -109,7 +109,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
 
     :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(auth_msg)})
     auth_response = receive_json_response(stream_ref, @timeout)
-    assert access_token = auth_response["result"]["access_token"]
+    assert _access_token = auth_response["result"]["access_token"]
 
     summary_msg = %{
       "jsonrpc" => "2.0",

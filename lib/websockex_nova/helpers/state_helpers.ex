@@ -113,7 +113,7 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   This avoids dynamic atom creation and is safe for all inputs.
   """
   @spec setup_handler(map(), atom(), module(), term(), atom()) :: map()
-  def setup_handler(state, handler_type, handler_module, handler_options \\ %{}, callback_name)
+  def setup_handler(state, handler_type, handler_module, handler_options, callback_name)
       when is_atom(handler_type) and is_atom(callback_name) do
     handlers = Map.get(state, :handlers, %{})
 
@@ -133,6 +133,14 @@ defmodule WebsockexNova.Helpers.StateHelpers do
       |> Map.put({handler_type, :state}, handler_state)
 
     Map.put(state, :handlers, updated_handlers)
+  end
+
+  def setup_handler(state, handler_type, handler_module) do
+    setup_handler(state, handler_type, handler_module, %{}, :"#{handler_type}_init")
+  end
+
+  def setup_handler(state, handler_type, handler_module, handler_options) do
+    setup_handler(state, handler_type, handler_module, handler_options, :"#{handler_type}_init")
   end
 
   @doc """

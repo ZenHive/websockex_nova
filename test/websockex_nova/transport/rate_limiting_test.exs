@@ -248,7 +248,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
       test_config = [handler: RateLimitHandlers.TestHandler, mode: :always_allow]
       Application.put_env(:websockex_nova, :rate_limiting, test_config)
       opts = [name: unique_name]
-      {:ok, pid} = RateLimiting.start_link(opts)
+      {:ok, _pid} = RateLimiting.start_link(opts)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -296,7 +296,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
   describe "edge cases" do
     test "rejects requests when queue is full" do
       unique_name = String.to_atom("overflow_#{:erlang.unique_integer([:positive])}")
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.OverflowHandler)
+      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.OverflowHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -311,7 +311,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "handles negative/zero refill rates and intervals safely" do
       unique_name = String.to_atom("neg_refill_#{:erlang.unique_integer([:positive])}")
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NegativeRefillHandler)
+      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NegativeRefillHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -326,7 +326,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "uses default cost for unknown request types" do
       unique_name = String.to_atom("unknown_type_#{:erlang.unique_integer([:positive])}")
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.UnknownTypeHandler)
+      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.UnknownTypeHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -341,7 +341,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "logs and rejects on invalid handler return" do
       unique_name = String.to_atom("invalid_return_#{:erlang.unique_integer([:positive])}")
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.InvalidReturnHandler)
+      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.InvalidReturnHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -355,7 +355,7 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "callback for never-processed request is not executed" do
       unique_name = String.to_atom("never_process_#{:erlang.unique_integer([:positive])}")
-      {:ok, pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NeverProcessHandler)
+      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NeverProcessHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do

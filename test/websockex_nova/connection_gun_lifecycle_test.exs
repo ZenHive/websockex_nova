@@ -48,17 +48,17 @@ defmodule WebsockexNova.ConnectionGunLifecycleTest do
     conn
   end
 
-  # Helper to flush unexpected HTTP responses from the mailbox
-  defp flush_http_responses do
-    receive do
-      {:websockex_nova, {:http_response, _, _, _, _}} -> flush_http_responses()
-      {:websockex_nova, {:http_response, _, _, _, _, _}} -> flush_http_responses()
-      {:websockex_nova, {:http_data, _, _, _}} -> flush_http_responses()
-      _ -> flush_http_responses()
-    after
-      10 -> :ok
-    end
-  end
+  # # Helper to flush unexpected HTTP responses from the mailbox
+  # defp flush_http_responses do
+  #   receive do
+  #     {:websockex_nova, {:http_response, _, _, _, _}} -> flush_http_responses()
+  #     {:websockex_nova, {:http_response, _, _, _, _, _}} -> flush_http_responses()
+  #     {:websockex_nova, {:http_data, _, _, _}} -> flush_http_responses()
+  #     _ -> flush_http_responses()
+  #   after
+  #     10 -> :ok
+  #   end
+  # end
 
   test "handles gun_up event and logs/telemetry", %{port: port} do
     conn = start_connection(port)

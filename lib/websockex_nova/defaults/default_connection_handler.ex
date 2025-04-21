@@ -129,39 +129,4 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   def status(_stream_ref, state) do
     {:ok, :ok, state}
   end
-
-  @impl true
-  @doc """
-  Initializes the subscription handler state. Used for compatibility with handler initialization migration.
-  """
-  def subscription_init(opts) do
-    {:ok, Map.new(opts)}
-  end
-
-  @impl true
-  @doc """
-  Initializes the message handler state. Used for compatibility with handler initialization migration.
-  """
-  def message_init(opts), do: WebsockexNova.Defaults.DefaultMessageHandler.message_init(opts)
-
-  @impl true
-  @doc """
-  Initializes the error handler state. Used for compatibility with handler initialization migration.
-  """
-  def error_init(opts), do: WebsockexNova.Defaults.DefaultErrorHandler.error_init(opts)
-
-  @impl true
-  @doc """
-  Initializes the logging handler state. Used for compatibility with handler initialization migration.
-  """
-  def logging_init(opts), do: WebsockexNova.Defaults.DefaultLoggingHandler.logging_init(opts)
-
-  @impl true
-  def rate_limit_init(opts), do: WebsockexNova.Defaults.DefaultRateLimitHandler.rate_limit_init(opts)
-
-  @impl true
-  @doc """
-  Initializes the auth handler state. Used for compatibility with handler initialization migration.
-  """
-  def auth_init(opts), do: WebsockexNova.Defaults.DefaultAuthHandler.auth_init(opts)
 end

@@ -304,29 +304,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_connection_handler(t(), module(), map()) :: t()
-  def setup_connection_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.connection_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                connection_handler: handler_module,
-                connection_handler_state: handler_state
-              })
-        }
-
-      # If init returns an error, we'll still set the handler but with nil state
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                connection_handler: handler_module,
-                connection_handler_state: nil
-              })
-        }
-    end
+  def setup_connection_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :connection_handler, handler_options)
   end
 
   @doc """
@@ -360,29 +339,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_message_handler(t(), module(), map()) :: t()
-  def setup_message_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.message_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                message_handler: handler_module,
-                message_handler_state: handler_state
-              })
-        }
-
-      # If init returns an error, we'll still set the handler but with nil state
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                message_handler: handler_module,
-                message_handler_state: nil
-              })
-        }
-    end
+  def setup_message_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :message_handler, handler_options)
   end
 
   @doc """
@@ -416,29 +374,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_error_handler(t(), module(), map()) :: t()
-  def setup_error_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.error_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                error_handler: handler_module,
-                error_handler_state: handler_state
-              })
-        }
-
-      # If init returns an error, we'll still set the handler but with nil state
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                error_handler: handler_module,
-                error_handler_state: nil
-              })
-        }
-    end
+  def setup_error_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :error_handler, handler_options)
   end
 
   @doc """
@@ -507,29 +444,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_logging_handler(t(), module(), map()) :: t()
-  def setup_logging_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.logging_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                logging_handler: handler_module,
-                logging_handler_state: handler_state
-              })
-        }
-
-      # If init returns an error, we'll still set the handler but with nil state
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                logging_handler: handler_module,
-                logging_handler_state: nil
-              })
-        }
-    end
+  def setup_logging_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :logging_handler, handler_options)
   end
 
   @doc """
@@ -544,28 +460,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_subscription_handler(t(), module(), map()) :: t()
-  def setup_subscription_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.subscription_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                subscription_handler: handler_module,
-                subscription_handler_state: handler_state
-              })
-        }
-
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                subscription_handler: handler_module,
-                subscription_handler_state: nil
-              })
-        }
-    end
+  def setup_subscription_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :subscription_handler, handler_options)
   end
 
   @doc """
@@ -580,27 +476,45 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct with the handler and its state
   """
   @spec setup_auth_handler(t(), module(), map()) :: t()
-  def setup_auth_handler(state, handler_module, handler_options) when is_atom(handler_module) do
-    case handler_module.auth_init(handler_options) do
-      {:ok, handler_state} ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                auth_handler: handler_module,
-                auth_handler_state: handler_state
-              })
-        }
+  def setup_auth_handler(state, handler_module, handler_options) do
+    setup_handler(state, handler_module, :auth_handler, handler_options)
+  end
 
-      _error ->
-        %{
-          state
-          | handlers:
-              Map.merge(state.handlers, %{
-                auth_handler: handler_module,
-                auth_handler_state: nil
-              })
-        }
+  # Generic handler setup function
+  defp setup_handler(state, handler_module, handler_type, handler_options) when is_atom(handler_module) do
+    init_fun = String.to_atom("#{handler_type}_init")
+
+    if function_exported?(handler_module, init_fun, 1) do
+      case apply(handler_module, init_fun, [handler_options]) do
+        {:ok, handler_state} ->
+          %{
+            state
+            | handlers:
+                Map.merge(state.handlers, %{
+                  handler_type => handler_module,
+                  :"#{handler_type}_state" => handler_state
+                })
+          }
+
+        _error ->
+          %{
+            state
+            | handlers:
+                Map.merge(state.handlers, %{
+                  handler_type => handler_module,
+                  :"#{handler_type}_state" => nil
+                })
+          }
+      end
+    else
+      %{
+        state
+        | handlers:
+            Map.merge(state.handlers, %{
+              handler_type => handler_module,
+              :"#{handler_type}_state" => nil
+            })
+      }
     end
   end
 end
