@@ -489,49 +489,60 @@ defmodule WebsockexNova.Gun.ConnectionState do
       "[setup_handler] type: #{inspect(handler_type)}, module: #{inspect(handler_module)}, options: #{inspect(handler_options)}"
     )
 
-    # Map handler_type to the correct init function name
-    init_fun =
-      case handler_type do
-        :connection_handler -> :connection_init
-        :subscription_handler -> :subscription_init
-        :auth_handler -> :auth_init
-        :message_handler -> :message_handler_init
-        :error_handler -> :error_handler_init
-        :logging_handler -> :logging_handler_init
-        _ -> String.to_atom("#{handler_type}_init")
-      end
+    init_fun = handler_init_fun(handler_type)
+    handler_state = call_handler_init(handler_module, init_fun, handler_options)
+    update_handler_state(state, handler_type, handler_module, handler_state)
+  end
 
+  defp handler_init_fun(:connection_handler), do: :connection_init
+  defp handler_init_fun(:subscription_handler), do: :subscription_init
+  defp handler_init_fun(:auth_handler), do: :auth_init
+  defp handler_init_fun(:message_handler), do: :message_handler_init
+  defp handler_init_fun(:error_handler), do: :error_handler_init
+  defp handler_init_fun(:logging_handler), do: :logging_handler_init
+  # defp handler_init_fun(handler_type), do: String.to_atom("#{handler_type}_init")
+
+  defp call_handler_init(handler_module, init_fun, handler_options) do
     if function_exported?(handler_module, init_fun, 1) do
       case apply(handler_module, init_fun, [handler_options]) do
-        {:ok, handler_state} ->
-          %{
-            state
-            | handlers:
-                Map.merge(state.handlers, %{
-                  handler_type => handler_module,
-                  :"#{handler_type}_state" => handler_state
-                })
-          }
-
-        _error ->
-          %{
-            state
-            | handlers:
-                Map.merge(state.handlers, %{
-                  handler_type => handler_module,
-                  :"#{handler_type}_state" => nil
-                })
-          }
+        {:ok, handler_state} -> handler_state
+        _error -> nil
       end
-    else
-      %{
-        state
-        | handlers:
-            Map.merge(state.handlers, %{
-              handler_type => handler_module,
-              :"#{handler_type}_state" => nil
-            })
-      }
     end
+  end
+
+  defp update_handler_state(state, :connection_handler, handler_module, handler_state) do
+    put_handler(state, :connection_handler, :connection_handler_state, handler_module, handler_state)
+  end
+
+  defp update_handler_state(state, :subscription_handler, handler_module, handler_state) do
+    put_handler(state, :subscription_handler, :subscription_handler_state, handler_module, handler_state)
+  end
+
+  defp update_handler_state(state, :auth_handler, handler_module, handler_state) do
+    put_handler(state, :auth_handler, :auth_handler_state, handler_module, handler_state)
+  end
+
+  defp update_handler_state(state, :message_handler, handler_module, handler_state) do
+    put_handler(state, :message_handler, :message_handler_state, handler_module, handler_state)
+  end
+
+  defp update_handler_state(state, :error_handler, handler_module, handler_state) do
+    put_handler(state, :error_handler, :error_handler_state, handler_module, handler_state)
+  end
+
+  defp update_handler_state(state, :logging_handler, handler_module, handler_state) do
+    put_handler(state, :logging_handler, :logging_handler_state, handler_module, handler_state)
+  end
+
+  defp put_handler(state, handler_type, handler_state_key, handler_module, handler_state) do
+    %{
+      state
+      | handlers:
+          Map.merge(state.handlers, %{
+            handler_type => handler_module,
+            handler_state_key => handler_state
+          })
+    }
   end
 end
