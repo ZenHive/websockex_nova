@@ -469,6 +469,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     GenServer.call(pid, {:status, stream_ref})
   end
 
+  @impl WebsockexNova.Transport
+  def schedule_reconnection(state, callback) do
+    WebsockexNova.Gun.ConnectionManager.schedule_reconnection(state, callback)
+  end
+
+  @impl WebsockexNova.Transport
+  def start_connection(state) do
+    case WebsockexNova.Gun.ConnectionManager.start_connection(state) do
+      {:ok, updated_state} -> updated_state
+      {:error, _reason, error_state} -> error_state
+    end
+  end
+
   # Server callbacks
   @impl true
   def init({host, port, options, _supervisor}) do
@@ -671,9 +684,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @impl true
   def handle_info(
         {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
-        %{gun_pid: gun_pid} = state
+        %{gun_pid: gun_pid, callback_pid: callback_pid} = state
       ) do
-    handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
+    result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
+    if callback_pid, do: send(callback_pid, {:connection_down, reason})
+    result
   end
 
   def handle_info({:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers}, %{gun_pid: gun_pid} = state) do
@@ -693,11 +708,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
   end
 
-  def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid} = state) do
+  def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid, callback_pid: callback_pid} = state) do
     # First clean up the stream with the error
     state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
     # Then delegate to MessageHandlers with the cleaned state
-    MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
+    result = MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
+    if callback_pid, do: send(callback_pid, {:connection_error, reason})
+    result
   end
 
   def handle_info({:gun_response, gun_pid, stream_ref, is_fin, status, headers}, %{gun_pid: gun_pid} = state) do

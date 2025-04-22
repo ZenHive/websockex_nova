@@ -24,4 +24,17 @@ defmodule WebsockexNova.MockTransportImpl do
 
   @impl true
   def open(_host, _port, _options, _supervisor), do: {:ok, :mock_transport_state}
+
+  @impl true
+  def schedule_reconnection(state, callback) do
+    # Immediately invoke the callback with a short delay and attempt number for test purposes
+    callback.(10, 1)
+    state
+  end
+
+  @impl true
+  def start_connection(state) do
+    # For the mock, just return the state as-is
+    state
+  end
 end
