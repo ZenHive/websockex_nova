@@ -42,6 +42,23 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @port 443
   @path "/"
 
+  @doc """
+  Returns connection information for the echo.websocket.org WebSocket server.
+  """
+  def connection_info(_opts) do
+    {:ok,
+     %{
+       host: @host,
+       port: @port,
+       path: @path,
+       headers: [],
+       timeout: 30_000,
+       transport_opts: %{
+         transport: :tls
+       }
+     }}
+  end
+
   #
   # ConnectionHandler callbacks
   #
@@ -278,25 +295,5 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   def authenticate(_stream_ref, _credentials, state) do
     # Echo server doesn't require authentication
     {:ok, :no_auth_required, state}
-  end
-
-  #
-  # Public API
-  #
-
-  @doc """
-  Returns connection information for the echo.websocket.org server.
-
-  This function is called by WebsockexNova.Client to determine connection details.
-  """
-  def connection_info(_state) do
-    {:ok,
-     %{
-       host: @host,
-       port: @port,
-       path: @path,
-       # Use TLS for secure connection
-       transport_opts: %{transport: :tls}
-     }}
   end
 end

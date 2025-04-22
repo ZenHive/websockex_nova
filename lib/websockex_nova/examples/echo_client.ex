@@ -24,7 +24,14 @@ defmodule WebsockexNova.Examples.EchoClient do
   """
   def start do
     Logger.info("Connecting to echo.websocket.org...")
-    Client.connect(EchoAdapter, %{})
+
+    case EchoAdapter.connection_info(%{}) do
+      {:ok, connection_info} ->
+        Client.connect(EchoAdapter, connection_info)
+
+      other ->
+        {:error, {:unexpected_connection_info, other}}
+    end
   end
 
   @doc """

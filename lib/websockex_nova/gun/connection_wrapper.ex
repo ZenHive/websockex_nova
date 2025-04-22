@@ -200,24 +200,74 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   # Client API
 
   @doc """
-  Opens a connection to a WebSocket server.
+  Opens a connection to a WebSocket server and upgrades to WebSocket in one step.
 
   ## Parameters
 
   * `host` - Hostname or IP address of the server
   * `port` - Port number of the server (default: 80, or 443 for TLS)
+  * `path` - WebSocket endpoint path
   * `options` - Connection options (see `t:options/0`)
-  * `supervisor` - Optional Gun client supervisor PID
 
   ## Returns
 
-  * `{:ok, pid}` on success
+  * `{:ok, %WebsockexNova.ClientConn{}}` on success
   * `{:error, reason}` on failure
   """
-  @spec open(binary(), pos_integer(), options(), pid() | nil) :: {:ok, pid()} | {:error, term()}
+  @spec open(binary(), pos_integer(), binary(), options()) :: {:ok, WebsockexNova.ClientConn.t()} | {:error, term()}
   @impl WebsockexNova.Transport
-  def open(host, port, options \\ %{}, supervisor \\ nil) do
-    GenServer.start_link(__MODULE__, {host, port, options, supervisor})
+  def open(host, port, path, options \\ %{}) do
+    # Start the connection process
+    case GenServer.start_link(__MODULE__, {host, port, options, nil}) do
+      {:ok, pid} ->
+        # Wait for connection to be established
+        status = wait_for_status(pid, :connected, Map.get(options, :timeout, 5000))
+
+        if status == :connected do
+          headers = Map.get(options, :headers, [])
+          # Perform WebSocket upgrade
+          case GenServer.call(pid, {:upgrade_to_websocket, path, headers}, Map.get(options, :timeout, 5000)) do
+            {:ok, stream_ref} ->
+              # Wait for websocket_connected status
+              ws_status = wait_for_status(pid, :websocket_connected, Map.get(options, :timeout, 5000))
+
+              if ws_status == :websocket_connected do
+                # Build ClientConn struct
+                state_result = GenServer.call(pid, :get_state)
+
+                case state_result do
+                  %WebsockexNova.Gun.ConnectionState{} = _state ->
+                    {:ok,
+                     %WebsockexNova.ClientConn{
+                       transport: __MODULE__,
+                       transport_pid: pid,
+                       stream_ref: stream_ref,
+                       adapter: Map.get(options, :adapter),
+                       adapter_state: Map.get(options, :adapter_state),
+                       callback_pids: Enum.filter([Map.get(options, :callback_pid)], & &1)
+                     }}
+
+                  _other ->
+                    GenServer.stop(pid)
+                    {:error, :connection_failed}
+                end
+              else
+                GenServer.stop(pid)
+                {:error, :websocket_upgrade_failed}
+              end
+
+            {:error, reason} ->
+              GenServer.stop(pid)
+              {:error, reason}
+          end
+        else
+          GenServer.stop(pid)
+          {:error, :connection_failed}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -529,6 +579,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_call({:upgrade_to_websocket, path, headers}, _from, state) do
+    Logger.debug(
+      "[ConnectionWrapper] Received upgrade_to_websocket: path=#{inspect(path)}, headers=#{inspect(headers)}, state.status=#{inspect(StateHelpers.get_status(state))}, gun_pid=#{inspect(state.gun_pid)}"
+    )
+
     if state.gun_pid && StateHelpers.get_status(state) == :connected do
       stream_ref =
         :gun.ws_upgrade(
@@ -538,12 +592,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           state.options.ws_opts
         )
 
+      Logger.debug("[ConnectionWrapper] Called :gun.ws_upgrade, stream_ref=#{inspect(stream_ref)}")
       # Update state with stream reference
       updated_state = ConnectionState.update_stream(state, stream_ref, :upgrading)
-
       {:reply, {:ok, stream_ref}, updated_state}
     else
-      # Return error if not connected or Gun process missing
+      Logger.error("[ConnectionWrapper] Cannot upgrade: not connected or missing gun_pid. State: #{inspect(state)}")
       {:reply, {:error, :not_connected}, state}
     end
   end
@@ -603,12 +657,17 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl true
   def handle_call({:wait_for_websocket_upgrade, stream_ref, timeout}, _from, state) do
+    Logger.debug(
+      "[ConnectionWrapper] Waiting for websocket upgrade: stream_ref=#{inspect(stream_ref)}, timeout=#{inspect(timeout)}, gun_pid=#{inspect(state.gun_pid)}"
+    )
+
     if state.gun_pid do
       monitor_ref = state.gun_monitor_ref
       result = :gun.await(state.gun_pid, stream_ref, timeout, monitor_ref)
+      Logger.debug("[ConnectionWrapper] :gun.await result: #{inspect(result)}")
       handle_websocket_upgrade_result(result, stream_ref, state)
     else
-      # Return error if Gun process is missing (not connected)
+      Logger.error("[ConnectionWrapper] Cannot wait for upgrade: gun_pid is nil. State: #{inspect(state)}")
       ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end
@@ -1113,18 +1172,23 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     end
   end
 
-  defp handle_websocket_upgrade_result({:upgrade, ["websocket"], headers}, stream_ref, state) do
-    updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
-    {:reply, {:ok, headers}, updated_state}
-  end
+  defp handle_websocket_upgrade_result(result, stream_ref, state) do
+    Logger.debug(
+      "[ConnectionWrapper] handle_websocket_upgrade_result: result=#{inspect(result)}, stream_ref=#{inspect(stream_ref)}"
+    )
 
-  defp handle_websocket_upgrade_result({:response, :fin, status, headers}, stream_ref, state) when status >= 400 do
-    reason = {:http_error, status, headers}
-    ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
-  end
+    case result do
+      {:upgrade, ["websocket"], headers} ->
+        updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
+        {:reply, {:ok, headers}, updated_state}
 
-  defp handle_websocket_upgrade_result({:error, reason}, stream_ref, state) do
-    ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
+      {:response, :fin, status, headers} when status >= 400 ->
+        reason = {:http_error, status, headers}
+        ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
+
+      {:error, reason} ->
+        ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
+    end
   end
 
   # Helper functions for rate limiting request construction
@@ -1195,5 +1259,33 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       %{size: size},
       %{connection_id: state.gun_pid, stream_ref: stream_ref, frame_type: frame_type}
     )
+  end
+
+  # Helper to wait for a connection status
+  defp wait_for_status(pid, expected_status, timeout) do
+    start = System.monotonic_time(:millisecond)
+    do_wait_for_status(pid, expected_status, timeout, start)
+  end
+
+  defp do_wait_for_status(pid, expected_status, timeout, start) do
+    state =
+      try do
+        GenServer.call(pid, :get_state, 100)
+      catch
+        :exit, _ -> %{status: :error}
+      end
+
+    if Map.get(state, :status) == expected_status do
+      expected_status
+    else
+      now = System.monotonic_time(:millisecond)
+
+      if now - start > timeout do
+        :timeout
+      else
+        Process.sleep(50)
+        do_wait_for_status(pid, expected_status, timeout, start)
+      end
+    end
   end
 end

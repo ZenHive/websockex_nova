@@ -24,7 +24,8 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   # Use ConnectionWrapper to connect with proper options
   {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{
     transport: :tls,
-    transport_opts: [verify: :verify_none]
+    transport_opts: [verify: :verify_none],
+    callback_pid: self()
   })
   ```
   """

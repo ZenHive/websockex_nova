@@ -24,7 +24,7 @@ defmodule WebsockexNova.Integration.EchoTest do
 
   test "basic echo functionality", %{port: port} do
     # Open a connection with this test process as the callback process
-    {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, callback_pid: self()})
+    {:ok, conn_pid} = ConnectionWrapper.open("echo.websocket.org", 443, %{transport: :tls, callback_pid: self()})
 
     # Wait for the connection to be established
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout
@@ -48,7 +48,7 @@ defmodule WebsockexNova.Integration.EchoTest do
 
   test "simulated request_id tracking", %{port: port} do
     # Open a connection with this test process as the callback process
-    {:ok, conn_pid} = ConnectionWrapper.open("localhost", port, %{transport: :tcp, callback_pid: self()})
+    {:ok, conn_pid} = ConnectionWrapper.open("echo.websocket.org", port, %{transport: :tls, callback_pid: self()})
 
     # Wait for the connection to be established
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout

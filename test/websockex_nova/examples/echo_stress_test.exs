@@ -3,8 +3,8 @@ defmodule WebsockexNova.Examples.EchoStressTest do
 
   alias WebsockexNova.Examples.EchoClient
 
-  # Mark these tests as integration and stress tests
-  @moduletag [:integration, :stress]
+  # Mark these tests as integration tests
+  @moduletag :integration
 
   # Longer timeout for stress tests
   @timeout 60_000

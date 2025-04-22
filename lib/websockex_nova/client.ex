@@ -43,7 +43,6 @@ defmodule WebsockexNova.Client do
   If an adapter doesn't implement a behavior, the client falls back to using default implementations
   from the `WebsockexNova.Defaults` namespace.
   """
-
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.MessageHandler
   alias WebsockexNova.Behaviors.SubscriptionHandler
@@ -52,6 +51,8 @@ defmodule WebsockexNova.Client do
   alias WebsockexNova.Defaults.DefaultAuthHandler
   alias WebsockexNova.Defaults.DefaultMessageHandler
   alias WebsockexNova.Defaults.DefaultSubscriptionHandler
+
+  require Logger
 
   # Default transport module, can be overridden in tests
   @default_transport WebsockexNova.Gun.ConnectionWrapper
@@ -124,20 +125,43 @@ defmodule WebsockexNova.Client do
   """
   @spec connect(module(), connect_options()) :: connection_result()
   def connect(adapter, options) when is_atom(adapter) and is_map(options) do
+    require Logger
+
+    Logger.debug("[Client.connect] Initializing adapter: #{inspect(adapter)} with options: #{inspect(options)}")
+
     with {:ok, adapter_state} <- init_adapter(adapter),
          {:ok, connection_info} <- get_connection_info(adapter, adapter_state, options),
-         {:ok, transport_opts} <- prepare_transport_options(adapter, connection_info),
-         {:ok, transport_pid} <- open_connection(connection_info, transport_opts),
-         {:ok, stream_ref} <- upgrade_to_websocket(transport_pid, connection_info) do
-      conn = %ClientConn{
-        transport: transport(),
-        transport_pid: transport_pid,
-        stream_ref: stream_ref,
-        adapter: adapter,
-        adapter_state: adapter_state
-      }
+         {:ok, transport_opts} <- prepare_transport_options(adapter, connection_info) do
+      # Ensure callback_pid is set so we get connection notifications
+      transport_opts = Map.put(transport_opts, :callback_pid, self())
+      transport_opts = Map.put(transport_opts, :adapter, adapter)
+      transport_opts = Map.put(transport_opts, :adapter_state, adapter_state)
 
-      {:ok, conn}
+      Logger.debug(
+        "[Client.connect] Opening connection with info: #{inspect(connection_info)}, transport_opts: #{inspect(transport_opts)}"
+      )
+
+      host = Map.fetch!(connection_info, :host)
+      port = Map.fetch!(connection_info, :port)
+      path = Map.fetch!(connection_info, :path)
+
+      case transport().open(host, port, path, transport_opts) do
+        {:ok, conn} ->
+          Logger.debug("[Client.connect] Connection established: #{inspect(conn)}")
+          {:ok, conn}
+
+        {:error, reason} ->
+          Logger.error("WebSocket connection failed: #{inspect(reason)}")
+          {:error, reason}
+      end
+    else
+      {:error, reason} ->
+        Logger.error("[Client.connect] Error: #{inspect(reason)}")
+        {:error, reason}
+
+      other ->
+        Logger.error("[Client.connect] Unexpected error: #{inspect(other)}")
+        other
     end
   end
 
@@ -459,22 +483,6 @@ defmodule WebsockexNova.Client do
     transport_opts = Handlers.configure_handlers(adapter, base_opts)
 
     {:ok, transport_opts}
-  end
-
-  # Open a connection using the transport
-  defp open_connection(connection_info, transport_opts) do
-    host = Map.fetch!(connection_info, :host)
-    port = Map.fetch!(connection_info, :port)
-
-    transport().open(host, port, transport_opts)
-  end
-
-  # Upgrade connection to WebSocket
-  defp upgrade_to_websocket(transport_pid, connection_info) do
-    path = Map.fetch!(connection_info, :path)
-    headers = Map.get(connection_info, :headers, [])
-
-    transport().upgrade_to_websocket(transport_pid, path, headers)
   end
 
   # Get the message handler module
