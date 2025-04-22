@@ -807,6 +807,17 @@ Add Deribit-specific usage examples to the guides as you implement.
 - **Name**: Refactor Connection Process for Testability, Modularity, and Robust Lifecycle Management (TDD)
 - **Description**: Refactor `lib/websockex_nova/connection.ex` to improve testability, maintainability, and clarity, while preserving robust, production-grade WebSocket lifecycle management. **This refactor must be performed using Test-Driven Development (TDD): write failing tests for all new modules and refactored logic before implementation, and use tests to drive the design.**
 
+#### **Update: Reconnection Logic Findings**
+
+- The codebase already provides a decoupled, shared reconnection logic layer in `WebsockexNova.Transport.Reconnection` and its strategy modules (`LinearBackoff`, `ExponentialBackoff`, `JitteredBackoff`).
+- Both the main connection process (`WebsockexNova.Connection.State`) and the Gun connection wrapper (`WebsockexNova.Gun.ConnectionState`) are intentionally different and serve different layers, but both can use the shared reconnection strategies directly, without coupling or translation of state structs.
+- **State management is handled by dedicated helpers:** `WebsockexNova.Helpers.StateHelpers` and `WebsockexNova.Gun.Helpers.StateHelpers` provide state mutation and access functions for their respective layers. This separation is intentional and supports modularity, testability, and clear boundaries between connection orchestration and transport details.
+- **Reconnection logic is shared, not duplicated:** Both state helpers should focus on state mutation and access, not on reconnection strategy, which is handled by the shared `WebsockexNova.Transport.Reconnection` module.
+- This approach avoids code duplication, keeps reconnection logic stateless and testable, and allows each process to use only the fields it needs (e.g., `:reconnect_attempts`, config options).
+- **Recommendation:** Future refactors should continue to use this shared module for all backoff/jitter/retry logic, and avoid duplicating reconnection logic or coupling state unnecessarily. If new reconnection strategies are needed, they should be added to the shared module.
+- **Performance & Maintainability:** This design is both performant (no extra process/message overhead, no state translation) and highly maintainable (single source of truth for reconnection logic, easy to test and extend).
+- **Validation:** This finding validates the current architecture and supports the TDD/testability goals of the refactor. No major state unification is needed; focus should remain on modularity, delegation, and leveraging the shared reconnection logic.
+
 #### **TDD Red/Green Cycles for Each Module**
 
 **Order:**
@@ -832,6 +843,10 @@ Add Deribit-specific usage examples to the guides as you implement.
   - Buffers a request and returns updated buffer
   - Flushes buffer and sets timeouts
   - Cancels a timeout and updates state
+
+**Note:**
+StateHelpers modules should focus on state mutation, buffering, and correlation logic only.
+All reconnection/backoff logic should be delegated to the shared `WebsockexNova.Transport.Reconnection` module, not implemented in state helpers.
 
 #### 2. HandlerInvoker
 

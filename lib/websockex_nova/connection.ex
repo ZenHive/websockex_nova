@@ -440,21 +440,63 @@ defmodule WebsockexNova.Connection do
     end
   end
 
-  def handle_info({:subscribe, stream_ref, channel, params, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.subscribe(wrapper_pid, stream_ref, channel, params)
-    send(from, {:reply, reply})
+  def handle_info({:subscribe, channel, params, from}, %{subscription_handler: handler, state: handler_state} = s) do
+    case handler.subscribe(channel, params, handler_state) do
+      {:reply, reply, new_state} ->
+        send(from, {:reply, reply})
+        {:noreply, %{s | state: new_state}}
+
+      {:noreply, new_state} ->
+        {:noreply, %{s | state: new_state}}
+
+      {:error, reason, new_state} ->
+        send(from, {:error, reason})
+        {:noreply, %{s | state: new_state}}
+    end
+  end
+
+  def handle_info({:subscribe, _channel, _params, from}, s) do
+    send(from, {:reply, {:text, ""}})
     {:noreply, s}
   end
 
-  def handle_info({:unsubscribe, stream_ref, channel, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.unsubscribe(wrapper_pid, stream_ref, channel)
-    send(from, {:reply, reply})
+  def handle_info({:unsubscribe, channel, from}, %{subscription_handler: handler, state: handler_state} = s) do
+    case handler.unsubscribe(channel, handler_state) do
+      {:reply, reply, new_state} ->
+        send(from, {:reply, reply})
+        {:noreply, %{s | state: new_state}}
+
+      {:noreply, new_state} ->
+        {:noreply, %{s | state: new_state}}
+
+      {:error, reason, new_state} ->
+        send(from, {:error, reason})
+        {:noreply, %{s | state: new_state}}
+    end
+  end
+
+  def handle_info({:unsubscribe, _channel, from}, s) do
+    send(from, {:reply, {:text, ""}})
     {:noreply, s}
   end
 
-  def handle_info({:authenticate, stream_ref, credentials, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.authenticate(wrapper_pid, stream_ref, credentials)
-    send(from, {:reply, reply})
+  def handle_info({:authenticate, credentials, from}, %{auth_handler: handler, state: handler_state} = s) do
+    case handler.authenticate(credentials, handler_state) do
+      {:reply, reply, new_state} ->
+        send(from, {:reply, reply})
+        {:noreply, %{s | state: new_state}}
+
+      {:noreply, new_state} ->
+        {:noreply, %{s | state: new_state}}
+
+      {:error, reason, new_state} ->
+        send(from, {:error, reason})
+        {:noreply, %{s | state: new_state}}
+    end
+  end
+
+  def handle_info({:authenticate, _credentials, from}, s) do
+    send(from, {:reply, {:text, ""}})
     {:noreply, s}
   end
 
@@ -517,11 +559,6 @@ defmodule WebsockexNova.Connection do
   end
 
   # Auth events: delegate to auth_handler
-  def handle_info({:authenticate, _credentials, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
-  end
-
   def handle_info({:authenticate, credentials, from}, %{auth_handler: handler, state: handler_state} = s) do
     case handler.authenticate(credentials, handler_state) do
       {:reply, reply, new_state} ->
@@ -535,6 +572,11 @@ defmodule WebsockexNova.Connection do
         send(from, {:error, reason})
         {:noreply, %{s | state: new_state}}
     end
+  end
+
+  def handle_info({:authenticate, _credentials, from}, s) do
+    send(from, {:reply, {:text, ""}})
+    {:noreply, s}
   end
 
   # Special case handlers for NoopAdapter tests
@@ -625,7 +667,7 @@ defmodule WebsockexNova.Connection do
     end
   end
 
-  # Incoming WebSocket frame: handle JSON-RPC response correlation (with stream_ref)
+  # Refactored handle_info for JSON-RPC response correlation (with stream_ref)
   def handle_info({:websocket_frame, _stream_ref, {:text, frame_data}}, %{pending_requests: pending, config: config} = s) do
     notification_pid = Map.get(config, :notification_pid)
 
@@ -634,7 +676,7 @@ defmodule WebsockexNova.Connection do
     )
 
     case Jason.decode(frame_data) do
-      {:ok, %{"id" => id} = _resp} ->
+      {:ok, %{"id" => id}} ->
         Logger.debug("[DEBUG] Decoded response with id=#{inspect(id)}. Attempting to pop from pending_requests.")
 
         case Map.pop(pending, id) do
@@ -643,9 +685,7 @@ defmodule WebsockexNova.Connection do
               "[DEBUG] Received JSON-RPC response for id=#{inspect(id)} but no pending request found. new_pending_requests=#{inspect(new_pending)}"
             )
 
-            if notification_pid,
-              do: send(notification_pid, {:notification, {:websockex_nova, {:websocket_frame, {:text, frame_data}}}})
-
+            dispatch_notification(notification_pid, frame_data)
             {:noreply, %{s | pending_requests: new_pending}}
 
           {from, new_pending} ->
@@ -654,8 +694,9 @@ defmodule WebsockexNova.Connection do
             )
 
             Logger.debug("[REPLY DEBUG] Sending {:reply, {:text, frame_data}} to #{inspect(from)}")
-            send(from, {:reply, {:text, frame_data}})
-            {:noreply, %{s | pending_requests: new_pending}}
+            # Use the helper for consistent state update and timer cleanup
+            new_state = handle_json_rpc_response(id, {:text, frame_data}, %{s | pending_requests: pending})
+            {:noreply, new_state}
         end
 
       {:ok, notification} ->
@@ -663,98 +704,29 @@ defmodule WebsockexNova.Connection do
           "[DEBUG] Received notification (no id): #{inspect(notification)}. Sending to notification_pid=#{inspect(notification_pid)}"
         )
 
-        if notification_pid,
-          do: send(notification_pid, {:notification, {:websockex_nova, {:websocket_frame, {:text, frame_data}}}})
-
+        dispatch_notification(notification_pid, frame_data)
         {:noreply, s}
 
       _ ->
         Logger.debug("[DEBUG] Received unhandled websocket_frame: #{inspect(frame_data)}")
-
-        if notification_pid,
-          do: send(notification_pid, {:notification, {:websockex_nova, {:websocket_frame, {:text, frame_data}}}})
-
+        dispatch_notification(notification_pid, frame_data)
         {:noreply, s}
     end
   end
 
-  # Incoming WebSocket frame: delegate to connection_handler
-  def handle_info({:websocket_frame, {frame_type, frame_data}}, %{connection_handler: handler, state: handler_state} = s) do
-    case handler.handle_frame(frame_type, frame_data, handler_state) do
-      {:ok, new_state} ->
-        {:noreply, %{s | state: new_state}}
-
-      {:reply, _reply_type, _reply_data, new_state} ->
-        # Send frame (implement send_frame logic as needed)
-        {:noreply, %{s | state: new_state}}
-
-      {:close, code, reason, new_state} ->
-        {:stop, {:close, code, reason}, %{s | state: new_state}}
-
-      {:reconnect, new_state} ->
-        {:noreply, %{s | state: new_state}}
-
-      {:stop, reason, new_state} ->
-        {:stop, reason, %{s | state: new_state}}
-    end
+  # Refactored Gun WebSocket frame handler
+  def handle_info({:gun_ws, _gun_pid, _stream_ref, frame}, state) do
+    handle_gun_ws_frame(frame, state)
   end
 
-  # Forward connection notifications to notification_pid
-  def handle_info({:websockex_nova, {:connection_up, protocol}}, %{config: config} = state) do
-    if notification_pid = config[:notification_pid] do
-      send(notification_pid, {:websockex_nova, {:connection_open, protocol}})
-    end
-
-    {:noreply, state}
+  # Refactored Gun connection down handler
+  def handle_info({:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams}, state) do
+    handle_gun_down(state, reason, protocol, gun_pid)
   end
 
-  def handle_info({:websockex_nova, {:websocket_upgrade, stream_ref, headers}}, %{config: config} = state) do
-    if notification_pid = config[:notification_pid] do
-      send(notification_pid, {:websockex_nova, {:connection_websocket_upgrade, stream_ref, headers}})
-    end
-
-    {:noreply, state}
-  end
-
-  # Add a clause to unwrap and re-dispatch websocket_frame messages
-  def handle_info({:websockex_nova, {:websocket_frame, stream_ref, frame}}, state) do
-    send(self(), {:websocket_frame, stream_ref, frame})
-    {:noreply, state}
-  end
-
-  def handle_info({:websockex_nova, {:websocket_frame, frame}}, state) do
-    send(self(), {:websocket_frame, frame})
-    {:noreply, state}
-  end
-
-  # Only wrap notification once for direct notification simulation from tests
-  def handle_info({:websocket_frame, {:text, frame_data}}, %{config: config} = s) do
-    notification_pid = Map.get(config, :notification_pid)
-    # Only wrap once, do not double-wrap
-    if notification_pid,
-      do: send(notification_pid, {:notification, {:websockex_nova, {:websocket_frame, {:text, frame_data}}}})
-
-    {:noreply, s}
-  end
-
-  # Echo adapter compatibility: echo text and JSON messages for platform_message
-
-  def handle_info({:platform_message, _stream_ref, message, from}, state) when is_binary(message) do
-    send(from, {:reply, {:text, message}})
-    {:noreply, state}
-  end
-
-  def handle_info({:platform_message, _stream_ref, message, from}, state) when is_map(message) do
-    {:ok, json} = Jason.encode(message)
-    send(from, {:reply, {:text, json}})
-    {:noreply, state}
-  end
-
-  # Fallback: echo any other type as string
-
-  def handle_info({:platform_message, _stream_ref, message, from}, state) do
-    send(from, {:reply, {:text, to_string(message)}})
-    {:noreply, state}
+  # Refactored Gun error handler
+  def handle_info({:gun_error, _gun_pid, _stream_ref, reason}, state) do
+    handle_gun_error(state, reason)
   end
 
   # Gun connection up
@@ -762,24 +734,6 @@ defmodule WebsockexNova.Connection do
     Logger.info("Gun connection up: #{inspect(protocol)}")
     :telemetry.execute(TelemetryEvents.connection_open(), %{protocol: protocol}, %{gun_pid: gun_pid})
     {:noreply, state}
-  end
-
-  # Gun connection down
-  def handle_info({:gun_down, gun_pid, protocol, reason, _killed_streams, _unprocessed_streams}, state) do
-    Logger.warning("Gun connection down: #{inspect(reason)}")
-    :telemetry.execute(TelemetryEvents.connection_close(), %{protocol: protocol, reason: reason}, %{gun_pid: gun_pid})
-    # Cancel all pending request timeouts
-    Enum.each(Map.values(state.pending_timeouts), fn ref -> Process.cancel_timer(ref) end)
-    # Clean up pending_requests and buffer
-    Enum.each(Map.values(state.pending_requests), fn from -> send(from, {:error, :disconnected}) end)
-    state = %{state | pending_requests: %{}, request_buffer: [], last_error: reason, pending_timeouts: %{}}
-    # Schedule reconnection using ConnectionManager
-    reconnect_callback = fn delay, _attempt ->
-      Process.send_after(self(), :reconnect, delay)
-    end
-
-    new_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
-    {:noreply, new_state}
   end
 
   # Gun WebSocket upgrade
@@ -823,42 +777,6 @@ defmodule WebsockexNova.Connection do
     {:stop, :websocket_upgrade_failed, %{state | request_buffer: []}}
   end
 
-  # Gun WebSocket frame
-  def handle_info({:gun_ws, _gun_pid, _stream_ref, frame}, state) do
-    pending = Map.get(state, :pending_requests, %{})
-    timeouts = Map.get(state, :pending_timeouts, %{})
-
-    case frame do
-      {:text, data} ->
-        case Jason.decode(data) do
-          {:ok, %{"id" => id} = _resp} ->
-            {from, new_pending} = Map.pop(pending, id)
-            # Cancel the timeout
-            timer_ref = Map.get(timeouts, id)
-            if timer_ref, do: Process.cancel_timer(timer_ref)
-            new_timeouts = Map.delete(timeouts, id)
-            if from, do: send(from, {:reply, {:text, data}})
-            {:noreply, %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}}
-
-          _ ->
-            {:noreply, state}
-        end
-
-      _ ->
-        {:noreply, state}
-    end
-  end
-
-  # On any Gun or adapter error, fail all pending/buffered requests and clean up timers
-  def handle_info({:gun_error, _gun_pid, _stream_ref, reason}, state) do
-    Logger.error("Gun error: #{inspect(reason)}. Failing all pending and buffered requests.")
-    Enum.each(Map.values(state.pending_timeouts), &Process.cancel_timer/1)
-    Enum.each(Map.values(state.pending_requests), fn from -> send(from, {:error, reason}) end)
-    Enum.each(state.request_buffer, fn {_frame, _id, from} -> send(from, {:error, reason}) end)
-    :telemetry.execute(TelemetryEvents.error_occurred(), %{reason: reason}, %{})
-    {:stop, reason, %{state | pending_requests: %{}, request_buffer: [], pending_timeouts: %{}}}
-  end
-
   # Reconnect event
   def handle_info(:reconnect, state) do
     Logger.info("Attempting reconnection...")
@@ -895,26 +813,6 @@ defmodule WebsockexNova.Connection do
     raise "Unexpected message in WebsockexNova.Connection: #{inspect(msg)}"
   end
 
-  # Handler return value compliance for {:reconnect, new_state} and {:stop, reason, new_state}
-  # defp handle_handler_result({:reconnect, new_state}, state) do
-  #   Logger.info("Handler requested reconnect. Scheduling reconnection.")
-  #   reconnect_callback = fn delay, _attempt -> Process.send_after(self(), :reconnect, delay) end
-  #   new_state = ConnectionManager.schedule_reconnection(new_state, reconnect_callback)
-  #   {:noreply, new_state}
-  # end
-
-  # defp handle_handler_result({:stop, reason, new_state}, _state) do
-  #   {:stop, reason, new_state}
-  # end
-
-  # defp handle_handler_result({:ok, new_state}, _state), do: {:noreply, new_state}
-  # defp handle_handler_result({:reply, _type, _data, new_state}, _state), do: {:noreply, new_state}
-
-  # defp handle_handler_result(other, state) do
-  #   Logger.warning("Unexpected handler result: #{inspect(other)}")
-  #   {:noreply, state}
-  # end
-
   # On terminate, cancel all timers and fail all pending requests
   @impl true
   def terminate(reason, state) do
@@ -923,5 +821,61 @@ defmodule WebsockexNova.Connection do
     Enum.each(Map.values(state.pending_requests || %{}), fn from -> send(from, {:error, :terminated}) end)
     Enum.each(state.request_buffer || [], fn {_frame, _id, from} -> send(from, {:error, :terminated}) end)
     :ok
+  end
+
+  # --- Helper Functions ---
+  defp handle_json_rpc_response(id, from, %{pending_requests: pending, pending_timeouts: timeouts} = state) do
+    {from_pid, new_pending} = Map.pop(pending, id)
+    timer_ref = Map.get(timeouts, id)
+    if timer_ref, do: Process.cancel_timer(timer_ref)
+    new_timeouts = Map.delete(timeouts, id)
+    if from_pid, do: send(from_pid, {:reply, from})
+    %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}
+  end
+
+  defp dispatch_notification(notification_pid, frame_data) when not is_nil(notification_pid) do
+    send(notification_pid, {:notification, {:websockex_nova, {:websocket_frame, {:text, frame_data}}}})
+  end
+
+  defp dispatch_notification(_, _), do: :ok
+
+  defp handle_gun_ws_frame({:text, data}, state) do
+    pending = Map.get(state, :pending_requests, %{})
+    timeouts = Map.get(state, :pending_timeouts, %{})
+
+    case Jason.decode(data) do
+      {:ok, %{"id" => id}} ->
+        {from, new_pending} = Map.pop(pending, id)
+        timer_ref = Map.get(timeouts, id)
+        if timer_ref, do: Process.cancel_timer(timer_ref)
+        new_timeouts = Map.delete(timeouts, id)
+        if from, do: send(from, {:reply, {:text, data}})
+        {:noreply, %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  defp handle_gun_ws_frame(_, state), do: {:noreply, state}
+
+  defp handle_gun_down(state, reason, protocol, gun_pid) do
+    Logger.warning("Gun connection down: #{inspect(reason)}")
+    :telemetry.execute(TelemetryEvents.connection_close(), %{protocol: protocol, reason: reason}, %{gun_pid: gun_pid})
+    Enum.each(Map.values(state.pending_timeouts), &Process.cancel_timer/1)
+    Enum.each(Map.values(state.pending_requests), fn from -> send(from, {:error, :disconnected}) end)
+    state = %{state | pending_requests: %{}, request_buffer: [], last_error: reason, pending_timeouts: %{}}
+    reconnect_callback = fn delay, _attempt -> Process.send_after(self(), :reconnect, delay) end
+    new_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
+    {:noreply, new_state}
+  end
+
+  defp handle_gun_error(state, reason) do
+    Logger.error("Gun error: #{inspect(reason)}. Failing all pending and buffered requests.")
+    Enum.each(Map.values(state.pending_timeouts), &Process.cancel_timer/1)
+    Enum.each(Map.values(state.pending_requests), fn from -> send(from, {:error, reason}) end)
+    Enum.each(state.request_buffer, fn {_frame, _id, from} -> send(from, {:error, reason}) end)
+    :telemetry.execute(TelemetryEvents.error_occurred(), %{reason: reason}, %{})
+    {:stop, reason, %{state | pending_requests: %{}, request_buffer: [], pending_timeouts: %{}}}
   end
 end
