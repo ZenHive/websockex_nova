@@ -272,6 +272,7 @@ defmodule WebsockexNova.Connection do
     Logger.debug("  transport_mod: #{inspect(transport_mod)}")
 
     {:ok, adapter_state} = adapter.init(opts_map)
+    {:ok, connection_handler_state} = connection_handler.connection_init(opts_map)
 
     if Keyword.get(opts, :test_mode, false) do
       config = Map.put(opts_map, :notification_pid, notification_pid)
@@ -284,6 +285,7 @@ defmodule WebsockexNova.Connection do
         ws_stream_ref: nil,
         status: :disconnected,
         connection_handler: connection_handler,
+        connection_handler_state: connection_handler_state,
         message_handler: message_handler,
         subscription_handler: subscription_handler,
         auth_handler: auth_handler,
@@ -315,6 +317,8 @@ defmodule WebsockexNova.Connection do
           }
         end
 
+      supervisor_pid = Keyword.get(opts, :supervisor_pid, nil)
+
       # Start transport (Gun-based by default)
       {:ok, wrapper_pid} =
         transport_mod.open(
@@ -327,11 +331,12 @@ defmodule WebsockexNova.Connection do
             callback_handler: connection_handler,
             message_handler: message_handler,
             error_handler: error_handler
-          }
+          },
+          supervisor_pid
         )
 
       :ok = wait_until_connected(wrapper_pid, 2000)
-      {:ok, stream_ref} = transport_mod.upgrade_to_websocket(wrapper_pid, gun_config.path)
+      {:ok, stream_ref} = transport_mod.upgrade_to_websocket(wrapper_pid, gun_config.path, [])
 
       config = opts_map |> Map.merge(gun_config) |> Map.put(:notification_pid, notification_pid)
       timeout_ms = Keyword.get(opts, :request_timeout, 10_000)
@@ -343,6 +348,7 @@ defmodule WebsockexNova.Connection do
         ws_stream_ref: stream_ref,
         status: :connecting,
         connection_handler: connection_handler,
+        connection_handler_state: connection_handler_state,
         message_handler: message_handler,
         subscription_handler: subscription_handler,
         auth_handler: auth_handler,
@@ -530,71 +536,6 @@ defmodule WebsockexNova.Connection do
   def handle_info({:send_frame, stream_ref, frame}, %{transport_mod: transport_mod, transport_state: transport_state} = s) do
     transport_mod.send_frame(transport_state, stream_ref, frame)
     {:noreply, s}
-  end
-
-  # Subscription events: delegate to subscription_handler
-  def handle_info({:subscribe, channel, params, from}, state) do
-    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :subscribe, [channel, params, state], state)
-
-    case result do
-      {:reply, reply, new_state} ->
-        send(from, {:reply, reply})
-        {:noreply, new_state}
-
-      {:noreply, new_state} ->
-        {:noreply, new_state}
-
-      {:error, reason, new_state} ->
-        send(from, {:error, reason})
-        {:noreply, new_state}
-
-      _ ->
-        send(from, {:reply, {:text, ""}})
-        {:noreply, state}
-    end
-  end
-
-  def handle_info({:unsubscribe, channel, from}, state) do
-    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :unsubscribe, [channel, state], state)
-
-    case result do
-      {:reply, reply, new_state} ->
-        send(from, {:reply, reply})
-        {:noreply, new_state}
-
-      {:noreply, new_state} ->
-        {:noreply, new_state}
-
-      {:error, reason, new_state} ->
-        send(from, {:error, reason})
-        {:noreply, new_state}
-
-      _ ->
-        send(from, {:reply, {:text, ""}})
-        {:noreply, state}
-    end
-  end
-
-  # Auth events: delegate to auth_handler
-  def handle_info({:authenticate, credentials, from}, state) do
-    result = WebsockexNova.HandlerInvoker.invoke(:auth_handler, :authenticate, [credentials, state], state)
-
-    case result do
-      {:reply, reply, new_state} ->
-        send(from, {:reply, reply})
-        {:noreply, new_state}
-
-      {:noreply, new_state} ->
-        {:noreply, new_state}
-
-      {:error, reason, new_state} ->
-        send(from, {:error, reason})
-        {:noreply, new_state}
-
-      _ ->
-        send(from, {:reply, {:text, ""}})
-        {:noreply, state}
-    end
   end
 
   # Special case handlers for NoopAdapter tests

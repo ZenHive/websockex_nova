@@ -197,7 +197,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         assert conn_info.port == port
 
         # Upgrade to WebSocket
-        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path, [])
         Process.sleep(@default_delay * 2)
 
         # Send a text frame
@@ -233,7 +233,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
         # Wait for connection to establish and upgrade to websocket
         Process.sleep(@default_delay)
-        {:ok, _stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+        {:ok, _stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path, [])
         Process.sleep(@default_delay)
 
         # Manually get state to verify test_pid is properly set

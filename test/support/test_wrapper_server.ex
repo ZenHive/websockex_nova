@@ -9,7 +9,7 @@ defmodule WebsockexNova.TestWrapperServer do
   def init(_opts), do: {:ok, %{}}
 
   def handle_call({:send_frame, _stream_ref, _frame}, _from, state) do
-    WebsockexNova.ConnectionWrapperMock.send_frame(self(), :stream_ref, :frame)
+    WebsockexNova.TransportMock.send_frame(self(), :stream_ref, :frame)
     {:reply, :ok, state}
   end
 end

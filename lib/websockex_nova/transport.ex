@@ -12,6 +12,7 @@ defmodule WebsockexNova.Transport do
     * `close/1` — Close the transport connection
     * `process_transport_message/2` — (Optional) Process a transport-specific message (e.g., Gun event)
     * `get_state/1` — (Optional) Retrieve the current transport state (for testability)
+    * `open/4` — Open a new transport connection
   """
 
   @typedoc "Opaque transport state (implementation-defined)"
@@ -51,4 +52,17 @@ defmodule WebsockexNova.Transport do
   (Optional) Retrieve the current transport state (for testability).
   """
   @callback get_state(state) :: any()
+
+  @doc """
+  Open a new transport connection.
+  Returns {:ok, state} or {:error, reason}.
+
+  ## Parameters
+    * host - Hostname or IP address to connect to
+    * port - Port number
+    * options - Transport-specific options (map or keyword)
+    * supervisor - Optional supervisor pid (may be nil)
+  """
+  @callback open(host :: binary, port :: pos_integer, options :: map | keyword, supervisor :: pid | nil) ::
+              {:ok, state} | {:error, term()}
 end

@@ -215,6 +215,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:error, reason}` on failure
   """
   @spec open(binary(), pos_integer(), options(), pid() | nil) :: {:ok, pid()} | {:error, term()}
+  @impl WebsockexNova.Transport
   def open(host, port, options \\ %{}, supervisor \\ nil) do
     GenServer.start_link(__MODULE__, {host, port, options, supervisor})
   end
@@ -231,6 +232,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `:ok`
   """
   @spec close(pid()) :: :ok
+  @impl WebsockexNova.Transport
   def close(pid) do
     GenServer.cast(pid, :close)
   end
@@ -251,7 +253,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   """
   @spec upgrade_to_websocket(pid(), binary(), Keyword.t()) ::
           {:ok, reference()} | {:error, term()}
-  def upgrade_to_websocket(pid, path, headers \\ []) do
+  @impl WebsockexNova.Transport
+  def upgrade_to_websocket(pid, path, headers) do
     GenServer.call(pid, {:upgrade_to_websocket, path, headers})
   end
 

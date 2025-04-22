@@ -121,7 +121,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
         until_connected.(until_connected)
 
         # Upgrade to websocket
-        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path)
+        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path, [])
         {:ok, _} = ConnectionWrapper.wait_for_websocket_upgrade(conn_pid, stream_ref, 1000)
         assert :ok == ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "hello over tls"})
 

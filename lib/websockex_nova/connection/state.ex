@@ -43,6 +43,7 @@ defmodule WebsockexNova.Connection.State do
     :config,
     :transport_mod,
     :transport_state,
+    :connection_handler_state,
     # [frame]
     frame_buffer: [],
     # [{frame, id, from}]

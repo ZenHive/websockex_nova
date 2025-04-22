@@ -21,4 +21,7 @@ defmodule WebsockexNova.MockTransportImpl do
 
   @impl true
   def get_state(state), do: state
+
+  @impl true
+  def open(_host, _port, _options, _supervisor), do: {:ok, :mock_transport_state}
 end

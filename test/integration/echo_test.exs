@@ -30,7 +30,7 @@ defmodule WebsockexNova.Integration.EchoTest do
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout
 
     # Attempt to upgrade to a WebSocket connection
-    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, "/ws")
+    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, "/ws", [])
 
     # Wait for the WebSocket upgrade to complete
     assert_receive {:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, @timeout
@@ -54,7 +54,7 @@ defmodule WebsockexNova.Integration.EchoTest do
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout
 
     # Attempt to upgrade to a WebSocket connection
-    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, "/ws")
+    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, "/ws", [])
 
     # Wait for the WebSocket upgrade to complete
     assert_receive {:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, @timeout

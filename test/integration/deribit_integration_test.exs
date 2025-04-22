@@ -27,7 +27,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
     {:ok, conn_pid} = ConnectionWrapper.open(@host, @port, opts)
     # Wait for connection_up
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout
-    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @ws_path)
+    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @ws_path, [])
     assert_receive {:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, @timeout
     %{conn_pid: conn_pid, stream_ref: stream_ref, client_id: client_id, client_secret: client_secret}
   end

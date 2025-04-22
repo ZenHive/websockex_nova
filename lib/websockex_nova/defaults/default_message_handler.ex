@@ -91,12 +91,6 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   end
 
   @impl true
-  def handle_message({:reply_many, _messages}, state) do
-    # Default: just continue with state
-    {:ok, state}
-  end
-
-  @impl true
   def validate_message(message) when is_map(message) do
     # Already parsed message
     {:ok, message}
