@@ -220,4 +220,55 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
       assert StateHelpers.get_status(%{config: %{}}) == nil
     end
   end
+
+  describe "request buffer and correlation helpers" do
+    setup do
+      state = %{
+        pending_requests: %{1 => :from1, 2 => :from2},
+        request_buffer: [{:frame1, 1, :from1}, {:frame2, 2, :from2}],
+        pending_timeouts: %{1 => :timer1, 2 => :timer2}
+      }
+
+      {:ok, state: state}
+    end
+
+    test "pop_pending_request/2 removes the request and timeout by id", %{state: state} do
+      {from, new_state} = StateHelpers.pop_pending_request(state, 1)
+      assert from == :from1
+      refute Map.has_key?(new_state.pending_requests, 1)
+      refute Map.has_key?(new_state.pending_timeouts, 1)
+      assert Map.has_key?(new_state.pending_requests, 2)
+      assert Map.has_key?(new_state.pending_timeouts, 2)
+    end
+
+    test "buffer_request/4 adds a request to the buffer", %{state: state} do
+      new_state = StateHelpers.buffer_request(state, :frame3, 3, :from3)
+      assert {:frame3, 3, :from3} in new_state.request_buffer
+    end
+
+    test "flush_buffer/2 moves buffered requests to pending and sets timeouts" do
+      state = %{
+        request_buffer: [{:frame1, 1, :from1}, {:frame2, 2, :from2}],
+        pending_requests: %{},
+        pending_timeouts: %{}
+      }
+
+      # Simulate timer refs
+      make_timer = fn id -> {:timer, id} end
+      {new_state, sent} = StateHelpers.flush_buffer(state, make_timer)
+      assert new_state.request_buffer == []
+      assert new_state.pending_requests == %{1 => :from1, 2 => :from2}
+      assert new_state.pending_timeouts == %{1 => {:timer, 1}, 2 => {:timer, 2}}
+      assert sent == [{:frame1, 1, :from1}, {:frame2, 2, :from2}]
+    end
+
+    test "cancel_timeout/2 removes and cancels a timeout by id" do
+      state = %{pending_timeouts: %{1 => :timer1, 2 => :timer2}}
+      cancel = fn ref -> send(self(), {:cancel, ref}) end
+      new_state = StateHelpers.cancel_timeout(state, 1, cancel)
+      refute Map.has_key?(new_state.pending_timeouts, 1)
+      assert Map.has_key?(new_state.pending_timeouts, 2)
+      assert_received {:cancel, :timer1}
+    end
+  end
 end

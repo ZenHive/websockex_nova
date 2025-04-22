@@ -830,7 +830,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 
 ---
 
-#### 1. StateHelpers
+#### 1. StateHelpers [x]
 
 - **Red:** Write failing unit tests for:
   - `pop_pending_request/2` (removes a pending request by id, returns {from, new_pending, new_timeouts})
@@ -853,7 +853,7 @@ All reconnection/backoff logic should be delegated to the shared `WebsockexNova.
 - **Red:** Write failing unit tests for:
   - `invoke/3` (dispatches to the correct handler and returns the result)
   - Handles all handler types (connection, message, subscription, auth, error, etc.)
-- **Green:** Implement minimal dispatcher logic to make tests pass.
+- **Green:** Implement dispatcher logic to make tests pass.
 - **Example Test Cases:**
   - Invokes the correct handler for a message event
   - Handles missing/optional handlers gracefully

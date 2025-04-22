@@ -200,4 +200,77 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def handle_ownership_transfer(_state, _info) do
     raise "handle_ownership_transfer/2 is not implemented. Please implement this function in the appropriate module."
   end
+
+  @doc """
+  Removes a pending request and its timeout by id.
+  Returns {from, new_state} where from is the original from pid (or nil).
+  """
+  @spec pop_pending_request(map(), term()) :: {term() | nil, map()}
+  def pop_pending_request(state, id) do
+    pending = Map.get(state, :pending_requests, %{})
+    timeouts = Map.get(state, :pending_timeouts, %{})
+    {from, new_pending} = Map.pop(pending, id)
+    new_timeouts = Map.delete(timeouts, id)
+
+    new_state =
+      state
+      |> Map.put(:pending_requests, new_pending)
+      |> Map.put(:pending_timeouts, new_timeouts)
+
+    {from, new_state}
+  end
+
+  @doc """
+  Adds a request to the request buffer.
+  Returns the updated state.
+  """
+  @spec buffer_request(map(), term(), term(), term()) :: map()
+  def buffer_request(state, frame, id, from) do
+    buffer = Map.get(state, :request_buffer, [])
+    Map.put(state, :request_buffer, buffer ++ [{frame, id, from}])
+  end
+
+  @doc """
+  Moves all buffered requests to pending_requests and sets timeouts using the provided make_timer fun.
+  Returns {new_state, sent_requests} where sent_requests is the list of flushed requests.
+  """
+  @spec flush_buffer(map(), (term() -> reference())) :: {map(), list()}
+  def flush_buffer(state, make_timer_fun) when is_function(make_timer_fun, 1) do
+    buffer = Map.get(state, :request_buffer, [])
+    pending = Map.get(state, :pending_requests, %{})
+    timeouts = Map.get(state, :pending_timeouts, %{})
+
+    {new_pending, new_timeouts} =
+      Enum.reduce(buffer, {pending, timeouts}, fn {_frame, id, from}, {p_acc, t_acc} ->
+        p_acc = if id, do: Map.put(p_acc, id, from), else: p_acc
+        t_acc = if id, do: Map.put(t_acc, id, make_timer_fun.(id)), else: t_acc
+        {p_acc, t_acc}
+      end)
+
+    new_state =
+      state
+      |> Map.put(:request_buffer, [])
+      |> Map.put(:pending_requests, new_pending)
+      |> Map.put(:pending_timeouts, new_timeouts)
+
+    {new_state, buffer}
+  end
+
+  @doc """
+  Removes and cancels a timeout by id using the provided cancel_fun.
+  Returns the updated state.
+  """
+  @spec cancel_timeout(map(), term(), (reference() -> any())) :: map()
+  def cancel_timeout(state, id, cancel_fun) when is_function(cancel_fun, 1) do
+    timeouts = Map.get(state, :pending_timeouts, %{})
+
+    case Map.pop(timeouts, id) do
+      {nil, new_timeouts} ->
+        Map.put(state, :pending_timeouts, new_timeouts)
+
+      {timer_ref, new_timeouts} ->
+        cancel_fun.(timer_ref)
+        Map.put(state, :pending_timeouts, new_timeouts)
+    end
+  end
 end

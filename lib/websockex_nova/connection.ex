@@ -89,6 +89,7 @@ defmodule WebsockexNova.Connection do
   alias WebsockexNova.Connection.State
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionWrapper
+  alias WebsockexNova.Helpers.StateHelpers
   alias WebsockexNova.Telemetry.TelemetryEvents
 
   require Logger
@@ -381,13 +382,13 @@ defmodule WebsockexNova.Connection do
 
     if is_nil(state.ws_stream_ref) do
       # Buffer the request if the WebSocket is not ready
-      {:reply, :buffered, %{state | request_buffer: state.request_buffer ++ [{frame, id, from}]}}
+      new_state = StateHelpers.buffer_request(state, frame, id, from)
+      {:reply, :buffered, new_state}
     else
       # Send the request immediately if the WebSocket is ready
       ConnectionWrapper.send_frame(state.wrapper_pid, state.ws_stream_ref, frame)
-      # Track the pending request for JSON-RPC correlation
+      # Track the pending request for JSON-RPC correlation and timeout
       new_pending = if id, do: Map.put(state.pending_requests, id, from), else: state.pending_requests
-      # Start a timeout for the request (TODO: configurable timeout duration)
       timer_ref = if id, do: Process.send_after(self(), {:request_timeout, id}, 10_000)
       new_timeouts = if id, do: Map.put(state.pending_timeouts, id, timer_ref), else: state.pending_timeouts
       {:reply, :sent, %{state | pending_requests: new_pending, pending_timeouts: new_timeouts}}
@@ -440,64 +441,67 @@ defmodule WebsockexNova.Connection do
     end
   end
 
-  def handle_info({:subscribe, channel, params, from}, %{subscription_handler: handler, state: handler_state} = s) do
-    case handler.subscribe(channel, params, handler_state) do
+  def handle_info({:subscribe, channel, params, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :subscribe, [channel, params, state], state)
+
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
+
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
     end
   end
 
-  def handle_info({:subscribe, _channel, _params, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
-  end
+  def handle_info({:unsubscribe, channel, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :unsubscribe, [channel, state], state)
 
-  def handle_info({:unsubscribe, channel, from}, %{subscription_handler: handler, state: handler_state} = s) do
-    case handler.unsubscribe(channel, handler_state) do
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
+
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
     end
   end
 
-  def handle_info({:unsubscribe, _channel, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
-  end
+  def handle_info({:authenticate, credentials, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:auth_handler, :authenticate, [credentials, state], state)
 
-  def handle_info({:authenticate, credentials, from}, %{auth_handler: handler, state: handler_state} = s) do
-    case handler.authenticate(credentials, handler_state) do
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
-    end
-  end
+        {:noreply, new_state}
 
-  def handle_info({:authenticate, _credentials, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
+    end
   end
 
   def handle_info({:ping, stream_ref, from}, %{wrapper_pid: wrapper_pid} = s) do
@@ -518,65 +522,68 @@ defmodule WebsockexNova.Connection do
   end
 
   # Subscription events: delegate to subscription_handler
-  def handle_info({:subscribe, _channel, _params, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
-  end
+  def handle_info({:subscribe, channel, params, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :subscribe, [channel, params, state], state)
 
-  def handle_info({:subscribe, channel, params, from}, %{subscription_handler: handler, state: handler_state} = s) do
-    case handler.subscribe(channel, params, handler_state) do
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
+
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
     end
   end
 
-  def handle_info({:unsubscribe, _channel, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
-  end
+  def handle_info({:unsubscribe, channel, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:subscription_handler, :unsubscribe, [channel, state], state)
 
-  def handle_info({:unsubscribe, channel, from}, %{subscription_handler: handler, state: handler_state} = s) do
-    case handler.unsubscribe(channel, handler_state) do
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
+
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
     end
   end
 
   # Auth events: delegate to auth_handler
-  def handle_info({:authenticate, credentials, from}, %{auth_handler: handler, state: handler_state} = s) do
-    case handler.authenticate(credentials, handler_state) do
+  def handle_info({:authenticate, credentials, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:auth_handler, :authenticate, [credentials, state], state)
+
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
-    end
-  end
+        {:noreply, new_state}
 
-  def handle_info({:authenticate, _credentials, from}, s) do
-    send(from, {:reply, {:text, ""}})
-    {:noreply, s}
+      _ ->
+        send(from, {:reply, {:text, ""}})
+        {:noreply, state}
+    end
   end
 
   # Special case handlers for NoopAdapter tests
@@ -591,79 +598,94 @@ defmodule WebsockexNova.Connection do
   end
 
   # Error events: delegate to error_handler
-  def handle_info({:error_event, error, from}, %{error_handler: handler, state: handler_state} = s) do
-    case handler.handle_error(error, %{}, handler_state) do
+  def handle_info({:error_event, error, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:error_handler, :handle_error, [error, %{}, state], state)
+
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:noreply, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:stop, reason, new_state} ->
-        {:stop, reason, %{s | state: new_state}}
+        {:stop, reason, new_state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
   # Message events: delegate to message_handler
-  def handle_info({:message_event, message, from}, %{message_handler: handler, state: handler_state} = s) do
-    case handler.handle_message(message, handler_state) do
+  def handle_info({:message_event, message, from}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:message_handler, :handle_message, [message, state], state)
+
+    case result do
       {:reply, reply, new_state} ->
         send(from, {:reply, reply})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:reply_many, replies, new_state} ->
         Enum.each(replies, fn reply -> send(from, {:reply, reply}) end)
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:ok, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:close, code, reason, new_state} ->
-        {:stop, {:close, code, reason}, %{s | state: new_state}}
+        {:stop, {:close, code, reason}, new_state}
 
       {:error, reason, new_state} ->
         send(from, {:error, reason})
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
   # Connection established: delegate to connection_handler
-  def handle_info({:websocket_connected, conn_info}, %{connection_handler: handler, state: handler_state} = s) do
-    case handler.handle_connect(conn_info, handler_state) do
+  def handle_info({:websocket_connected, conn_info}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:connection_handler, :handle_connect, [conn_info, state], state)
+
+    case result do
       {:ok, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:reply, _frame_type, _data, new_state} ->
-        # Send frame (implement send_frame logic as needed)
-        # For now, just update state
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:close, code, reason, new_state} ->
-        # Close connection logic here
-        {:stop, {:close, code, reason}, %{s | state: new_state}}
+        {:stop, {:close, code, reason}, new_state}
 
       {:reconnect, new_state} ->
-        # Reconnect logic here
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:stop, reason, new_state} ->
-        {:stop, reason, %{s | state: new_state}}
+        {:stop, reason, new_state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
   # Connection disconnected: delegate to connection_handler
-  def handle_info({:websocket_disconnected, reason}, %{connection_handler: handler, state: handler_state} = s) do
-    case handler.handle_disconnect(reason, handler_state) do
+  def handle_info({:websocket_disconnected, reason}, state) do
+    result = WebsockexNova.HandlerInvoker.invoke(:connection_handler, :handle_disconnect, [reason, state], state)
+
+    case result do
       {:ok, new_state} ->
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:reconnect, new_state} ->
-        # Reconnect logic here
-        {:noreply, %{s | state: new_state}}
+        {:noreply, new_state}
 
       {:stop, stop_reason, new_state} ->
-        {:stop, stop_reason, %{s | state: new_state}}
+        {:stop, stop_reason, new_state}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -746,26 +768,11 @@ defmodule WebsockexNova.Connection do
     })
 
     # Flush request buffer
-    {new_pending, new_timeouts} =
-      Enum.reduce(state.request_buffer, {state.pending_requests, state.pending_timeouts}, fn {frame, id, from},
-                                                                                             {pending, timeouts} ->
-        ConnectionWrapper.send_frame(state.wrapper_pid, stream_ref, frame)
-        pending = if id, do: Map.put(pending, id, from), else: pending
+    make_timer = fn id -> Process.send_after(self(), {:request_timeout, id}, 10_000) end
+    {new_state, _sent} = StateHelpers.flush_buffer(state, make_timer)
+    new_state = %{new_state | ws_stream_ref: stream_ref}
 
-        timeouts =
-          if id, do: Map.put(timeouts, id, Process.send_after(self(), {:request_timeout, id}, 10_000)), else: timeouts
-
-        {pending, timeouts}
-      end)
-
-    {:noreply,
-     %{
-       state
-       | ws_stream_ref: stream_ref,
-         request_buffer: [],
-         pending_requests: new_pending,
-         pending_timeouts: new_timeouts
-     }}
+    {:noreply, new_state}
   end
 
   # On WebSocket upgrade failure, fail all buffered requests and transition to safe state
@@ -793,17 +800,9 @@ defmodule WebsockexNova.Connection do
 
   # Handle request timeout for pending JSON-RPC requests
   def handle_info({:request_timeout, id}, state) do
-    pending = Map.get(state, :pending_requests, %{})
-    timeouts = Map.get(state, :pending_timeouts, %{})
-
-    case Map.pop(pending, id) do
-      {nil, new_pending} ->
-        {:noreply, %{state | pending_requests: new_pending, pending_timeouts: Map.delete(timeouts, id)}}
-
-      {from, new_pending} ->
-        send(from, {:error, :timeout})
-        {:noreply, %{state | pending_requests: new_pending, pending_timeouts: Map.delete(timeouts, id)}}
-    end
+    {from, new_state} = StateHelpers.pop_pending_request(state, id)
+    if from, do: send(from, {:error, :timeout})
+    {:noreply, new_state}
   end
 
   # Catch-all for unexpected messages: log and crash (let it crash philosophy)
