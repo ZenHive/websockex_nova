@@ -49,28 +49,6 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   @default_max_delay 30_000
 
   @impl true
-  def error_init(opts \\ %{}) do
-    # Accept reconnection options as a map or keyword list
-    reconnection =
-      case Map.get(opts, :reconnection) do
-        nil -> %{}
-        rc when is_list(rc) -> Map.new(rc)
-        rc when is_map(rc) -> rc
-        _ -> %{}
-      end
-
-    state =
-      opts
-      |> Map.new()
-      |> Map.put(:reconnection, reconnection)
-      |> Map.put_new(:max_reconnect_attempts, @default_max_reconnect_attempts)
-      |> Map.put_new(:base_delay, @default_base_delay)
-      |> Map.put_new(:max_delay, @default_max_delay)
-
-    {:ok, state}
-  end
-
-  @impl true
   def handle_error(error, context, state) do
     # Track the error in the state
     state =

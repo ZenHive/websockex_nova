@@ -657,6 +657,23 @@ Tasks follow this format:
 - **Status**: DONE
   - DummyClient fully removed from codebase and replaced with ConnectionWrapper in supervisor.
 
+### T5.1.1
+
+- **Name**: Remove connection.ex and simplify client interface
+- **Description**: Connection.ex has already been deleted! Now implement a simpler client API that delegates directly to ConnectionWrapper through the Transport behavior, eliminating code duplication and improving testability while maintaining alignment with the architecture.
+- **Acceptance Criteria**:
+  - ✅ connection.ex is completely removed from the codebase
+  - A simplified client API exists that directly uses Transport behavior
+  - All functionality previously in Connection is properly delegated to ConnectionWrapper
+  - No duplication between client API and transport layer
+  - Clean boundaries between transport, adapter, and client interface layers
+  - All tests passing with the new architecture
+  - Documentation updated to reflect the new architecture
+- **Priority**: P0
+- **Effort**: 1.5
+- **Dependencies**: T2.14, T3.4
+- **Status**: IN_PROGRESS
+
 ### T5.2
 
 - **Name**: Comprehensive integration test suite for connection lifecycle

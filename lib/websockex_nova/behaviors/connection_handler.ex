@@ -70,7 +70,6 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
 
   ## Callbacks
 
-  * `connection_init/1` - Initialize the handler's state
   * `handle_connect/2` - Process a successful connection
   * `handle_disconnect/2` - Handle disconnection events
   * `handle_frame/3` - Process received WebSocket frames
@@ -152,7 +151,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
 
   * `{:ok, state}` - The initialized state
   """
-  @callback connection_init(opts :: term()) :: {:ok, state()}
+  @callback init(opts :: term()) :: {:ok, state()}
 
   @doc """
   Handle a successful WebSocket connection.

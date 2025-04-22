@@ -39,13 +39,16 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   @impl true
   @doc """
-  Initializes the connection handler state. Used for compatibility with handler initialization migration.
+  Initializes the handler state.
   """
-  def connection_init(opts) when is_list(opts) do
-    {:ok, Map.new(opts)}
-  end
+  def init(opts) do
+    state =
+      case opts do
+        opts when is_list(opts) -> Map.new(opts)
+        opts when is_map(opts) -> opts
+        _ -> %{}
+      end
 
-  def connection_init(state) when is_map(state) do
     {:ok, state}
   end
 

@@ -1,210 +1,555 @@
 defmodule WebsockexNova.Client do
   @moduledoc """
-  Ergonomic, adapter-agnostic client API for interacting with platform adapter connections in WebsockexNova.
+  Main client API for WebsockexNova WebSocket connections.
 
-  This module is the primary, recommended interface for sending messages, subscribing, authenticating, and more,
-  to any process-based connection (e.g., Echo, Deribit) started via `WebsockexNova.Connection.start_link/1`.
+  This module provides a high-level, user-friendly API for interacting with WebSocket connections
+  using WebsockexNova. It delegates operations to the transport layer and adapter implementations
+  while providing a consistent interface regardless of the underlying transport or adapter.
 
-  - Adapter-agnostic: works with any adapter implementing the platform contract.
-  - Ready for extension: featureful adapters (like Deribit) may support more operations.
-  - See the Echo adapter for a minimal example.
+  ## Usage
 
-  ## Examples
+  ```elixir
+  # Connect to a WebSocket server using an adapter
+  {:ok, conn} = WebsockexNova.Client.connect(MyApp.WebSocket.Adapter, %{
+    host: "example.com",
+    port: 443,
+    path: "/ws",
+    transport_opts: [transport: :tls]
+  })
 
-      iex> {:ok, conn} = WebsockexNova.Connection.start_link(adapter: WebsockexNova.Platform.Echo.Adapter)
-      iex> WebsockexNova.Client.send_text(conn, "Hello")
-      {:text, "Hello"}
+  # Send a JSON message
+  {:ok, response} = WebsockexNova.Client.send_json(conn, %{type: "ping"})
 
-      iex> WebsockexNova.Client.send_json(conn, %{foo: "bar"})
-      {:text, "{\"foo\":\"bar\"}"}
+  # Subscribe to a channel
+  {:ok, subscription} = WebsockexNova.Client.subscribe(conn, "market.updates")
 
-  - `conn` is a `%WebsockexNova.ClientConn{}` struct, ready for use with all client functions.
-  - No manual WebSocket upgrade or struct building required.
+  # Authenticate with credentials
+  {:ok, auth_result} = WebsockexNova.Client.authenticate(conn, %{api_key: "key", secret: "secret"})
 
-  **Advanced users:** If you need full control, use `WebsockexNova.Connection.start_link_raw/1` to get the raw process pid and manage upgrades yourself.
+  # Close the connection
+  :ok = WebsockexNova.Client.close(conn)
+  ```
 
-  See the Echo adapter for a minimal example, and featureful adapters (like Deribit) for advanced usage.
+  ## Adapter Integration
+
+  The client API works with any adapter that implements the required behaviors:
+
+  - `WebsockexNova.Behaviors.ConnectionHandler`
+  - `WebsockexNova.Behaviors.MessageHandler`
+  - `WebsockexNova.Behaviors.SubscriptionHandler`
+  - `WebsockexNova.Behaviors.AuthHandler`
+  - `WebsockexNova.Behaviors.ErrorHandler`
+
+  If an adapter doesn't implement a behavior, the client falls back to using default implementations
+  from the `WebsockexNova.Defaults` namespace.
   """
 
+  alias WebsockexNova.Behaviors.AuthHandler
+  alias WebsockexNova.Behaviors.MessageHandler
+  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Client.Handlers
   alias WebsockexNova.ClientConn
+  alias WebsockexNova.Defaults.DefaultAuthHandler
+  alias WebsockexNova.Defaults.DefaultMessageHandler
+  alias WebsockexNova.Defaults.DefaultSubscriptionHandler
+
+  # Default transport module, can be overridden in tests
+  @default_transport WebsockexNova.Gun.ConnectionWrapper
+  @default_timeout 30_000
+
+  @typedoc "Connection configuration options"
+  @type connect_options :: %{
+          host: String.t(),
+          port: pos_integer(),
+          path: String.t(),
+          headers: Keyword.t() | map(),
+          transport_opts: map() | nil,
+          timeout: pos_integer() | nil
+        }
+
+  @typedoc "Message options"
+  @type message_options :: %{
+          timeout: pos_integer() | nil
+        }
+
+  @typedoc "Subscribe options"
+  @type subscribe_options :: %{
+          timeout: pos_integer() | nil
+        }
+
+  @typedoc "Authentication options"
+  @type auth_options :: %{
+          timeout: pos_integer() | nil
+        }
+
+  @typedoc "Connection response"
+  @type connection_result :: {:ok, ClientConn.t()} | {:error, term()}
+
+  @typedoc "Message response"
+  @type message_result :: {:ok, term()} | {:error, term()}
+
+  @typedoc "Subscription response"
+  @type subscription_result :: {:ok, term()} | {:error, term()}
+
+  @typedoc "Authentication response"
+  @type auth_result :: {:ok, term()} | {:error, term()}
+
+  @typedoc "Status response"
+  @type status_result :: {:ok, atom()} | {:error, term()}
 
   @doc """
-  Sends a text message to the connection and waits for a reply.
+  Connects to a WebSocket server using the specified adapter.
 
-  Returns the reply tuple (e.g., `{:text, reply}`) or `{:error, :timeout}` if no reply is received.
-  """
-  @spec send_text(ClientConn.t(), String.t(), timeout()) :: {:text, String.t()} | {:error, :timeout}
-  def send_text(%ClientConn{pid: pid, stream_ref: stream_ref}, text, timeout \\ 1000)
-      when is_pid(pid) and is_binary(text) do
-    send(pid, {:platform_message, stream_ref, text, self()})
+  This function initializes the adapter, retrieves connection information,
+  establishes a connection using the transport layer, and upgrades to WebSocket.
 
-    receive do
-      {:reply, reply} -> reply
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
+  ## Parameters
 
-  @doc """
-  Sends a JSON-encodable map to the connection and waits for a reply.
-
-  Returns the reply tuple (e.g., `{:text, json}`) or `{:error, :timeout}` if no reply is received.
-  """
-  @spec send_json(ClientConn.t(), map(), timeout()) :: {:text, String.t()} | {:error, :timeout}
-  def send_json(%ClientConn{pid: pid, stream_ref: stream_ref}, map, timeout \\ 1000) when is_pid(pid) and is_map(map) do
-    send(pid, {:platform_message, stream_ref, map, self()})
-    wait_for_reply(timeout)
-  end
-
-  defp wait_for_reply(timeout) do
-    receive do
-      {:reply, reply} -> reply
-      _other -> wait_for_reply(timeout)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Subscribes to a channel/topic via the connection.
-
-  Returns the reply or `{:error, :timeout}`.
-  """
-  @spec subscribe(ClientConn.t(), String.t(), map(), timeout()) :: any()
-  def subscribe(%ClientConn{pid: pid, stream_ref: stream_ref}, channel, params \\ %{}, timeout \\ 1000) do
-    send(pid, {:subscribe, stream_ref, channel, params, self()})
-
-    receive do
-      {:reply, reply} -> normalize_inert(reply)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Unsubscribes from a channel/topic via the connection.
-
-  Returns the reply or `{:error, :timeout}`.
-  """
-  @spec unsubscribe(ClientConn.t(), String.t(), timeout()) :: any()
-  def unsubscribe(%ClientConn{pid: pid, stream_ref: stream_ref}, channel, timeout \\ 1000) do
-    send(pid, {:unsubscribe, stream_ref, channel, self()})
-
-    receive do
-      {:reply, reply} -> normalize_inert(reply)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Sends authentication data to the connection.
-
-  Returns the reply or `{:error, :timeout}`.
-  """
-  @spec authenticate(ClientConn.t(), map(), timeout()) :: any()
-  def authenticate(%ClientConn{pid: pid, stream_ref: stream_ref}, credentials, timeout \\ 1000) do
-    send(pid, {:authenticate, stream_ref, credentials, self()})
-
-    receive do
-      {:reply, reply} -> normalize_inert(reply)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Sends a ping frame to the connection.
-
-  Returns the reply or `{:error, :timeout}`.
-  """
-  @spec ping(ClientConn.t(), timeout()) :: any()
-  def ping(%ClientConn{pid: pid, stream_ref: stream_ref}, timeout \\ 1000) do
-    send(pid, {:ping, stream_ref, self()})
-
-    receive do
-      {:reply, reply} -> normalize_inert(reply)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Requests connection status.
-
-  Returns the status or `{:error, :timeout}`.
-  """
-  @spec status(ClientConn.t(), timeout()) :: any()
-  def status(%ClientConn{pid: pid, stream_ref: stream_ref}, timeout \\ 1000) do
-    send(pid, {:status, stream_ref, self()})
-
-    receive do
-      {:reply, status} -> normalize_inert(status)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Sends a raw message to the connection and waits for a reply.
-
-  Returns the reply or `{:error, :timeout}`.
-  """
-  @spec send_raw(ClientConn.t(), any(), timeout()) :: any()
-  def send_raw(%ClientConn{pid: pid, stream_ref: stream_ref}, message, timeout \\ 1000) do
-    send(pid, {:platform_message, stream_ref, message, self()})
-
-    receive do
-      {:reply, reply} -> normalize_inert(reply)
-    after
-      timeout -> {:error, :timeout}
-    end
-  end
-
-  @doc """
-  Sends a text message to the connection without waiting for a reply (fire-and-forget).
-  """
-  @spec cast_text(ClientConn.t(), String.t()) :: :ok
-  def cast_text(%ClientConn{pid: pid, stream_ref: stream_ref}, text) when is_pid(pid) and is_binary(text) do
-    send(pid, {:platform_message, stream_ref, text, nil})
-    :ok
-  end
-
-  defp normalize_inert({:error, :not_implemented}), do: {:text, ""}
-  defp normalize_inert(other), do: other
-
-  @doc """
-  Waits until the connection is ready for WebSocket upgrade (status == :connected).
-  Blocks until the connection is ready or the timeout is reached.
+  * `adapter` - Module implementing adapter behaviors
+  * `options` - Connection options
 
   ## Options
-    - timeout: maximum time to wait in milliseconds (default: 2000)
-    - interval: polling interval in milliseconds (default: 50)
 
-  Returns :ok if connected, {:error, :timeout} otherwise.
+  * `:host` - Hostname or IP address of the server (required)
+  * `:port` - Port number of the server (required)
+  * `:path` - WebSocket endpoint path (required)
+  * `:headers` - Additional headers for the upgrade request (optional)
+  * `:transport_opts` - Transport-specific options (optional)
+  * `:timeout` - Connection timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, conn}` on success
+  * `{:error, reason}` on failure
   """
-  @spec wait_until_connected(pid(), keyword()) :: :ok | {:error, :timeout}
-  def wait_until_connected(pid, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, 2000)
-    interval = Keyword.get(opts, :interval, 50)
-    start = System.monotonic_time(:millisecond)
-    do_wait_until_connected(pid, start, timeout, interval)
-  end
+  @spec connect(module(), connect_options()) :: connection_result()
+  def connect(adapter, options) when is_atom(adapter) and is_map(options) do
+    with {:ok, adapter_state} <- init_adapter(adapter),
+         {:ok, connection_info} <- get_connection_info(adapter, adapter_state, options),
+         {:ok, transport_opts} <- prepare_transport_options(adapter, connection_info),
+         {:ok, transport_pid} <- open_connection(connection_info, transport_opts),
+         {:ok, stream_ref} <- upgrade_to_websocket(transport_pid, connection_info) do
+      conn = %ClientConn{
+        transport: transport(),
+        transport_pid: transport_pid,
+        stream_ref: stream_ref,
+        adapter: adapter,
+        adapter_state: adapter_state
+      }
 
-  defp do_wait_until_connected(pid, start, timeout, interval) do
-    case :sys.get_state(pid) do
-      %{status: :connected} ->
-        :ok
-
-      _ ->
-        if System.monotonic_time(:millisecond) - start > timeout do
-          {:error, :timeout}
-        else
-          Process.sleep(interval)
-          do_wait_until_connected(pid, start, timeout, interval)
-        end
+      {:ok, conn}
     end
   end
 
-  # This module can be extended with more helpers (subscribe, auth, etc.) as needed.
+  @doc """
+  Sends a raw WebSocket frame.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `frame` - WebSocket frame to send
+
+  ## Returns
+
+  * `:ok` on success
+  * `{:error, reason}` on failure
+  """
+  @spec send_frame(ClientConn.t(), WebsockexNova.Transport.frame()) :: :ok | {:error, term()}
+  def send_frame(%ClientConn{} = conn, frame) do
+    conn.transport.send_frame(conn.transport_pid, conn.stream_ref, frame)
+  end
+
+  @doc """
+  Sends a text message.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `text` - Text message to send
+  * `options` - Message options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, response}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec send_text(ClientConn.t(), String.t(), message_options() | nil) :: message_result()
+  def send_text(%ClientConn{} = conn, text, options \\ nil) when is_binary(text) do
+    message_handler = get_message_handler(conn.adapter)
+
+    with {:ok, encoded} <- message_handler.encode_message(:text, text, conn.adapter_state),
+         :ok <- send_frame(conn, {:text, encoded}) do
+      wait_for_response(conn, options)
+    end
+  end
+
+  @doc """
+  Sends a JSON message.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `data` - Map to encode as JSON and send
+  * `options` - Message options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, response}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec send_json(ClientConn.t(), map(), message_options() | nil) :: message_result()
+  def send_json(%ClientConn{} = conn, data, options \\ nil) when is_map(data) do
+    message_handler = get_message_handler(conn.adapter)
+
+    with {:ok, encoded} <- message_handler.encode_message(:json, data, conn.adapter_state),
+         :ok <- send_frame(conn, {:text, encoded}) do
+      wait_for_response(conn, options)
+    end
+  end
+
+  @doc """
+  Subscribes to a channel or topic.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `channel` - Channel or topic to subscribe to
+  * `options` - Subscription options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, subscription}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec subscribe(ClientConn.t(), String.t(), subscribe_options() | nil) :: subscription_result()
+  def subscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
+    subscription_handler = get_subscription_handler(conn.adapter)
+
+    with {:ok, sub_message, new_state} <- subscription_handler.subscribe(channel, conn.adapter_state, %{}),
+         {:ok, conn} <- update_adapter_state(conn, new_state),
+         :ok <- send_frame(conn, {:text, sub_message}) do
+      wait_for_response(conn, options)
+    end
+  end
+
+  @doc """
+  Unsubscribes from a channel or topic.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `channel` - Channel or topic to unsubscribe from
+  * `options` - Subscription options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, result}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec unsubscribe(ClientConn.t(), String.t(), subscribe_options() | nil) :: subscription_result()
+  def unsubscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
+    subscription_handler = get_subscription_handler(conn.adapter)
+
+    with {:ok, unsub_message, new_state} <- subscription_handler.unsubscribe(channel, conn.adapter_state),
+         {:ok, conn} <- update_adapter_state(conn, new_state),
+         :ok <- send_frame(conn, {:text, unsub_message}) do
+      wait_for_response(conn, options)
+    end
+  end
+
+  @doc """
+  Authenticates with the WebSocket server.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `credentials` - Authentication credentials
+  * `options` - Authentication options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, auth_result}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec authenticate(ClientConn.t(), map(), auth_options() | nil) :: auth_result()
+  def authenticate(%ClientConn{} = conn, credentials, options \\ nil) when is_map(credentials) do
+    auth_handler = get_auth_handler(conn.adapter)
+
+    with {:ok, auth_data, new_state} <-
+           auth_handler.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
+         {:ok, conn} <- update_adapter_state(conn, new_state),
+         :ok <- send_frame(conn, {:text, auth_data}) do
+      wait_for_response(conn, options)
+    end
+  end
+
+  @doc """
+  Sends a ping message to the WebSocket server.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `options` - Message options
+
+  ## Options
+
+  * `:timeout` - Response timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, :pong}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec ping(ClientConn.t(), message_options() | nil) :: {:ok, :pong} | {:error, term()}
+  def ping(%ClientConn{} = conn, options \\ nil) do
+    with :ok <- send_frame(conn, :ping) do
+      timeout = get_timeout(options)
+      # Wait for pong response
+      receive do
+        {:websockex_nova, :pong} -> {:ok, :pong}
+      after
+        timeout -> {:error, :timeout}
+      end
+    end
+  end
+
+  @doc """
+  Gets the current connection status.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `options` - Options
+
+  ## Options
+
+  * `:timeout` - Request timeout in milliseconds (default: 30,000)
+
+  ## Returns
+
+  * `{:ok, status}` on success
+  * `{:error, reason}` on failure
+  """
+  @spec status(ClientConn.t(), map() | nil) :: status_result()
+  def status(%ClientConn{} = conn, _options \\ nil) do
+    GenServer.call(conn.transport_pid, :get_status, get_timeout(nil))
+  end
+
+  @doc """
+  Closes the WebSocket connection.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+
+  ## Returns
+
+  * `:ok`
+  """
+  @spec close(ClientConn.t()) :: :ok
+  def close(%ClientConn{} = conn) do
+    conn.transport.close(conn.transport_pid)
+  end
+
+  @doc """
+  Registers a process to receive notifications from the connection.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `pid` - Process ID to register
+
+  ## Returns
+
+  * `{:ok, ClientConn.t()}` with updated connection
+  """
+  @spec register_callback(ClientConn.t(), pid()) :: {:ok, ClientConn.t()}
+  def register_callback(%ClientConn{} = conn, pid) when is_pid(pid) do
+    if pid in conn.callback_pids do
+      {:ok, conn}
+    else
+      new_conn = %{conn | callback_pids: [pid | conn.callback_pids]}
+
+      # Notify the transport to monitor this process
+      GenServer.cast(conn.transport_pid, {:register_callback, pid})
+
+      {:ok, new_conn}
+    end
+  end
+
+  @doc """
+  Unregisters a process from receiving notifications.
+
+  ## Parameters
+
+  * `conn` - Client connection struct
+  * `pid` - Process ID to unregister
+
+  ## Returns
+
+  * `{:ok, ClientConn.t()}` with updated connection
+  """
+  @spec unregister_callback(ClientConn.t(), pid()) :: {:ok, ClientConn.t()}
+  def unregister_callback(%ClientConn{} = conn, pid) when is_pid(pid) do
+    if pid in conn.callback_pids do
+      new_conn = %{conn | callback_pids: List.delete(conn.callback_pids, pid)}
+
+      # Notify the transport to stop monitoring this process
+      GenServer.cast(conn.transport_pid, {:unregister_callback, pid})
+
+      {:ok, new_conn}
+    else
+      {:ok, conn}
+    end
+  end
+
+  # Private helpers
+
+  # Initialize the adapter
+  defp init_adapter(adapter) do
+    if function_exported?(adapter, :init, 1) do
+      adapter.init([])
+    else
+      {:ok, %{}}
+    end
+  end
+
+  # Get connection information from the adapter or options
+  defp get_connection_info(adapter, adapter_state, options) do
+    if function_exported?(adapter, :connection_info, 1) do
+      case adapter.connection_info(adapter_state) do
+        {:ok, connection_info} ->
+          # Merge connection info from adapter with options, preferring options if both exist
+          {:ok, Map.merge(connection_info, options)}
+
+        other ->
+          other
+      end
+    else
+      # Use options directly if adapter doesn't provide connection_info
+      {:ok, options}
+    end
+  end
+
+  # Prepare transport options with handlers configuration
+  defp prepare_transport_options(adapter, connection_info) do
+    base_opts = Map.get(connection_info, :transport_opts, %{})
+
+    # Configure handlers based on the adapter
+    transport_opts = Handlers.configure_handlers(adapter, base_opts)
+
+    {:ok, transport_opts}
+  end
+
+  # Open a connection using the transport
+  defp open_connection(connection_info, transport_opts) do
+    host = Map.fetch!(connection_info, :host)
+    port = Map.fetch!(connection_info, :port)
+
+    transport().open(host, port, transport_opts)
+  end
+
+  # Upgrade connection to WebSocket
+  defp upgrade_to_websocket(transport_pid, connection_info) do
+    path = Map.fetch!(connection_info, :path)
+    headers = Map.get(connection_info, :headers, [])
+
+    transport().upgrade_to_websocket(transport_pid, path, headers)
+  end
+
+  # Get the message handler module
+  defp get_message_handler(adapter) do
+    if implements?(adapter, MessageHandler) do
+      adapter
+    else
+      DefaultMessageHandler
+    end
+  end
+
+  # Get the subscription handler module
+  defp get_subscription_handler(adapter) do
+    if implements?(adapter, SubscriptionHandler) do
+      adapter
+    else
+      DefaultSubscriptionHandler
+    end
+  end
+
+  # Get the auth handler module
+  defp get_auth_handler(adapter) do
+    if implements?(adapter, AuthHandler) do
+      adapter
+    else
+      DefaultAuthHandler
+    end
+  end
+
+  # Check if a module implements a behavior
+  defp implements?(module, behavior) do
+    :attributes
+    |> module.__info__()
+    |> Keyword.get_values(:behaviour)
+    |> List.flatten()
+    |> Enum.member?(behavior)
+  rescue
+    # Handle case where module doesn't exist or doesn't have __info__
+    _ -> false
+  end
+
+  # Wait for response with timeout
+  defp wait_for_response(_conn, options) do
+    # This is a simplified implementation - in a real implementation, this would
+    # set up proper message matching and response correlation
+    timeout = get_timeout(options)
+
+    receive do
+      {:websockex_nova, :response, response} ->
+        {:ok, response}
+
+      {:websockex_nova, :error, reason} ->
+        {:error, reason}
+    after
+      timeout ->
+        {:error, :timeout}
+    end
+  end
+
+  # Update the adapter state in the connection
+  defp update_adapter_state(conn, new_state) do
+    {:ok, %{conn | adapter_state: new_state}}
+  end
+
+  # Get timeout value from options or use default
+  defp get_timeout(options) do
+    if is_map(options) do
+      Map.get(options, :timeout, @default_timeout)
+    else
+      @default_timeout
+    end
+  end
+
+  # Get the transport module, with support for test overrides
+  defp transport do
+    Application.get_env(:websockex_nova, :transport, @default_transport)
+  end
 end

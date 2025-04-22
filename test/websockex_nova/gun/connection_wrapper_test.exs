@@ -408,7 +408,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
         {:ok, state}
       end
 
-      def connection_init(opts), do: {:ok, opts}
+      def init(opts), do: {:ok, opts}
       def subscription_init(opts), do: {:ok, opts}
       def auth_init(opts), do: {:ok, opts}
     end

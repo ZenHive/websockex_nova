@@ -19,8 +19,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     @moduledoc false
     @behaviour ConnectionHandler
 
-    def connection_init(opts) do
-      Logger.debug("[TestConnectionHandler.connection_init] opts: #{inspect(opts)}")
+    def init(opts) do
+      Logger.debug("[TestConnectionHandler.init] opts: #{inspect(opts)}")
 
       if test_pid = Map.get(opts, :test_pid) do
         send(test_pid, {:handler_init, opts})

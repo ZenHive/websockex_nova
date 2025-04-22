@@ -159,22 +159,6 @@ defmodule WebsockexNova.Behaviors.ErrorHandler do
   @type reconnect_decision :: {boolean(), delay()}
 
   @doc """
-  Initialize the handler's state.
-
-  Called when the error handler is started. The return value becomes the initial state.
-
-  ## Parameters
-
-  * `opts` - The options passed to the handler
-
-  ## Returns
-
-  * `{:ok, state}` - The initialized state
-  * `{:error, reason}` - Initialization failed
-  """
-  @callback error_init(opts :: term()) :: {:ok, state()} | {:error, term()}
-
-  @doc """
   Handle an error and determine the appropriate action.
 
   Called when an error occurs during WebSocket operations.

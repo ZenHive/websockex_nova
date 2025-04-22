@@ -52,19 +52,22 @@ defmodule WebsockexNova.MixProject do
       {:mox, "~> 1.0", only: :test},
       # Security scanning
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
-
+      {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
       # Used for mock WebSocket server in tests
       {:cowboy, "~> 2.10", only: :test},
 
       # WebSock for standardized WebSocket handling
       {:websock, "~> 0.5", only: :test},
       {:websock_adapter, "~> 0.5", only: :test},
+
       # Required for Plug.Cowboy.http/3
       {:plug_cowboy, "~> 2.6", only: :test},
       {:stream_data, "~> 1.0", only: [:test, :dev]},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
+
       # For generating temporary files (certificates) in tests
       {:temp, "~> 0.4", only: :test},
+
       # For generating self-signed certificates in tests
       {:x509, "~> 0.8", only: :test},
       {:certifi, "~> 2.5"},
@@ -96,7 +99,8 @@ defmodule WebsockexNova.MixProject do
         "typecheck",
         "security",
         "coverage"
-      ]
+      ],
+      rebuild: ["deps.clean --all", "clean", "deps.get", "compile", "dialyzer", "credo --strict"]
     ]
   end
 end

@@ -494,7 +494,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
     update_handler_state(state, handler_type, handler_module, handler_state)
   end
 
-  defp handler_init_fun(:connection_handler), do: :connection_init
+  defp handler_init_fun(:connection_handler), do: :init
   defp handler_init_fun(:subscription_handler), do: :subscription_init
   defp handler_init_fun(:auth_handler), do: :auth_init
   defp handler_init_fun(:message_handler), do: :message_handler_init
