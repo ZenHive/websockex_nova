@@ -15,9 +15,18 @@ defmodule WebsockexNova.ClientTest do
     @behaviour WebsockexNova.Transport
 
     @impl true
-    def open(host, port, _opts, _supervisor \\ nil) do
-      send(self(), {:open_connection, host, port})
-      {:ok, self()}
+    def open(host, port, path, opts \\ %{}) do
+      send(self(), {:open_connection, host, port, path, opts})
+
+      {:ok,
+       %WebsockexNova.ClientConn{
+         transport: __MODULE__,
+         transport_pid: self(),
+         stream_ref: make_ref(),
+         adapter: Map.get(opts, :adapter),
+         adapter_state: Map.get(opts, :adapter_state),
+         callback_pids: Enum.filter([Map.get(opts, :callback_pid)], & &1)
+       }}
     end
 
     @impl true
