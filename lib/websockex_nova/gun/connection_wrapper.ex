@@ -1,8 +1,3 @@
-defmodule WebsockexNova.ConnectionWrapperBehaviour do
-  @moduledoc false
-  @callback send_frame(pid(), reference(), term()) :: :ok | {:error, term()}
-end
-
 defmodule WebsockexNova.Gun.ConnectionWrapper do
   @moduledoc """
   A thin adapter over Gun's WebSocket implementation, providing a standardized API.
@@ -135,7 +130,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   ```
   """
 
-  @behaviour WebsockexNova.ConnectionWrapperBehaviour
+  # @behaviour WebsockexNova.ConnectionWrapperBehaviour
+  @behaviour WebsockexNova.Transport
 
   use GenServer
 
@@ -273,7 +269,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `:ok` on success
   * `{:error, reason}` on failure
   """
-  @impl WebsockexNova.ConnectionWrapperBehaviour
+  @impl WebsockexNova.Transport
   @spec send_frame(pid(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
   def send_frame(pid, stream_ref, frame) do
     GenServer.call(pid, {:send_frame, stream_ref, frame})
@@ -291,8 +287,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   * `:ok`
   """
-  @spec process_gun_message(pid(), tuple()) :: :ok
-  def process_gun_message(pid, message) do
+  @impl WebsockexNova.Transport
+  @spec process_transport_message(pid(), tuple()) :: :ok
+  def process_transport_message(pid, message) do
     GenServer.cast(pid, {:process_gun_message, message})
   end
 
@@ -307,6 +304,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   * The current state struct
   """
+  @impl WebsockexNova.Transport
   @spec get_state(pid()) :: ConnectionState.t()
   def get_state(pid) do
     GenServer.call(pid, :get_state)

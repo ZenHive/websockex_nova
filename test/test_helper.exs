@@ -14,7 +14,7 @@ Mox.defmock(WebsockexNova.RateLimitHandlerMock, for: WebsockexNova.Behaviors.Rat
 Mox.defmock(WebsockexNova.LoggingHandlerMock, for: WebsockexNova.Behaviors.LoggingHandler)
 Mox.defmock(WebsockexNova.MetricsCollectorMock, for: WebsockexNova.Behaviors.MetricsCollector)
 Mox.defmock(WebsockexNova.ConnectionManagerMock, for: WebsockexNova.ConnectionManagerBehaviour)
-Mox.defmock(WebsockexNova.ConnectionWrapperMock, for: WebsockexNova.ConnectionWrapperBehaviour)
+Mox.defmock(WebsockexNova.TransportMock, for: WebsockexNova.Transport)
 # Mox.set_mox_global()
 
 # ["#{__DIR__}", "support/**/*.ex"]
