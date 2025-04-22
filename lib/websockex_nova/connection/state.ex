@@ -16,7 +16,9 @@ defmodule WebsockexNova.Connection.State do
     :rate_limit_handler,
     :logging_handler,
     :metrics_collector,
-    :wrapper_pid
+    :wrapper_pid,
+    :transport_mod,
+    :transport_state
   ]
   defstruct [
     :adapter,
@@ -39,6 +41,8 @@ defmodule WebsockexNova.Connection.State do
     :last_error,
     # merged config/options
     :config,
+    :transport_mod,
+    :transport_state,
     # [frame]
     frame_buffer: [],
     # [{frame, id, from}]

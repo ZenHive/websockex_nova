@@ -64,6 +64,8 @@ defmodule WebsockexNova.Connection do
     * :backoff_state - current backoff state
     * :last_error - last error encountered
     * :pending_timeouts - map of id => timer_ref for request timeouts (added for robust cleanup)
+    * :transport_mod - the transport module
+    * :transport_state - the transport state
 
   ## Lifecycle and Event Flow
 
@@ -118,7 +120,9 @@ defmodule WebsockexNova.Connection do
           backoff_state: term(),
           last_error: term(),
           # id => timer_ref for request timeouts
-          pending_timeouts: map()
+          pending_timeouts: map(),
+          transport_mod: module(),
+          transport_state: term()
         }
 
   @doc """
@@ -252,6 +256,10 @@ defmodule WebsockexNova.Connection do
     notification_pid = Keyword.get(opts, :callback_pid)
     callback_pid = self()
 
+    # Transport injection (default to Gun-based transport)
+    transport_mod = Keyword.get(opts, :transport_mod, ConnectionWrapper)
+    transport_state = Keyword.get(opts, :transport_state, nil)
+
     Logger.debug("Handler injection at runtime:")
     Logger.debug("  connection_handler: #{inspect(connection_handler)}")
     Logger.debug("  message_handler: #{inspect(message_handler)}")
@@ -261,11 +269,11 @@ defmodule WebsockexNova.Connection do
     Logger.debug("  rate_limit_handler: #{inspect(rate_limit_handler)}")
     Logger.debug("  logging_handler: #{inspect(logging_handler)}")
     Logger.debug("  metrics_collector: #{inspect(metrics_collector)}")
+    Logger.debug("  transport_mod: #{inspect(transport_mod)}")
 
     {:ok, adapter_state} = adapter.init(opts_map)
 
     if Keyword.get(opts, :test_mode, false) do
-      # Test mode: do not connect, just build state with nil wrapper_pid and ws_stream_ref
       config = Map.put(opts_map, :notification_pid, notification_pid)
       timeout_ms = Keyword.get(opts, :request_timeout, 10_000)
 
@@ -287,13 +295,13 @@ defmodule WebsockexNova.Connection do
         backoff_state: nil,
         last_error: nil,
         config: Map.put(config, :request_timeout, timeout_ms),
-        pending_timeouts: %{}
+        pending_timeouts: %{},
+        transport_mod: transport_mod,
+        transport_state: transport_state
       }
 
       {:ok, state}
     else
-      # Normal connection flow
-      # Extract Gun connection config from adapter_state or adapter
       gun_config =
         if function_exported?(adapter, :gun_config, 1) do
           adapter.gun_config(adapter_state)
@@ -307,15 +315,14 @@ defmodule WebsockexNova.Connection do
           }
         end
 
-      # Start Gun connection using ConnectionWrapper, ensuring callback_pid is set to self()
+      # Start transport (Gun-based by default)
       {:ok, wrapper_pid} =
-        ConnectionWrapper.open(
+        transport_mod.open(
           to_string(gun_config.host),
           gun_config.port,
           %{
             transport: gun_config.transport,
             ws_opts: gun_config.ws_opts,
-            # always self()
             callback_pid: callback_pid,
             callback_handler: connection_handler,
             message_handler: message_handler,
@@ -323,13 +330,10 @@ defmodule WebsockexNova.Connection do
           }
         )
 
-      # Wait until connected before upgrading
       :ok = wait_until_connected(wrapper_pid, 2000)
-      {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(wrapper_pid, gun_config.path)
+      {:ok, stream_ref} = transport_mod.upgrade_to_websocket(wrapper_pid, gun_config.path)
 
-      # Store notification_pid in config for later use
       config = opts_map |> Map.merge(gun_config) |> Map.put(:notification_pid, notification_pid)
-
       timeout_ms = Keyword.get(opts, :request_timeout, 10_000)
 
       state = %State{
@@ -350,7 +354,9 @@ defmodule WebsockexNova.Connection do
         backoff_state: nil,
         last_error: nil,
         config: Map.put(config, :request_timeout, timeout_ms),
-        pending_timeouts: %{}
+        pending_timeouts: %{},
+        transport_mod: transport_mod,
+        transport_state: wrapper_pid
       }
 
       {:ok, state}
@@ -366,8 +372,12 @@ defmodule WebsockexNova.Connection do
   end
 
   @impl true
-  def handle_call({:upgrade_to_websocket, path, headers}, _from, %{wrapper_pid: wrapper_pid} = s) do
-    case ConnectionWrapper.upgrade_to_websocket(wrapper_pid, path, headers) do
+  def handle_call(
+        {:upgrade_to_websocket, path, headers},
+        _from,
+        %{transport_mod: transport_mod, transport_state: transport_state} = s
+      ) do
+    case transport_mod.upgrade_to_websocket(transport_state, path, headers) do
       {:ok, stream_ref} ->
         {:reply, {:ok, stream_ref}, %{s | ws_stream_ref: stream_ref}}
 
@@ -377,17 +387,18 @@ defmodule WebsockexNova.Connection do
   end
 
   # Buffer outgoing requests if not ready
-  def handle_call({:send_request, frame, id, from}, _from, state) do
+  def handle_call(
+        {:send_request, frame, id, from},
+        _from,
+        %{transport_mod: transport_mod, transport_state: transport_state} = state
+      ) do
     state = Map.put_new(state, :pending_timeouts, %{})
 
     if is_nil(state.ws_stream_ref) do
-      # Buffer the request if the WebSocket is not ready
       new_state = StateHelpers.buffer_request(state, frame, id, from)
       {:reply, :buffered, new_state}
     else
-      # Send the request immediately if the WebSocket is ready
-      ConnectionWrapper.send_frame(state.wrapper_pid, state.ws_stream_ref, frame)
-      # Track the pending request for JSON-RPC correlation and timeout
+      transport_mod.send_frame(transport_state, state.ws_stream_ref, frame)
       new_pending = if id, do: Map.put(state.pending_requests, id, from), else: state.pending_requests
       timer_ref = if id, do: Process.send_after(self(), {:request_timeout, id}, 10_000)
       new_timeouts = if id, do: Map.put(state.pending_timeouts, id, timer_ref), else: state.pending_timeouts
@@ -398,7 +409,7 @@ defmodule WebsockexNova.Connection do
   @impl true
   def handle_info(
         {:platform_message, stream_ref, message, from},
-        %{wrapper_pid: wrapper_pid, pending_requests: pending} = state
+        %{transport_mod: transport_mod, transport_state: transport_state, pending_requests: pending} = state
       )
       when is_map(message) do
     Logger.debug(
@@ -410,7 +421,7 @@ defmodule WebsockexNova.Connection do
     if id do
       Logger.debug("[DEBUG] JSON-RPC correlation: id=#{inspect(id)} (from=#{inspect(from)})")
       {:ok, json} = Jason.encode(message)
-      :ok = ConnectionWrapper.send_frame(wrapper_pid, stream_ref, {:text, json})
+      :ok = transport_mod.send_frame(transport_state, stream_ref, {:text, json})
       new_pending = Map.put(pending || %{}, id, from)
 
       Logger.debug(
@@ -504,20 +515,20 @@ defmodule WebsockexNova.Connection do
     end
   end
 
-  def handle_info({:ping, stream_ref, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.ping(wrapper_pid, stream_ref)
+  def handle_info({:ping, stream_ref, from}, %{transport_mod: transport_mod, transport_state: transport_state} = s) do
+    reply = transport_mod.send_frame(transport_state, stream_ref, :ping)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:status, stream_ref, from}, %{wrapper_pid: wrapper_pid} = s) do
-    reply = ConnectionWrapper.status(wrapper_pid, stream_ref)
+  def handle_info({:status, stream_ref, from}, %{transport_mod: transport_mod, transport_state: transport_state} = s) do
+    reply = transport_mod.send_frame(transport_state, stream_ref, :status)
     send(from, {:reply, reply})
     {:noreply, s}
   end
 
-  def handle_info({:send_frame, stream_ref, frame}, %{wrapper_pid: wrapper_pid} = s) do
-    ConnectionWrapper.send_frame(wrapper_pid, stream_ref, frame)
+  def handle_info({:send_frame, stream_ref, frame}, %{transport_mod: transport_mod, transport_state: transport_state} = s) do
+    transport_mod.send_frame(transport_state, stream_ref, frame)
     {:noreply, s}
   end
 

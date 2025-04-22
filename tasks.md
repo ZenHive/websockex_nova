@@ -848,7 +848,7 @@ Add Deribit-specific usage examples to the guides as you implement.
 StateHelpers modules should focus on state mutation, buffering, and correlation logic only.
 All reconnection/backoff logic should be delegated to the shared `WebsockexNova.Transport.Reconnection` module, not implemented in state helpers.
 
-#### 2. HandlerInvoker
+#### 2. HandlerInvoker [x]
 
 - **Red:** Write failing unit tests for:
   - `invoke/3` (dispatches to the correct handler and returns the result)
