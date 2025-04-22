@@ -26,11 +26,16 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   ## Configuration
 
-  The default handler supports the following configuration in the state:
+  The default handler supports configuration via the `:reconnection` key in the state (preferred),
+  or legacy keys for backward compatibility:
 
-  * `:max_reconnect_attempts` - Maximum number of reconnection attempts (default: 5)
-  * `:base_delay` - Base delay in milliseconds for reconnect backoff (default: 1000)
-  * `:max_delay` - Maximum delay in milliseconds for reconnect backoff (default: 30000)
+  * `:reconnection` - map or keyword list with keys:
+      * `:max_attempts` or `:max_reconnect_attempts` (default: 5)
+      * `:base_delay` or `:initial_delay` (default: 1000)
+      * `:max_delay` (default: 30000)
+      * `:strategy` (currently only exponential supported)
+  * Legacy keys (for backward compatibility):
+      * `:max_reconnect_attempts`, `:base_delay`, `:max_delay`
   """
 
   @behaviour WebsockexNova.Behaviors.ErrorHandler
@@ -45,9 +50,19 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   @impl true
   def error_init(opts \\ %{}) do
+    # Accept reconnection options as a map or keyword list
+    reconnection =
+      case Map.get(opts, :reconnection) do
+        nil -> %{}
+        rc when is_list(rc) -> Map.new(rc)
+        rc when is_map(rc) -> rc
+        _ -> %{}
+      end
+
     state =
       opts
       |> Map.new()
+      |> Map.put(:reconnection, reconnection)
       |> Map.put_new(:max_reconnect_attempts, @default_max_reconnect_attempts)
       |> Map.put_new(:base_delay, @default_base_delay)
       |> Map.put_new(:max_delay, @default_max_delay)
@@ -75,15 +90,10 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
       :transient ->
         # For transient errors, calculate retry delay
         attempt = Map.get(context, :attempt, 1)
-        max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+        {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
 
         if attempt <= max_attempts do
-          base_delay = Map.get(state, :base_delay, @default_base_delay)
-          max_delay = Map.get(state, :max_delay, @default_max_delay)
-
-          # Exponential backoff with jitter
           delay = calculate_backoff_delay(attempt, base_delay, max_delay)
-
           {:retry, delay, state}
         else
           {:stop, :max_retry_attempts_reached, state}
@@ -93,12 +103,9 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   @impl true
   def should_reconnect?(error, attempt, state) do
-    max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+    {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
 
     if attempt <= max_attempts && reconnectable_error?(error) do
-      base_delay = Map.get(state, :base_delay, @default_base_delay)
-      max_delay = Map.get(state, :max_delay, @default_max_delay)
-
       delay = calculate_backoff_delay(attempt, base_delay, max_delay)
       {true, delay}
     else
@@ -153,5 +160,35 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     # Add jitter by taking a random value between 0.8*delay and delay
     jitter_min = raw_delay * 0.8
     trunc(jitter_min + :rand.uniform() * (raw_delay - jitter_min))
+  end
+
+  # Extract reconnection options from state (prefer :reconnection map, fallback to legacy keys)
+  defp extract_reconnection_opts(state) do
+    rc =
+      case Map.get(state, :reconnection) do
+        nil -> %{}
+        rc when is_list(rc) -> Map.new(rc)
+        rc when is_map(rc) -> rc
+        _ -> %{}
+      end
+
+    max_attempts =
+      Map.get(rc, :max_attempts) ||
+        Map.get(rc, :max_reconnect_attempts) ||
+        Map.get(state, :max_reconnect_attempts) ||
+        @default_max_reconnect_attempts
+
+    base_delay =
+      Map.get(rc, :base_delay) ||
+        Map.get(rc, :initial_delay) ||
+        Map.get(state, :base_delay) ||
+        @default_base_delay
+
+    max_delay =
+      Map.get(rc, :max_delay) ||
+        Map.get(state, :max_delay) ||
+        @default_max_delay
+
+    {max_attempts, base_delay, max_delay}
   end
 end
