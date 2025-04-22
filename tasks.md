@@ -361,6 +361,36 @@ Tasks follow this format:
 - **Status**: DONE
 - **Code Review Rating** Rating: 4.5/5, The only significant missing item appears to be the telemetry integration, which was listed in the acceptance criteria. Otherwise, the refactoring has been completed according to the plan, with all other criteria met.
 
+### T2.X
+
+- **Name**: Support multiple callback PIDs in connection state and message routing
+- **Description**: Refactor the connection state and message routing logic to support notifying multiple callback PIDs (not just a single callback_pid). This will allow multiple processes (e.g., test processes, LiveView, background jobs) to receive connection events and frames. Update the state struct, registration/unregistration logic, and the notify/2 function to handle a list of callback PIDs. Update all usages accordingly.
+- **Acceptance Criteria**:
+  - Connection state struct supports a list of callback PIDs (e.g., callback_pids: [pid()])
+  - Functions to register/unregister callback PIDs are implemented and tested
+  - notify/2 sends messages to all registered callback PIDs
+  - All message routing (frames, errors, upgrades, etc.) uses the new logic
+  - All tests pass and multiple processes can receive notifications
+- **Priority**: P1
+- **Effort**: 2
+- **Dependencies**: T2.4
+- **Status**: TODO
+
+### T2.Y
+
+- **Name**: Update Client Response Matching and Filtering
+- **Description**: Refactor the client's `wait_for_response/2` to robustly match only relevant user responses, filtering out non-user messages (such as server banners). Optionally, allow a custom matcher/filter function to be passed in for advanced use cases. Update documentation and add tests for these scenarios.
+- **Acceptance Criteria**:
+  - `wait_for_response/2` matches the message format sent by the connection process (e.g., `{:websockex_nova, {:websocket_frame, stream_ref, {:text, response}}}`)
+  - Non-user messages (e.g., server banners) are filtered out
+  - Optionally, a custom matcher/filter can be provided
+  - Documentation and usage examples are updated
+  - Tests cover all scenarios
+- **Priority**: P1
+- **Effort**: 1
+- **Dependencies**: T2.4
+- **Status**: TODO
+
 ## Phase 3: Reconnection & Integration
 
 ### T3.1

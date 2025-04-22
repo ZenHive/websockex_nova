@@ -525,12 +525,17 @@ defmodule WebsockexNova.Client do
   end
 
   # Wait for response with timeout
-  defp wait_for_response(_conn, options) do
+  defp wait_for_response(conn, options) do
     # This is a simplified implementation - in a real implementation, this would
     # set up proper message matching and response correlation
     timeout = get_timeout(options)
+    stream_ref = conn.stream_ref
 
     receive do
+      {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}} ->
+        {:ok, response}
+
+      # fallback for test mocks
       {:websockex_nova, :response, response} ->
         {:ok, response}
 

@@ -95,9 +95,6 @@ defmodule WebsockexNova.Examples.EchoAdapter do
     # Store the message and forward to the client
     new_state = %{state | messages: [data | state.messages]}
 
-    # The echo server just sends messages back, so we'll pass them through
-    send(self(), {:websockex_nova, :response, data})
-
     {:ok, new_state}
   end
 
