@@ -45,6 +45,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @doc """
   Returns connection information for the echo.websocket.org WebSocket server.
   """
+  @impl ConnectionHandler
   def connection_info(_opts) do
     {:ok,
      %{

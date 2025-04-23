@@ -51,4 +51,38 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
       end
     end
   end
+
+  describe "DeribitAdapter.needs_reauthentication?/1" do
+    alias WebsockexNova.Examples.DeribitAdapter
+
+    test "returns true if access_token is nil" do
+      state = %{access_token: nil, expires_in: 3600}
+      assert DeribitAdapter.needs_reauthentication?(state)
+    end
+
+    test "returns true if expires_in is nil" do
+      state = %{access_token: "token", expires_in: nil}
+      assert DeribitAdapter.needs_reauthentication?(state)
+    end
+
+    test "returns true if authenticated is false or failed" do
+      state = %{access_token: "token", expires_in: 3600, authenticated: false}
+      assert DeribitAdapter.needs_reauthentication?(state)
+
+      state = %{access_token: "token", expires_in: 3600, authenticated: :failed}
+      assert DeribitAdapter.needs_reauthentication?(state)
+    end
+
+    test "returns true if token is expired (using access_token_obtained_at and expires_in)" do
+      now = System.system_time(:second)
+      state = %{access_token: "token", expires_in: 10, access_token_obtained_at: now - 100}
+      assert DeribitAdapter.needs_reauthentication?(state)
+    end
+
+    test "returns false if token is valid and not expiring soon" do
+      now = System.system_time(:second)
+      state = %{access_token: "token", expires_in: 3600, access_token_obtained_at: now}
+      refute DeribitAdapter.needs_reauthentication?(state)
+    end
+  end
 end
