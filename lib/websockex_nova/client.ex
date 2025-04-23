@@ -346,9 +346,12 @@ defmodule WebsockexNova.Client do
          {:ok, conn} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn, {:text, auth_data}),
          {:ok, response} <- wait_for_response(conn, options) do
-      case auth_handler.handle_auth_response(response, conn.adapter_state) do
+      # Parse the response as JSON if it's a binary
+      parsed_response = parse_auth_response(response)
+
+      case auth_handler.handle_auth_response(parsed_response, conn.adapter_state) do
         {:ok, updated_state} ->
-          {:ok, response, updated_state}
+          {:ok, parsed_response, updated_state}
 
         {:error, reason, updated_state} ->
           {:error, reason, updated_state}
@@ -361,6 +364,17 @@ defmodule WebsockexNova.Client do
       end
     end
   end
+
+  # Helper to parse a binary response as JSON, or pass through a map directly
+  defp parse_auth_response(response) when is_binary(response) do
+    case Jason.decode(response) do
+      {:ok, decoded} -> decoded
+      {:error, _} -> %{"error" => "invalid_json", "original" => response}
+    end
+  end
+
+  defp parse_auth_response(response) when is_map(response), do: response
+  defp parse_auth_response(response), do: %{"error" => "invalid_response", "original" => response}
 
   @doc """
   Sends a ping message to the WebSocket server.

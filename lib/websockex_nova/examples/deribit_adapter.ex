@@ -92,7 +92,7 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   @impl MessageHandler
   def handle_message(message, state) do
     Logger.debug("[DeribitAdapter] handle_message: #{inspect(message)}")
-    {:ok, message, state}
+    {:ok, Map.put(state, :last_message, message)}
   end
 
   @impl MessageHandler
@@ -156,33 +156,6 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   end
 
   @impl AuthHandler
-  def handle_auth_response(response, state) do
-    case Jason.decode(response) do
-      {:ok, %{"result" => %{"access_token" => token, "expires_in" => expires_in}}} ->
-        auth_expires_at = System.system_time(:second) + expires_in
-
-        state =
-          state
-          |> Map.put(:auth_status, :authenticated)
-          |> Map.put(:auth_expires_at, auth_expires_at)
-          |> put_in([:credentials, :token], token)
-
-        {:ok, state}
-
-      {:ok, %{"error" => error}} ->
-        state =
-          state
-          |> Map.put(:auth_status, :failed)
-          |> Map.put(:auth_error, error)
-
-        {:error, error, state}
-
-      _ ->
-        {:error, :invalid_auth_response, state}
-    end
-  end
-
-  @impl AuthHandler
   def authenticate(_stream_ref, _credentials, state) do
     # The client will use generate_auth_data/1 and handle_auth_response/2
     {:ok, state}
@@ -191,5 +164,36 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   @impl AuthHandler
   def needs_reauthentication?(state) do
     DefaultAuthHandler.needs_reauthentication?(state)
+  end
+
+  # This new implementation matches the behavior callback signature
+  # and handles both map and binary inputs
+  @impl AuthHandler
+  def handle_auth_response(%{"result" => %{"access_token" => token, "expires_in" => expires_in}} = _response, state) do
+    auth_expires_at = System.system_time(:second) + expires_in
+
+    state =
+      state
+      |> Map.put(:auth_status, :authenticated)
+      |> Map.put(:auth_expires_at, auth_expires_at)
+      |> put_in([:credentials, :token], token)
+
+    {:ok, state}
+  end
+
+  @impl AuthHandler
+  def handle_auth_response(%{"error" => error} = _response, state) do
+    state =
+      state
+      |> Map.put(:auth_status, :failed)
+      |> Map.put(:auth_error, error)
+
+    {:error, error, state}
+  end
+
+  # Fallback clause for any other map response format
+  @impl AuthHandler
+  def handle_auth_response(_response, state) do
+    {:error, :invalid_auth_response, state}
   end
 end

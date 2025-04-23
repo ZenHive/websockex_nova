@@ -23,9 +23,6 @@ defmodule WebsockexNova.Examples.DeribitClient do
     case DeribitAdapter.connection_info(%{}) do
       {:ok, connection_info} ->
         Client.connect(DeribitAdapter, connection_info)
-
-      other ->
-        {:error, {:unexpected_connection_info, other}}
     end
   end
 

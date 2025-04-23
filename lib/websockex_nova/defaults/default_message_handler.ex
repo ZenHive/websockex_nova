@@ -79,8 +79,23 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   # Fallback for any non-map messages
   @impl true
+  def handle_message(message, state) when is_binary(message) and is_map(state) do
+    # Store the raw binary in the state directly rather than trying to convert
+    # This helps preserve binary data that isn't meant to be parsed
+    processed_count = Map.get(state, :processed_count, 0)
+
+    updated_state =
+      state
+      |> Map.put(:processed_count, processed_count + 1)
+      |> Map.put(:last_binary_message, message)
+
+    {:ok, updated_state}
+  end
+
+  # Original fallback for any other non-map messages
+  @impl true
   def handle_message(message, state) when is_map(state) do
-    # Convert binary to map for consistent handling
+    # Convert to map for consistent handling
     {:ok, processed_message} = validate_message(message)
     handle_message(processed_message, state)
   end
@@ -93,26 +108,33 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   @impl true
   def validate_message(message) when is_binary(message) do
-    if String.valid?(message) && String.starts_with?(message, "{") do
-      # Attempt to parse as JSON
-      case Jason.decode(message) do
-        {:ok, decoded} ->
-          {:ok, decoded}
+    # Try to determine if this is JSON or binary data
+    cond do
+      # If it's clearly a JSON string (starts with { or [), try to parse it
+      String.valid?(message) && (String.starts_with?(message, "{") || String.starts_with?(message, "[")) ->
+        case Jason.decode(message) do
+          {:ok, decoded} ->
+            {:ok, decoded}
 
-        {:error, _} ->
-          # Cannot parse as JSON, convert to map with content field
-          {:ok, %{"content" => message, "type" => "binary_data"}}
-      end
-    else
-      # Binary data, convert to a map with content field
-      {:ok, %{"content" => message, "type" => "binary_data"}}
+          {:error, _} ->
+            # Failed to parse as JSON, treat as a raw binary
+            {:ok, message}
+        end
+
+      # If it's valid text but not JSON, keep as binary but mark it as text
+      String.valid?(message) ->
+        {:ok, message}
+
+      # Otherwise it's non-text binary data, preserve as is
+      true ->
+        {:ok, message}
     end
   end
 
   @impl true
   def validate_message(message) do
-    # Any other format, convert to a map with content field
-    {:ok, %{"content" => inspect(message), "type" => "unknown_data"}}
+    # Any other format, stringify for consistency
+    {:ok, inspect(message)}
   end
 
   @impl true
@@ -159,6 +181,13 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     # For backward compatibility, handle a raw binary as a message
     # But convert it to a map first for consistency
     encode_message(%{"content" => message, "type" => "raw_data"}, state)
+  end
+
+  @impl true
+  def encode_message({frame_type, binary_data}, state)
+      when is_binary(binary_data) and frame_type in [:text, :binary] and is_map(state) do
+    # Direct pass-through for pre-formatted binary data with specified frame type
+    {:ok, frame_type, binary_data}
   end
 
   @impl true

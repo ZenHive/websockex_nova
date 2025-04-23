@@ -9,6 +9,15 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   - Processing authentication responses from the server
   - Determining when reauthentication is needed
 
+  ## Binary Data Support
+
+  WebsockexNova supports both structured map data and raw binary data for authentication:
+
+  - `generate_auth_data/1` can return either a map or binary data
+  - This flexibility allows implementing various authentication protocols
+  - Binary authentication data is useful for token-based or custom binary protocols
+  - Map-based authentication is convenient for JSON or structured payloads
+
   ## Architecture
 
   WebsockexNova uses a thin adapter architecture for authentication, allowing applications
@@ -98,7 +107,7 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   @type state :: map()
 
   @typedoc "Authentication payload to send to the server"
-  @type auth_data :: map()
+  @type auth_data :: map() | binary()
 
   @typedoc "Authentication response from the server"
   @type auth_response :: map()
@@ -116,7 +125,7 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   ## Returns
 
   - `{:ok, auth_data, state}`: Authentication data generated successfully
-    - `auth_data`: A map containing authentication payload to send to the server
+    - `auth_data`: A map or binary containing authentication payload to send to the server
     - `state`: Potentially updated state after generating authentication data
   - `{:error, reason, state}`: Failed to generate authentication data
     - `reason`: Atom or string describing the error

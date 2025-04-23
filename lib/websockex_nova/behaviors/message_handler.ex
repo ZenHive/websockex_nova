@@ -6,6 +6,19 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   allowing client applications to customize message processing while maintaining a
   clean separation from transport concerns.
 
+  ## Binary Data Support
+
+  WebsockexNova supports both structured map data and raw binary data throughout
+  the message handling pipeline:
+
+  - `handle_message/2` can receive and process both maps and binary data
+  - `encode_message/2` can return either maps or binary payloads
+  - Binary data is preserved in its original form when appropriate
+  - Implementations can choose how to handle different data formats
+
+  This flexibility allows WebsockexNova to work with any WebSocket protocol,
+  whether it uses structured data like JSON or raw binary formats.
+
   ## Thin Adapter Pattern
 
   As part of the thin adapter architecture:
@@ -100,7 +113,7 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   @type message :: map() | binary()
 
   @typedoc "Message type"
-  @type message_type :: atom() | String.t() | {atom(), term()}
+  @type message_type :: atom() | String.t() | {atom(), term()} | binary()
 
   @typedoc "Frame type"
   @type frame_type :: :text | :binary | :ping | :pong | :close
@@ -135,7 +148,13 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   Return values for message encoding
 
   * `{:ok, frame_type, data}` - Successfully encoded message
+    * `frame_type` - The WebSocket frame type (:text, :binary, etc.)
+    * `data` - The encoded message data as binary
   * `{:error, reason}` - Failed to encode message
+
+  Note: When returning binary data, you may use either:
+  * `{:ok, :binary, my_binary_data}` for explicit binary frames
+  * `{:ok, :text, my_text_data}` for text frames
   """
   @type encode_return ::
           {:ok, frame_type(), binary()}
@@ -221,7 +240,13 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   ## Returns
 
   * `{:ok, frame_type, data}` - Successfully encoded message
+    * `frame_type` - The WebSocket frame type (:text, :binary, etc.)
+    * `data` - The encoded message data as binary
   * `{:error, reason}` - Failed to encode message
+
+  Note: When returning binary data, you may use either:
+  * `{:ok, :binary, my_binary_data}` for explicit binary frames
+  * `{:ok, :text, my_text_data}` for text frames
   """
   @callback encode_message(message_type(), state()) :: encode_return()
 end
