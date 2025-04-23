@@ -334,19 +334,19 @@ defmodule WebsockexNova.Client do
 
   ## Returns
 
-  * `{:ok, auth_result}` on success
+  * `{:ok, conn, auth_result}` on success (with updated connection)
   * `{:error, reason}` on failure
   """
-  @spec authenticate(ClientConn.t(), map(), auth_options() | nil) :: auth_result()
+  @spec authenticate(ClientConn.t(), map(), auth_options() | nil) :: {:ok, ClientConn.t(), term()} | {:error, term()}
   def authenticate(%ClientConn{} = conn, credentials, options \\ nil) when is_map(credentials) do
     auth_handler = get_auth_handler(conn.adapter)
 
     with {:ok, auth_data, new_state} <-
            auth_handler.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
-         {:ok, conn} <- update_adapter_state(conn, new_state),
-         :ok <- send_frame(conn, {:text, auth_data}) do
-      wait_for_response(conn, options)
-      # Just return the raw response to match test expectations
+         {:ok, updated_conn} <- update_adapter_state(conn, new_state),
+         :ok <- send_frame(updated_conn, {:text, auth_data}),
+         {:ok, response} <- wait_for_response(updated_conn, options) do
+      {:ok, updated_conn, response}
     end
   end
 

@@ -1,0 +1,2 @@
+alias WebsockexNova.Client
+alias WebsockexNova.Examples.ClientDeribit

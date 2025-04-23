@@ -291,7 +291,8 @@ defmodule WebsockexNova.ClientTest do
           path: "/ws"
         })
 
-      {:ok, response} = Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+      {:ok, updated_conn, response} = Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+      assert %ClientConn{} = updated_conn
       assert response == "{\"auth\":true}"
     end
 

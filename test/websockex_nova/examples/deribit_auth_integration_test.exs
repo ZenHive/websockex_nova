@@ -39,7 +39,7 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
       }
 
       case Client.authenticate(conn, credentials) do
-        {:ok, response} ->
+        {:ok, _updated_conn, response} ->
           # Parse the response JSON
           {:ok, decoded} = Jason.decode(response)
 
