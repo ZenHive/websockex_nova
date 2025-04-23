@@ -257,5 +257,19 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   """
   @callback status(stream_ref :: term(), state()) :: {:ok, term(), state()} | {:error, term(), state()}
 
+  @doc """
+  Returns connection information for establishing a WebSocket connection.
+
+  This callback should return a map with connection details such as host, port, path, headers, timeout, and transport options.
+
+  ## Parameters
+  * `opts` - Options for connection info (map or keyword list)
+
+  ## Returns
+  * `{:ok, conn_info}` - Connection info map
+  * `{:error, reason}` - If connection info could not be determined
+  """
+  @callback connection_info(opts :: map() | keyword()) :: {:ok, map()} | {:error, term()}
+
   @optional_callbacks [handle_timeout: 1]
 end

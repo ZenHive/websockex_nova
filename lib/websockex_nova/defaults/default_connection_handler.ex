@@ -132,4 +132,9 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   def status(_stream_ref, state) do
     {:ok, :ok, state}
   end
+
+  @impl true
+  def connection_info(_opts) do
+    {:error, :not_implemented}
+  end
 end
