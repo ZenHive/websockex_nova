@@ -6,7 +6,8 @@ defmodule WebsockexNova.Examples.DeribitAdapterTest do
   describe "DeribitAdapter minimal implementation" do
     test "connection_info/1 returns correct info" do
       {:ok, info} = DeribitAdapter.connection_info(%{})
-      assert info.host == "www.deribit.com"
+      expected_host = System.get_env("DERIBIT_HOST") || "test.deribit.com"
+      assert info.host == expected_host
       assert info.port == 443
       assert info.path == "/ws/api/v2"
       assert info.transport_opts.transport == :tls

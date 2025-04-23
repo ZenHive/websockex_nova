@@ -6,6 +6,7 @@ defmodule WebsockexNova.Examples.EchoClient do
   echo.websocket.org WebSocket Echo Server.
   """
 
+  alias WebsockexNova.Client
   alias WebsockexNova.Examples.EchoAdapter
 
   require Logger

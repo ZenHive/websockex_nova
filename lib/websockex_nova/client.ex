@@ -344,8 +344,21 @@ defmodule WebsockexNova.Client do
     with {:ok, auth_data, new_state} <-
            auth_handler.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
          {:ok, conn} <- update_adapter_state(conn, new_state),
-         :ok <- send_frame(conn, {:text, auth_data}) do
-      wait_for_response(conn, options)
+         :ok <- send_frame(conn, {:text, auth_data}),
+         {:ok, response} <- wait_for_response(conn, options) do
+      case auth_handler.handle_auth_response(response, conn.adapter_state) do
+        {:ok, updated_state} ->
+          {:ok, response, updated_state}
+
+        {:error, reason, updated_state} ->
+          {:error, reason, updated_state}
+
+        {:error, reason} ->
+          {:error, reason}
+
+        other ->
+          {:error, other}
+      end
     end
   end
 

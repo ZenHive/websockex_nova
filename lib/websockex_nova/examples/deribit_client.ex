@@ -1,7 +1,10 @@
 defmodule WebsockexNova.Examples.DeribitClient do
   @moduledoc """
   Minimal client for the Deribit WebSocket API v2 using DeribitAdapter.
-  Allows connecting, sending messages, and registering callback processes.
+  Allows connecting, sending messages, registering callback processes, and authenticating.
+
+  Reads DERIBIT_CLIENT_ID and DERIBIT_CLIENT_SECRET from the environment for authentication.
+  Use WebsockexNova.Client.authenticate/2 for authentication.
   """
 
   alias WebsockexNova.Client
@@ -40,5 +43,19 @@ defmodule WebsockexNova.Examples.DeribitClient do
   """
   def register_callback(conn, pid \\ self()) do
     Client.register_callback(conn, pid)
+  end
+
+  @doc """
+  Returns the Deribit client ID from the environment.
+  """
+  def client_id do
+    System.get_env("DERIBIT_CLIENT_ID")
+  end
+
+  @doc """
+  Returns the Deribit client secret from the environment.
+  """
+  def client_secret do
+    System.get_env("DERIBIT_CLIENT_SECRET")
   end
 end

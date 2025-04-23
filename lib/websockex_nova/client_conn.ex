@@ -14,6 +14,7 @@ defmodule WebsockexNova.ClientConn do
     * `:adapter` - Adapter module implementing various behaviors
     * `:adapter_state` - State maintained by the adapter
     * `:callback_pids` - List of PIDs registered to receive event notifications
+    * `:connection_info` - Connection information
   """
 
   @typedoc "WebSocket transport module"
@@ -35,7 +36,8 @@ defmodule WebsockexNova.ClientConn do
           stream_ref: stream_ref(),
           adapter: adapter(),
           adapter_state: adapter_state(),
-          callback_pids: list(pid())
+          callback_pids: list(pid()),
+          connection_info: map()
         }
 
   defstruct [
@@ -44,6 +46,7 @@ defmodule WebsockexNova.ClientConn do
     :stream_ref,
     :adapter,
     :adapter_state,
-    callback_pids: []
+    callback_pids: [],
+    connection_info: %{}
   ]
 end
