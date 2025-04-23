@@ -135,11 +135,13 @@ defmodule WebsockexNova.Helpers.StateHelpers do
     Map.put(state, :handlers, updated_handlers)
   end
 
-  def setup_handler(state, handler_type, handler_module) do
+  # sobelow_skip ["DOS.BinToAtom"]
+  def setup_handler(state, handler_type, handler_module) when is_atom(handler_type) do
     setup_handler(state, handler_type, handler_module, %{}, :"#{handler_type}_init")
   end
 
-  def setup_handler(state, handler_type, handler_module, handler_options) do
+  # sobelow_skip ["DOS.BinToAtom"]
+  def setup_handler(state, handler_type, handler_module, handler_options) when is_atom(handler_type) do
     setup_handler(state, handler_type, handler_module, handler_options, :"#{handler_type}_init")
   end
 

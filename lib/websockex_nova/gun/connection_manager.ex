@@ -124,51 +124,50 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     error_handler_state = Map.get(state.handlers, :error_handler_state)
     last_error = Map.get(state, :last_error)
 
-    # Ensure error_handler_state is never nil
-    error_handler_state =
-      cond do
-        is_map(error_handler_state) ->
-          error_handler_state
-
-        function_exported?(error_handler, :error_handler_init, 1) ->
-          case error_handler.error_handler_init(%{}) do
-            {:ok, s} -> s
-            _ -> %{}
-          end
-
-        true ->
-          %{}
-      end
-
-    # Use the attempt count from error handler state
+    error_handler_state = ensure_error_handler_state(error_handler, error_handler_state)
     attempt = Map.get(error_handler_state, :reconnect_attempts, 1)
 
     case error_handler.should_reconnect?(last_error, attempt, error_handler_state) do
       {true, delay} when is_integer(delay) and delay > 0 ->
         callback.(delay, attempt)
-        # Increment attempt count in error handler state
-        new_error_handler_state =
-          if function_exported?(error_handler, :increment_reconnect_attempts, 1) do
-            error_handler.increment_reconnect_attempts(error_handler_state)
-          else
-            error_handler_state
-          end
-
-        # Update state with new error handler state
+        new_error_handler_state = increment_reconnect_attempts(error_handler, error_handler_state)
         new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
         ConnectionState.update_status(new_state, :reconnecting)
 
       {false, _} ->
-        # Reset attempt count in error handler state
-        new_error_handler_state =
-          if function_exported?(error_handler, :reset_reconnect_attempts, 1) do
-            error_handler.reset_reconnect_attempts(error_handler_state)
-          else
-            error_handler_state
-          end
-
+        new_error_handler_state = reset_reconnect_attempts(error_handler, error_handler_state)
         new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
         ConnectionState.update_status(new_state, :error)
+    end
+  end
+
+  defp ensure_error_handler_state(_error_handler, error_handler_state) when is_map(error_handler_state),
+    do: error_handler_state
+
+  defp ensure_error_handler_state(error_handler, _nil) do
+    if function_exported?(error_handler, :error_handler_init, 1) do
+      case error_handler.error_handler_init(%{}) do
+        {:ok, s} -> s
+        _ -> %{}
+      end
+    else
+      %{}
+    end
+  end
+
+  defp increment_reconnect_attempts(error_handler, error_handler_state) do
+    if function_exported?(error_handler, :increment_reconnect_attempts, 1) do
+      error_handler.increment_reconnect_attempts(error_handler_state)
+    else
+      error_handler_state
+    end
+  end
+
+  defp reset_reconnect_attempts(error_handler, error_handler_state) do
+    if function_exported?(error_handler, :reset_reconnect_attempts, 1) do
+      error_handler.reset_reconnect_attempts(error_handler_state)
+    else
+      error_handler_state
     end
   end
 
