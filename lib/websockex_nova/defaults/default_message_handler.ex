@@ -52,50 +52,46 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   end
 
   @impl true
-  def handle_message(%{"type" => "error"} = message, state) do
-    # Handle error messages
-    error_message = Map.get(message, "message", "Unknown error")
-    state = Map.put(state, :last_error, message)
+  def handle_message(message, state) when is_map(message) and is_map(state) do
+    case message do
+      %{"type" => "error"} = error_msg ->
+        # Handle error messages
+        error_message = Map.get(error_msg, "message", "Unknown error")
+        updated_state = Map.put(state, :last_error, error_msg)
+        {:error, error_message, updated_state}
 
-    {:error, error_message, state}
+      %{"type" => "subscription"} = subscription_msg ->
+        # Track subscription status
+        handle_subscription_message(subscription_msg, state)
+
+      _ ->
+        # Handle general messages
+        processed_count = Map.get(state, :processed_count, 0)
+
+        updated_state =
+          state
+          |> Map.put(:processed_count, processed_count + 1)
+          |> Map.put(:last_message, message)
+
+        {:ok, updated_state}
+    end
   end
 
-  def handle_message(%{"type" => "subscription"} = message, state) do
-    # Track subscription status
-    channel = Map.get(message, "channel")
-
-    status =
-      message
-      |> Map.get("status", "unknown")
-      |> safe_to_atom(@allowed_statuses, :unknown)
-
-    subscriptions = Map.get(state, :subscriptions, %{})
-    subscriptions = Map.put(subscriptions, channel, status)
-
-    state = Map.put(state, :subscriptions, subscriptions)
-
-    {:ok, state}
-  end
-
+  # Fallback for any non-map messages
   @impl true
-  def handle_message(message, state) do
-    # Handle general messages
-    processed_count = Map.get(state, :processed_count, 0)
-
-    state =
-      state
-      |> Map.put(:processed_count, processed_count + 1)
-      |> Map.put(:last_message, message)
-
-    {:ok, state}
+  def handle_message(message, state) when is_map(state) do
+    # Convert binary to map for consistent handling
+    {:ok, processed_message} = validate_message(message)
+    handle_message(processed_message, state)
   end
 
   @impl true
   def validate_message(message) when is_map(message) do
-    # Already parsed message
+    # Already a map, just pass through
     {:ok, message}
   end
 
+  @impl true
   def validate_message(message) when is_binary(message) do
     if String.valid?(message) && String.starts_with?(message, "{") do
       # Attempt to parse as JSON
@@ -104,17 +100,19 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
           {:ok, decoded}
 
         {:error, _} ->
-          {:error, :invalid_json, message}
+          # Cannot parse as JSON, convert to map with content field
+          {:ok, %{"content" => message, "type" => "binary_data"}}
       end
     else
-      # Treat as binary data
-      {:ok, message}
+      # Binary data, convert to a map with content field
+      {:ok, %{"content" => message, "type" => "binary_data"}}
     end
   end
 
+  @impl true
   def validate_message(message) do
-    # Any other format, pass through
-    {:ok, message}
+    # Any other format, convert to a map with content field
+    {:ok, %{"content" => inspect(message), "type" => "unknown_data"}}
   end
 
   @impl true
@@ -122,36 +120,30 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     safe_to_atom(type, @allowed_types, :unknown)
   end
 
+  @impl true
   def message_type(%{"method" => method}) when is_binary(method) do
     safe_to_atom(method, @allowed_methods, :unknown)
   end
 
+  @impl true
   def message_type(%{"action" => action}) when is_binary(action) do
     safe_to_atom(action, @allowed_actions, :unknown)
   end
 
+  @impl true
   def message_type(message) when is_map(message) do
     # Unknown message type
     :unknown
   end
 
-  def message_type(binary_message) when is_binary(binary_message) do
-    # Binary message
-    :binary
-  end
-
+  @impl true
   def message_type(_) do
-    # Fallback
+    # Fallback for non-map values
     :unknown
   end
 
   @impl true
-  def encode_message(message, _state) when is_binary(message) do
-    # Binary data passes through as binary frame
-    {:ok, :binary, message}
-  end
-
-  def encode_message(message, _state) when is_map(message) do
+  def encode_message(message, state) when is_map(message) and is_map(state) do
     # Encode maps as JSON
     case Jason.encode(message) do
       {:ok, json} ->
@@ -162,17 +154,51 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     end
   end
 
-  def encode_message(:ping, _state) do
+  @impl true
+  def encode_message(message, state) when is_binary(message) and is_map(state) do
+    # For backward compatibility, handle a raw binary as a message
+    # But convert it to a map first for consistency
+    encode_message(%{"content" => message, "type" => "raw_data"}, state)
+  end
+
+  @impl true
+  def encode_message(:ping, state) when is_map(state) do
     # Special handling for ping message
-    {:ok, :text, Jason.encode!(%{type: "ping"})}
+    encode_message(%{type: "ping"}, state)
+  end
+
+  @impl true
+  def encode_message(message, state) when is_atom(message) and is_map(state) do
+    # Handle atom messages by converting to a type field
+    encode_message(%{type: to_string(message)}, state)
   end
 
   # Attempt to encode any other term
-  def encode_message(message, _state) do
-    encoded = Jason.encode!(%{type: to_string(message)})
-    {:ok, :text, encoded}
+  @impl true
+  def encode_message(message, state) when is_map(state) do
+    # Ensure any other message type is converted to a map
+    encode_message(%{content: inspect(message), type: "encoded_term"}, state)
   rescue
     e -> {:error, {:encode_failed, e}}
+  end
+
+  # Private helper functions
+
+  defp handle_subscription_message(message, state) do
+    # Extract channel and status information
+    channel = Map.get(message, "channel")
+
+    status =
+      message
+      |> Map.get("status", "unknown")
+      |> safe_to_atom(@allowed_statuses, :unknown)
+
+    # Update subscriptions in state
+    subscriptions = Map.get(state, :subscriptions, %{})
+    updated_subscriptions = Map.put(subscriptions, channel, status)
+    updated_state = Map.put(state, :subscriptions, updated_subscriptions)
+
+    {:ok, updated_state}
   end
 
   defp safe_to_atom(string, allowed_atoms, fallback) when is_binary(string) do

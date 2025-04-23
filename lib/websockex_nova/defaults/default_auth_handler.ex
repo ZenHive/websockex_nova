@@ -52,9 +52,9 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
 
   ## Returns
 
-  `{:ok, state}` or `{:error, reason}`
+  `{:ok, state}` or `{:error, reason, state}`
   """
-  @spec auth_init(map()) :: {:ok, map()} | {:error, atom() | String.t()}
+  @spec auth_init(map()) :: {:ok, map()} | {:error, atom() | String.t(), map()}
   def auth_init(options) when is_map(options) do
     # Add default values if not present
     state =
@@ -65,7 +65,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     if has_valid_credentials?(state) do
       {:ok, state}
     else
-      {:error, :invalid_credentials}
+      {:error, :invalid_credentials, state}
     end
   end
 
@@ -89,7 +89,65 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def handle_auth_response(%{"type" => "auth_success"} = response, state) do
+  def handle_auth_response(response, state) when is_map(response) and is_map(state) do
+    case response do
+      %{"type" => "auth_success"} = resp ->
+        handle_auth_success(resp, state)
+
+      %{"type" => "auth_error", "reason" => reason} ->
+        handle_auth_error(reason, state)
+
+      %{"type" => "auth_error"} = resp ->
+        reason = Map.get(resp, "message", "Unknown auth error")
+        handle_auth_error(reason, state)
+
+      _ ->
+        {:ok, state}
+    end
+  end
+
+  @impl true
+  def needs_reauthentication?(state) when is_map(state) do
+    threshold = Map.get(state, :auth_refresh_threshold, @default_auth_refresh_threshold)
+
+    cond do
+      # If auth status is failed, needs reauthentication
+      Map.get(state, :auth_status) == :failed ->
+        true
+
+      # If not authenticated yet, doesn't need reauthentication
+      Map.get(state, :auth_status) != :authenticated ->
+        false
+
+      # If no auth expiration timestamp, doesn't need reauthentication
+      not Map.has_key?(state, :auth_expires_at) ->
+        false
+
+      # If auth is about to expire, needs reauthentication
+      state.auth_expires_at < System.system_time(:second) + threshold ->
+        true
+
+      # Otherwise, doesn't need reauthentication
+      true ->
+        false
+    end
+  end
+
+  @impl true
+  def authenticate(stream_ref, credentials, state) when is_map(credentials) and is_map(state) do
+    # Update state with credentials and generate auth data
+    updated_state = Map.put(state, :credentials, credentials)
+
+    # In a real implementation, you would use stream_ref to send authentication data
+    # This is a simplified implementation
+    _stream_ref = stream_ref
+
+    {:ok, updated_state}
+  end
+
+  # Private helper functions
+
+  defp handle_auth_success(response, state) do
     expires_at =
       case response do
         %{"expires_at" => expires_at} when is_integer(expires_at) ->
@@ -117,8 +175,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     {:ok, updated_state}
   end
 
-  @impl true
-  def handle_auth_response(%{"type" => "auth_error", "reason" => reason}, state) do
+  defp handle_auth_error(reason, state) do
     Logger.warning("Authentication error: #{reason}")
 
     updated_state =
@@ -128,94 +185,6 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
 
     {:error, reason, updated_state}
   end
-
-  @impl true
-  def handle_auth_response(%{"type" => "auth_error"} = response, state) do
-    reason = Map.get(response, "message", "Unknown auth error")
-    Logger.warning("Authentication error: #{reason}")
-
-    updated_state =
-      state
-      |> Map.put(:auth_status, :failed)
-      |> Map.put(:auth_error, reason)
-
-    {:error, reason, updated_state}
-  end
-
-  @impl true
-  def handle_auth_response(_response, state) do
-    {:ok, state}
-  end
-
-  @impl true
-  def needs_reauthentication?(state) do
-    threshold = Map.get(state, :auth_refresh_threshold, @default_auth_refresh_threshold)
-
-    cond do
-      # If auth status is failed, needs reauthentication
-      Map.get(state, :auth_status) == :failed ->
-        true
-
-      # If not authenticated yet, doesn't need reauthentication
-      Map.get(state, :auth_status) != :authenticated ->
-        false
-
-      # If no auth expiration timestamp, doesn't need reauthentication
-      not Map.has_key?(state, :auth_expires_at) ->
-        false
-
-      # If auth is about to expire, needs reauthentication
-      state.auth_expires_at < System.system_time(:second) + threshold ->
-        true
-
-      # Otherwise, doesn't need reauthentication
-      true ->
-        false
-    end
-  end
-
-  # @doc """
-  # Authenticate with the provided credentials.
-
-  # This function is called by the Connection module when WebsockexNova.Client.authenticate/2 is used.
-  # It delegates to the adapter's encode_auth_request/1 function to generate the appropriate auth request
-  # for the platform.
-
-  # ## Parameters
-
-  # * `credentials` - Authentication credentials (typically %{api_key: key, secret: secret})
-  # * `state` - Current state
-
-  # ## Returns
-
-  # * `{:reply, reply, new_state}` - Send a message back to the caller
-  # * `{:noreply, new_state}` - No immediate reply
-  # """
-  # def authenticate(credentials, state) do
-  #   case state.adapter.encode_auth_request(credentials) do
-  #     {:text, request} ->
-  #       # Send auth request frame to the websocket and update state
-  #       send(self(), {:send_frame, {:text, request}})
-
-  #       updated_state =
-  #         state
-  #         |> Map.put(:auth_status, :authenticating)
-  #         |> Map.put(:credentials, credentials)
-
-  #       {:noreply, updated_state}
-
-  #     {:error, reason} ->
-  #       # Authentication encoding failed
-  #       {:error, reason, state}
-  #   end
-  # end
-
-  @impl true
-  def authenticate(_stream_ref, _credentials, state) do
-    {:ok, state}
-  end
-
-  # Private helper functions
 
   defp has_valid_credentials?(state) do
     case state do

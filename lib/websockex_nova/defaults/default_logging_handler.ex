@@ -18,21 +18,38 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   require Logger
 
   @impl true
-  def log_connection_event(event, context, state) do
-    log(:connection, event, context, state)
+  def log_connection_event(event, context, state) when is_map(context) and is_map(state) do
+    # Ensure event is a map
+    event_map = ensure_map(event)
+    log(:connection, event_map, context, state)
   end
 
   @impl true
-  def log_message_event(event, context, state) do
-    log(:message, event, context, state)
+  def log_message_event(event, context, state) when is_map(context) and is_map(state) do
+    # Ensure event is a map
+    event_map = ensure_map(event)
+    log(:message, event_map, context, state)
   end
 
   @impl true
-  def log_error_event(event, context, state) do
-    log(:error, event, context, state)
+  def log_error_event(event, context, state) when is_map(context) and is_map(state) do
+    # Ensure event is a map
+    event_map = ensure_map(event)
+    log(:error, event_map, context, state)
   end
 
-  defp log(category, event, context, state) do
+  @doc """
+  Initializes the DefaultLoggingHandler state.
+
+  Returns {:ok, opts} where opts is the options map (or empty map).
+  """
+  @spec logging_init(map()) :: {:ok, map()}
+  def logging_init(opts) when is_map(opts), do: {:ok, opts}
+  def logging_init(_), do: {:ok, %{}}
+
+  # Private helper functions
+
+  defp log(category, event, context, state) when is_map(event) and is_map(context) and is_map(state) do
     level =
       case Map.get(state, :log_level, :info) do
         l when l in [:debug, :info, :warn, :warning, :error] -> l
@@ -50,19 +67,31 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   end
 
   defp format_log(category, event, context, :json) do
-    data = %{category: category, event: event, context: context, timestamp: DateTime.utc_now()}
+    data = %{
+      category: category,
+      event: event,
+      context: context,
+      timestamp: DateTime.utc_now()
+    }
+
     Jason.encode!(data)
   end
 
-  defp format_log(_category, event, context, other) do
-    "[LOG][#{inspect(other)}] #{inspect(event)} | #{inspect(context)}"
+  defp format_log(category, event, context, other) do
+    "[LOG][#{inspect(other)}] #{inspect(event)} | #{inspect(context)} #{inspect(category)}"
   end
 
-  @doc """
-  Initializes the DefaultLoggingHandler state.
+  # Ensure event is a map
+  defp ensure_map(event) when is_map(event), do: event
+  defp ensure_map(event) when is_binary(event), do: %{message: event}
+  defp ensure_map(event) when is_atom(event), do: %{type: event}
 
-  Returns {:ok, opts} where opts is the options map (or empty map).
-  """
-  @spec logging_init(map()) :: {:ok, map()}
-  def logging_init(opts) when is_map(opts), do: {:ok, opts}
+  defp ensure_map(event) when is_tuple(event) do
+    case event do
+      {type, data} when is_atom(type) -> %{type: type, data: ensure_map(data)}
+      _ -> %{value: inspect(event)}
+    end
+  end
+
+  defp ensure_map(event), do: %{value: inspect(event)}
 end

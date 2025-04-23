@@ -49,9 +49,9 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   @default_max_delay 30_000
 
   @impl true
-  def handle_error(error, context, state) do
+  def handle_error(error, context, state) when is_map(context) and is_map(state) do
     # Track the error in the state
-    state =
+    updated_state =
       state
       |> Map.put(:last_error, error)
       |> Map.put(:error_context, context)
@@ -59,28 +59,28 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     # Handle based on error classification
     case classify_error(error, context) do
       :critical ->
-        {:stop, :critical_error, state}
+        {:stop, :critical_error, updated_state}
 
       :normal ->
         # Non-critical errors don't need special handling
-        {:ok, state}
+        {:ok, updated_state}
 
       :transient ->
         # For transient errors, calculate retry delay
         attempt = Map.get(context, :attempt, 1)
-        {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
+        {max_attempts, base_delay, max_delay} = extract_reconnection_opts(updated_state)
 
         if attempt <= max_attempts do
           delay = calculate_backoff_delay(attempt, base_delay, max_delay)
-          {:retry, delay, state}
+          {:retry, delay, updated_state}
         else
-          {:stop, :max_retry_attempts_reached, state}
+          {:stop, :max_retry_attempts_reached, updated_state}
         end
     end
   end
 
   @impl true
-  def should_reconnect?(error, attempt, state) do
+  def should_reconnect?(error, attempt, state) when is_integer(attempt) and is_map(state) do
     {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
 
     if attempt <= max_attempts && reconnectable_error?(error) do
@@ -92,7 +92,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   @impl true
-  def log_error(error, context, _state) do
+  def log_error(error, context, state) when is_map(context) and is_map(state) do
     error_type = extract_error_type(error)
     context_str = format_context(context)
 
@@ -130,8 +130,6 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     Enum.map_join(context, ", ", fn {k, v} -> "#{k}: #{inspect(v)}" end)
   end
 
-  defp format_context(_), do: ""
-
   defp calculate_backoff_delay(attempt, base_delay, max_delay) do
     # Exponential backoff with bounded jitter
     raw_delay = min(max_delay, base_delay * :math.pow(2, attempt - 1))
@@ -141,7 +139,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   # Extract reconnection options from state (prefer :reconnection map, fallback to legacy keys)
-  defp extract_reconnection_opts(state) do
+  defp extract_reconnection_opts(state) when is_map(state) do
     rc =
       case Map.get(state, :reconnection) do
         nil -> %{}

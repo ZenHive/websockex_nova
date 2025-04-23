@@ -23,7 +23,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
           DefaultLoggingHandler.log_connection_event(:connected, %{host: "localhost"}, @default_state)
         end)
 
-      assert log =~ "[CONNECTION] :connected"
+      assert log =~ "[CONNECTION]"
+      assert log =~ "type: :connected"
       assert log =~ "host: \"localhost\""
     end
 
@@ -34,7 +35,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
         end)
 
       assert log =~ "\"category\":"
-      assert log =~ "disconnected"
+      assert log =~ "\"type\":"
+      assert log =~ "\"disconnected\""
       assert log =~ "timeout"
     end
   end
@@ -53,7 +55,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
           DefaultLoggingHandler.log_message_event(:sent, %{payload: "hi"}, @default_state)
         end)
 
-      assert log =~ "[MESSAGE] :sent"
+      assert log =~ "[MESSAGE]"
+      assert log =~ "type: :sent"
       assert log =~ "payload: \"hi\""
     end
 
@@ -63,7 +66,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
           DefaultLoggingHandler.log_message_event(:received, %{payload: "pong"}, @warn_state)
         end)
 
-      assert log =~ "[MESSAGE] :received"
+      assert log =~ "[MESSAGE]"
+      assert log =~ "type: :received"
       assert log =~ "payload: \"pong\""
     end
   end
@@ -82,7 +86,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
           DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1006, reason: "abnormal"}, @default_state)
         end)
 
-      assert log =~ "[ERROR] :ws_error"
+      assert log =~ "[ERROR]"
+      assert log =~ "type: :ws_error"
       assert log =~ "code: 1006"
       assert log =~ "reason: \"abnormal\""
     end
@@ -94,7 +99,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
         end)
 
       assert log =~ "\"category\":"
-      assert log =~ "ws_error"
+      assert log =~ "\"type\":"
+      assert log =~ "\"ws_error\""
       assert log =~ "going away"
     end
   end
@@ -114,7 +120,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
         end)
 
       assert log =~ "[LOG]["
-      assert log =~ ":foo"
+      assert log =~ "type: :foo"
       assert log =~ "bar: 1"
     end
 
@@ -125,7 +131,8 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
         end)
 
       # Logger will treat :notalevel as :info (Logger.log/2 will not crash)
-      assert log =~ "[MESSAGE] :foo"
+      assert log =~ "[MESSAGE]"
+      assert log =~ "type: :foo"
       assert log =~ "bar: 2"
     end
   end

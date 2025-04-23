@@ -58,35 +58,38 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   @impl true
   def rate_limit_init(opts) do
+    # Convert to map if passed as keyword list
+    opts_map = if is_list(opts), do: Map.new(opts), else: opts
+
     # Extract rate limiting mode
-    mode = extract_mode(opts)
+    mode = extract_mode(opts_map)
     Logger.debug("Default rate limiter initialized with mode: #{inspect(mode)}")
 
     # Extract specific key used both for capacity and initial tokens
-    capacity = Keyword.get(opts, :capacity, @default_capacity)
+    capacity = Map.get(opts_map, :capacity, @default_capacity)
 
     # Allow configuring initial token count separately from capacity
-    initial_tokens = Keyword.get(opts, :tokens, capacity)
+    initial_tokens = Map.get(opts_map, :tokens, capacity)
 
     state = %{
       mode: mode,
       bucket: %{
         capacity: capacity,
         tokens: initial_tokens,
-        refill_rate: Keyword.get(opts, :refill_rate, @default_refill_rate),
-        refill_interval: Keyword.get(opts, :refill_interval, @default_refill_interval),
+        refill_rate: Map.get(opts_map, :refill_rate, @default_refill_rate),
+        refill_interval: Map.get(opts_map, :refill_interval, @default_refill_interval),
         last_refill: System.monotonic_time(:millisecond)
       },
       queue: :queue.new(),
-      queue_limit: Keyword.get(opts, :queue_limit, @default_queue_limit),
-      cost_map: Keyword.get(opts, :cost_map, @default_cost_map)
+      queue_limit: Map.get(opts_map, :queue_limit, @default_queue_limit),
+      cost_map: Map.get(opts_map, :cost_map, @default_cost_map)
     }
 
     {:ok, state}
   end
 
   @impl true
-  def check_rate_limit(request, state) do
+  def check_rate_limit(request, state) when is_map(request) and is_map(state) do
     Logger.debug("Checking rate limit for request: #{inspect(request)}, mode: #{inspect(state.mode)}")
 
     case state.mode do
@@ -111,7 +114,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   end
 
   @impl true
-  def handle_tick(state) do
+  def handle_tick(state) when is_map(state) do
     # Logger.debug("Handling tick with mode: #{inspect(state.mode)}")
 
     case state.mode do
@@ -135,20 +138,8 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   # Private helper functions
 
-  defp extract_mode(opts) do
-    mode =
-      cond do
-        # Check for mode in opts map
-        is_map(opts) && Map.has_key?(opts, :mode) ->
-          Map.get(opts, :mode)
-
-        # Check for mode in opts keyword list
-        Keyword.keyword?(opts) && Keyword.has_key?(opts, :mode) ->
-          Keyword.get(opts, :mode)
-
-        true ->
-          :normal
-      end
+  defp extract_mode(opts) when is_map(opts) do
+    mode = Map.get(opts, :mode, :normal)
 
     # Validate that the mode is valid
     if mode in @modes do
@@ -159,7 +150,9 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
     end
   end
 
-  defp normal_check_rate_limit(request, state) do
+  defp extract_mode(_), do: :normal
+
+  defp normal_check_rate_limit(request, state) when is_map(request) and is_map(state) do
     # Calculate available tokens since last refill
     updated_bucket = refill_bucket(state.bucket)
 
@@ -187,7 +180,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
     end
   end
 
-  defp refill_bucket(bucket) do
+  defp refill_bucket(bucket) when is_map(bucket) do
     current_time = System.monotonic_time(:millisecond)
     elapsed = current_time - bucket.last_refill
     tokens_to_add = trunc(elapsed / bucket.refill_interval * bucket.refill_rate)
@@ -203,20 +196,19 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
     end
   end
 
-  defp calculate_cost(request, cost_map) do
+  defp calculate_cost(request, cost_map) when is_map(request) and is_map(cost_map) do
     # Get cost based on request type, or default to 1
-    Map.get(cost_map, request.type, 1)
+    type = Map.get(request, :type)
+    Map.get(cost_map, type, 1)
   end
 
-  defp insert_with_priority(queue, item_tuple) do
-    # Extract the request from the tuple
-    {request, _cost} = item_tuple
+  defp insert_with_priority(queue, {request, cost}) when is_map(request) do
     # If the request has a priority, insert it ahead of lower priority items
     priority = Map.get(request, :priority)
 
     if is_nil(priority) or :queue.is_empty(queue) do
       # No priority or empty queue - just append
-      :queue.in(item_tuple, queue)
+      :queue.in({request, cost}, queue)
     else
       # Insert based on priority (higher priorities come first)
       queue_list = :queue.to_list(queue)
@@ -229,11 +221,11 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
         end)
 
       # Rebuild queue with the item inserted at the right position
-      :queue.from_list(before_items ++ [item_tuple] ++ after_items)
+      :queue.from_list(before_items ++ [{request, cost}] ++ after_items)
     end
   end
 
-  defp process_queue(state) do
+  defp process_queue(state) when is_map(state) do
     case :queue.out(state.queue) do
       {{:value, {request, cost}}, new_queue} ->
         if state.bucket.tokens >= cost do

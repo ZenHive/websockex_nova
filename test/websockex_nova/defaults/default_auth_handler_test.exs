@@ -36,7 +36,8 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:error, :invalid_credentials} = DefaultAuthHandler.auth_init(options)
+      assert {:error, :invalid_credentials, state} = DefaultAuthHandler.auth_init(options)
+      assert state.auth_status == :unauthenticated
     end
 
     test "fails initialization with empty credentials" do
@@ -47,7 +48,8 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
         }
       }
 
-      assert {:error, :invalid_credentials} = DefaultAuthHandler.auth_init(options)
+      assert {:error, :invalid_credentials, state} = DefaultAuthHandler.auth_init(options)
+      assert state.auth_status == :unauthenticated
     end
 
     test "accepts list options" do
@@ -248,6 +250,17 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
       }
 
       assert DefaultAuthHandler.needs_reauthentication?(state) == false
+    end
+  end
+
+  describe "DefaultAuthHandler.authenticate/3" do
+    test "updates state with credentials" do
+      state = %{auth_status: :unauthenticated}
+      credentials = %{api_key: "test_key", secret: "test_secret"}
+      stream_ref = make_ref()
+
+      assert {:ok, updated_state} = DefaultAuthHandler.authenticate(stream_ref, credentials, state)
+      assert updated_state.credentials == credentials
     end
   end
 end

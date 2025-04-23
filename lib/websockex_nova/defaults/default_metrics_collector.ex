@@ -58,7 +58,8 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   # Telemetry event handlers
 
   @impl true
-  def handle_connection_event(event, measurements, _metadata) do
+  def handle_connection_event(event, measurements, metadata)
+      when is_list(event) and is_map(measurements) and is_map(metadata) do
     case event do
       [:websockex_nova, :connection, :open] ->
         incr(:connections_opened)
@@ -80,16 +81,17 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   end
 
   @impl true
-  def handle_message_event(event, measurements, _metadata) do
+  def handle_message_event(event, measurements, metadata)
+      when is_list(event) and is_map(measurements) and is_map(metadata) do
     case event do
       [:websockex_nova, :message, :sent] ->
         incr(:messages_sent)
-        add(:bytes_sent, measurements[:size])
+        add(:bytes_sent, Map.get(measurements, :size, 0))
         record_latency(:message_sent_latency, measurements)
 
       [:websockex_nova, :message, :received] ->
         incr(:messages_received)
-        add(:bytes_received, measurements[:size])
+        add(:bytes_received, Map.get(measurements, :size, 0))
         record_latency(:message_received_latency, measurements)
 
       _ ->
@@ -100,7 +102,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   end
 
   @impl true
-  def handle_error_event(_event, _measurements, metadata) do
+  def handle_error_event(_event, _measurements, metadata) when is_map(metadata) do
     reason = Map.get(metadata, :reason, :unknown)
     incr({:error, reason})
     incr(:errors_total)
@@ -125,15 +127,19 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   end
 
   def handle_telemetry(event, measurements, metadata, _config) do
+    # Ensure measurements and metadata are maps
+    measurements_map = ensure_map(measurements)
+    metadata_map = ensure_map(metadata)
+
     cond do
       List.starts_with?(event, [:websockex_nova, :connection]) ->
-        __MODULE__.handle_connection_event(event, measurements, metadata)
+        __MODULE__.handle_connection_event(event, measurements_map, metadata_map)
 
       List.starts_with?(event, [:websockex_nova, :message]) ->
-        __MODULE__.handle_message_event(event, measurements, metadata)
+        __MODULE__.handle_message_event(event, measurements_map, metadata_map)
 
       List.starts_with?(event, [:websockex_nova, :error]) ->
-        __MODULE__.handle_error_event(event, measurements, metadata)
+        __MODULE__.handle_error_event(event, measurements_map, metadata_map)
 
       true ->
         :ok
@@ -142,12 +148,36 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
 
   # ETS metric helpers
   defp incr(key), do: :ets.update_counter(@table, key, {2, 1}, {key, 0})
+
   defp add(key, value) when is_integer(value), do: :ets.update_counter(@table, key, {2, value}, {key, 0})
   defp add(_key, _), do: :ok
 
-  defp record_duration(key, %{duration: ms}) when is_integer(ms), do: :ets.update_counter(@table, key, {2, ms}, {key, 0})
-  defp record_duration(_key, _), do: :ok
+  # Record duration with pattern matching optimization
+  defp record_duration(key, %{duration: ms}) when is_integer(ms) do
+    :ets.update_counter(@table, key, {2, ms}, {key, 0})
+  end
 
-  defp record_latency(key, %{latency: ms}) when is_integer(ms), do: :ets.update_counter(@table, key, {2, ms}, {key, 0})
-  defp record_latency(_key, _), do: :ok
+  defp record_duration(key, measurements) when is_map(measurements) do
+    case Map.get(measurements, :duration) do
+      ms when is_integer(ms) -> :ets.update_counter(@table, key, {2, ms}, {key, 0})
+      _ -> :ok
+    end
+  end
+
+  # Record latency with pattern matching optimization
+  defp record_latency(key, %{latency: ms}) when is_integer(ms) do
+    :ets.update_counter(@table, key, {2, ms}, {key, 0})
+  end
+
+  defp record_latency(key, measurements) when is_map(measurements) do
+    case Map.get(measurements, :latency) do
+      ms when is_integer(ms) -> :ets.update_counter(@table, key, {2, ms}, {key, 0})
+      _ -> :ok
+    end
+  end
+
+  # Ensure data is a map
+  defp ensure_map(data) when is_map(data), do: data
+  defp ensure_map(data) when is_list(data), do: Map.new(data)
+  defp ensure_map(_), do: %{}
 end

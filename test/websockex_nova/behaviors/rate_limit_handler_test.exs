@@ -41,7 +41,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandlerTest do
 
       # Directly check for callbacks in the behavior module
       callbacks = RateLimitHandler.behaviour_info(:callbacks)
-      assert Enum.member?(callbacks, {:init, 1})
+      assert Enum.member?(callbacks, {:rate_limit_init, 1})
       assert Enum.member?(callbacks, {:check_rate_limit, 2})
     end
 
@@ -52,7 +52,7 @@ defmodule WebsockexNova.Behaviors.RateLimitHandlerTest do
   end
 
   describe "TestRateLimitHandler implementation" do
-    test "init/1 returns state" do
+    test "rate_limit_init/1 returns state" do
       assert {:ok, %{test: :value}} = TestRateLimitHandler.rate_limit_init(%{test: :value})
     end
 

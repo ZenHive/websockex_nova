@@ -53,83 +53,83 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   end
 
   @impl true
-  def handle_connect(conn_info, state) do
-    state =
+  def handle_connect(conn_info, state) when is_map(conn_info) and is_map(state) do
+    updated_state =
       state
       |> Map.put(:connection, conn_info)
       |> Map.put(:connected_at, System.system_time(:millisecond))
       |> Map.put(:reconnect_attempts, 0)
 
-    {:ok, state}
+    {:ok, updated_state}
   end
 
   @impl true
-  def handle_disconnect({:local, _code, _message} = reason, state) do
+  def handle_disconnect({:local, _code, _message} = reason, state) when is_map(state) do
     # No reconnection for local disconnects (client initiated)
     {:ok, Map.put(state, :last_disconnect_reason, reason)}
   end
 
-  def handle_disconnect(reason, state) do
+  def handle_disconnect(reason, state) when is_map(state) do
     # For remote or error disconnects, try reconnection
     current_attempts = Map.get(state, :reconnect_attempts, 0)
     max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
 
-    state = Map.put(state, :last_disconnect_reason, reason)
+    updated_state = Map.put(state, :last_disconnect_reason, reason)
 
     if current_attempts < max_attempts do
-      state = Map.put(state, :reconnect_attempts, current_attempts + 1)
-      {:reconnect, state}
+      updated_state = Map.put(updated_state, :reconnect_attempts, current_attempts + 1)
+      {:reconnect, updated_state}
     else
-      {:ok, state}
+      {:ok, updated_state}
     end
   end
 
   @impl true
-  def handle_frame(:ping, frame_data, state) do
+  def handle_frame(:ping, frame_data, state) when is_map(state) do
     # Automatically respond to pings with pongs
     {:reply, :pong, frame_data, state}
   end
 
-  def handle_frame(:pong, _frame_data, state) do
+  def handle_frame(:pong, _frame_data, state) when is_map(state) do
     # Track pong responses
-    state = Map.put(state, :last_pong_received, System.monotonic_time(:millisecond))
+    updated_state = Map.put(state, :last_pong_received, System.monotonic_time(:millisecond))
 
     # Delete last_ping_sent if it exists, otherwise leave state unchanged
-    state =
-      if Map.has_key?(state, :last_ping_sent) do
-        Map.delete(state, :last_ping_sent)
+    updated_state =
+      if Map.has_key?(updated_state, :last_ping_sent) do
+        Map.delete(updated_state, :last_ping_sent)
       else
-        state
+        updated_state
       end
 
-    {:ok, state}
+    {:ok, updated_state}
   end
 
-  def handle_frame(_frame_type, _frame_data, state) do
+  def handle_frame(_frame_type, _frame_data, state) when is_map(state) do
     # Default implementation for other frame types
     {:ok, state}
   end
 
   @impl true
-  def handle_timeout(state) do
+  def handle_timeout(state) when is_map(state) do
     current_attempts = Map.get(state, :reconnect_attempts, 0)
     max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
 
     if current_attempts < max_attempts do
-      state = Map.put(state, :reconnect_attempts, current_attempts + 1)
-      {:reconnect, state}
+      updated_state = Map.put(state, :reconnect_attempts, current_attempts + 1)
+      {:reconnect, updated_state}
     else
       {:stop, :max_reconnect_attempts_reached, state}
     end
   end
 
   @impl true
-  def ping(_stream_ref, state) do
+  def ping(_stream_ref, state) when is_map(state) do
     {:ok, state}
   end
 
   @impl true
-  def status(_stream_ref, state) do
+  def status(_stream_ref, state) when is_map(state) do
     {:ok, :ok, state}
   end
 

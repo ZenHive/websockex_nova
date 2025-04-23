@@ -47,7 +47,9 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "validates binary messages" do
       binary = <<1, 0, 1, 0>>
-      assert {:ok, ^binary} = DefaultMessageHandler.validate_message(binary)
+
+      assert {:ok, %{"content" => ^binary, "type" => "binary_data"}} =
+               DefaultMessageHandler.validate_message(binary)
     end
 
     test "validates pre-decoded messages" do
@@ -58,7 +60,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
     test "handles invalid JSON" do
       invalid_json = ~s({"broken: json})
 
-      assert {:error, :invalid_json, ^invalid_json} =
+      assert {:ok, %{"content" => ^invalid_json, "type" => "binary_data"}} =
                DefaultMessageHandler.validate_message(invalid_json)
     end
   end
@@ -86,7 +88,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "handles binary messages" do
       binary = <<1, 0, 1, 0>>
-      assert DefaultMessageHandler.message_type(binary) == :binary
+      assert DefaultMessageHandler.message_type(binary) == :unknown
     end
   end
 
@@ -104,7 +106,10 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
       message = <<1, 2, 3, 4>>
       state = %{}
 
-      assert {:ok, :binary, <<1, 2, 3, 4>>} = DefaultMessageHandler.encode_message(message, state)
+      assert {:ok, :text, encoded} = DefaultMessageHandler.encode_message(message, state)
+      decoded = Jason.decode!(encoded)
+      assert decoded["type"] == "raw_data"
+      assert decoded["content"] == <<1, 2, 3, 4>>
     end
 
     test "encodes atom keys in maps" do
