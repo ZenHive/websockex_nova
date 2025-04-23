@@ -24,17 +24,14 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       callback_pid: self()
     }
 
-    {:ok, conn_pid} = ConnectionWrapper.open(@host, @port, opts)
+    {:ok, conn} = ConnectionWrapper.open(@host, @port, @ws_path, opts)
     # Wait for connection_up
     assert_receive {:websockex_nova, {:connection_up, :http}}, @timeout
-    {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @ws_path, [])
-    assert_receive {:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, @timeout
-    %{conn_pid: conn_pid, stream_ref: stream_ref, client_id: client_id, client_secret: client_secret}
+    %{conn: conn, client_id: client_id, client_secret: client_secret}
   end
 
   test "authenticates with credentials", %{
-    conn_pid: conn_pid,
-    stream_ref: stream_ref,
+    conn: conn,
     client_id: client_id,
     client_secret: client_secret
   } do
@@ -49,15 +46,14 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(auth_msg)})
-    response = receive_json_response(stream_ref, @timeout)
+    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    response = receive_json_response(conn.stream_ref, @timeout)
     assert response["result"]["access_token"]
     assert response["result"]["expires_in"]
   end
 
   test "tracks and responds with matching request_id", %{
-    conn_pid: conn_pid,
-    stream_ref: stream_ref,
+    conn: conn,
     client_id: client_id,
     client_secret: client_secret
   } do
@@ -73,8 +69,8 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(auth_msg)})
-    _auth_response = receive_json_response(stream_ref, @timeout)
+    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    _auth_response = receive_json_response(conn.stream_ref, @timeout)
 
     for request_id <- [123, "abc-123", "request-#{:rand.uniform(1000)}"] do
       message = %{
@@ -84,15 +80,14 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
         "params" => %{}
       }
 
-      :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(message)})
-      response = receive_json_response(stream_ref, @timeout)
+      :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(message)})
+      response = receive_json_response(conn.stream_ref, @timeout)
       assert response["id"] == request_id
     end
   end
 
   test "fetches account summary after authentication", %{
-    conn_pid: conn_pid,
-    stream_ref: stream_ref,
+    conn: conn,
     client_id: client_id,
     client_secret: client_secret
   } do
@@ -107,8 +102,8 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(auth_msg)})
-    auth_response = receive_json_response(stream_ref, @timeout)
+    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    auth_response = receive_json_response(conn.stream_ref, @timeout)
     assert _access_token = auth_response["result"]["access_token"]
 
     summary_msg = %{
@@ -118,8 +113,8 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       "params" => %{"currency" => "BTC"}
     }
 
-    :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, Jason.encode!(summary_msg)})
-    summary_response = receive_json_response(stream_ref, @timeout)
+    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(summary_msg)})
+    summary_response = receive_json_response(conn.stream_ref, @timeout)
     assert summary_response["result"]["currency"] == "BTC"
   end
 

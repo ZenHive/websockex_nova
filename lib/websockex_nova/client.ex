@@ -42,6 +42,23 @@ defmodule WebsockexNova.Client do
 
   If an adapter doesn't implement a behavior, the client falls back to using default implementations
   from the `WebsockexNova.Defaults` namespace.
+
+  ## Custom Matcher Example
+
+  You can pass a custom matcher function to filter or extract specific responses:
+
+      matcher = fn
+        {:websockex_nova, {:websocket_frame, _stream_ref, {:text, "special"}}} -> {:ok, "special"}
+        _ -> :skip
+      end
+
+      opts = %{matcher: matcher}
+      {:ok, response} = WebsockexNova.Client.send_text(conn, "ignored", opts)
+      # response == "special"
+
+  The matcher function receives each message and should return:
+  - `{:ok, value}` to match and return the value
+  - `:skip` to ignore and continue waiting
   """
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.MessageHandler
@@ -195,6 +212,7 @@ defmodule WebsockexNova.Client do
   ## Options
 
   * `:timeout` - Response timeout in milliseconds (default: 30,000)
+  * `:matcher` - (optional) A function to match/filter responses. The function should accept a message and return `{:ok, response}` to match, or `:skip` to ignore and continue waiting. See module doc for examples.
 
   ## Returns
 
@@ -223,6 +241,7 @@ defmodule WebsockexNova.Client do
   ## Options
 
   * `:timeout` - Response timeout in milliseconds (default: 30,000)
+  * `:matcher` - (optional) A function to match/filter responses. The function should accept a message and return `{:ok, response}` to match, or `:skip` to ignore and continue waiting. See module doc for examples.
 
   ## Returns
 
@@ -251,6 +270,7 @@ defmodule WebsockexNova.Client do
   ## Options
 
   * `:timeout` - Response timeout in milliseconds (default: 30,000)
+  * `:matcher` - (optional) A function to match/filter responses. The function should accept a message and return `{:ok, response}` to match, or `:skip` to ignore and continue waiting. See module doc for examples.
 
   ## Returns
 
@@ -280,6 +300,7 @@ defmodule WebsockexNova.Client do
   ## Options
 
   * `:timeout` - Response timeout in milliseconds (default: 30,000)
+  * `:matcher` - (optional) A function to match/filter responses. The function should accept a message and return `{:ok, response}` to match, or `:skip` to ignore and continue waiting. See module doc for examples.
 
   ## Returns
 
@@ -309,6 +330,7 @@ defmodule WebsockexNova.Client do
   ## Options
 
   * `:timeout` - Response timeout in milliseconds (default: 30,000)
+  * `:matcher` - (optional) A function to match/filter responses. The function should accept a message and return `{:ok, response}` to match, or `:skip` to ignore and continue waiting. See module doc for examples.
 
   ## Returns
 
@@ -346,14 +368,31 @@ defmodule WebsockexNova.Client do
   """
   @spec ping(ClientConn.t(), message_options() | nil) :: {:ok, :pong} | {:error, term()}
   def ping(%ClientConn{} = conn, options \\ nil) do
+    Logger.debug("[Client.ping] Sending ping frame to server for conn: #{inspect(conn)}")
+
     with :ok <- send_frame(conn, :ping) do
       timeout = get_timeout(options)
-      # Wait for pong response
-      receive do
-        {:websockex_nova, :pong} -> {:ok, :pong}
-      after
-        timeout -> {:error, :timeout}
+      stream_ref = conn.stream_ref
+      Logger.debug("[Client.ping] Waiting for pong response (timeout: #{timeout} ms)...")
+
+      matcher = fn
+        {:websockex_nova, {:websocket_frame, ^stream_ref, {:pong, _}}} ->
+          Logger.debug("[Client.ping] Received pong response from server.")
+          {:ok, :pong}
+
+        {:websockex_nova, {:websocket_frame, ^stream_ref, :pong}} ->
+          Logger.debug("[Client.ping] Received pong response from server.")
+          {:ok, :pong}
+
+        {:websockex_nova, :error, reason} ->
+          {:error, reason}
+
+        _ ->
+          :skip
       end
+
+      start = System.monotonic_time(:millisecond)
+      do_wait_for_response(matcher, timeout, start)
     end
   end
 
@@ -524,25 +563,72 @@ defmodule WebsockexNova.Client do
     _ -> false
   end
 
-  # Wait for response with timeout
+  # Wait for response with timeout and matcher/filter support
   defp wait_for_response(conn, options) do
-    # This is a simplified implementation - in a real implementation, this would
-    # set up proper message matching and response correlation
+    Logger.debug(
+      "[Client.wait_for_response] Waiting for response with conn: #{inspect(conn)} and options: #{inspect(options)}"
+    )
+
     timeout = get_timeout(options)
     stream_ref = conn.stream_ref
 
+    matcher =
+      if is_map(options) and Map.has_key?(options, :matcher) do
+        options.matcher
+      else
+        fn msg ->
+          stream_ref = conn.stream_ref
+
+          case msg do
+            {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}} ->
+              Logger.debug("[Matcher] Matched text frame: #{inspect(msg)}")
+              {:ok, response}
+
+            {:websockex_nova, :response, response} ->
+              Logger.debug("[Matcher] Matched legacy response: #{inspect(msg)}")
+              {:ok, response}
+
+            {:websockex_nova, :error, reason} ->
+              Logger.debug("[Matcher] Matched error: #{inspect(msg)}")
+              {:error, reason}
+
+            _ ->
+              Logger.debug("[Matcher] Skipped message: #{inspect(msg)}")
+              :skip
+          end
+        end
+      end
+
+    start = System.monotonic_time(:millisecond)
+    do_wait_for_response(matcher, timeout, start)
+  end
+
+  defp do_wait_for_response(matcher, timeout, start) do
+    Logger.debug(
+      "[Client.do_wait_for_response] Waiting for response with matcher: #{inspect(matcher)}, timeout: #{timeout}, start: #{start}"
+    )
+
+    now = System.monotonic_time(:millisecond)
+    remaining = max(timeout - (now - start), 0)
+
     receive do
-      {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}} ->
-        {:ok, response}
+      msg ->
+        case matcher.(msg) do
+          {:ok, value} ->
+            {:ok, value}
 
-      # fallback for test mocks
-      {:websockex_nova, :response, response} ->
-        {:ok, response}
+          {:error, reason} ->
+            {:error, reason}
 
-      {:websockex_nova, :error, reason} ->
-        {:error, reason}
+          :skip ->
+            if remaining > 0 do
+              do_wait_for_response(matcher, timeout, start)
+            else
+              {:error, :timeout}
+            end
+        end
     after
-      timeout ->
+      remaining ->
         {:error, :timeout}
     end
   end

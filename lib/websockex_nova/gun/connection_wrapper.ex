@@ -325,6 +325,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @impl WebsockexNova.Transport
   @spec send_frame(pid(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
   def send_frame(pid, stream_ref, frame) do
+    Logger.debug(
+      "[ConnectionWrapper.send_frame/3] Sending frame: #{inspect(frame)} to stream_ref: #{inspect(stream_ref)}"
+    )
+
     GenServer.call(pid, {:send_frame, stream_ref, frame})
   end
 
@@ -627,6 +631,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @impl true
   def handle_call(:get_port, _from, state) do
     {:reply, StateHelpers.get_port(state), state}
+  end
+
+  @impl true
+  def handle_call(:get_status, _from, state) do
+    status = StateHelpers.get_status(state)
+    {:reply, {:ok, status}, state}
   end
 
   @impl true
@@ -1212,21 +1222,42 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   # --- Private helpers for send_frame ---
   defp handle_send_frame_with_rate_limiting(state, stream_ref, frame) do
+    Logger.debug(
+      "[ConnectionWrapper.handle_send_frame_with_rate_limiting] Preparing to send frame: #{inspect(frame)} on stream_ref: #{inspect(stream_ref)} (gun_pid: #{inspect(state.gun_pid)})"
+    )
+
     request = build_rate_limit_request(state, stream_ref, frame)
     rate_limiter = Map.get(state.options, :rate_limiter, RateLimiting)
 
     case RateLimiting.check(request, rate_limiter) do
       {:allow, _request_id} ->
+        Logger.debug(
+          "[ConnectionWrapper.handle_send_frame_with_rate_limiting] Allowed by rate limiter. Calling :gun.ws_send with frame: #{inspect(frame)}"
+        )
+
         result = :gun.ws_send(state.gun_pid, stream_ref, frame)
+
+        Logger.debug(
+          "[ConnectionWrapper.handle_send_frame_with_rate_limiting] :gun.ws_send result: #{inspect(result)} for frame: #{inspect(frame)}"
+        )
+
         emit_telemetry_for_frame(state, stream_ref, frame)
         {:reply, result, state}
 
       {:queue, request_id} ->
+        Logger.debug(
+          "[ConnectionWrapper.handle_send_frame_with_rate_limiting] Queued by rate limiter. Will call :gun.ws_send later for frame: #{inspect(frame)}"
+        )
+
         callback = fn -> :gun.ws_send(state.gun_pid, stream_ref, frame) end
         _ = RateLimiting.on_process(request_id, callback, rate_limiter)
         {:reply, :ok, state}
 
       {:reject, reason} ->
+        Logger.debug(
+          "[ConnectionWrapper.handle_send_frame_with_rate_limiting] Rejected by rate limiter: #{inspect(reason)} for frame: #{inspect(frame)}"
+        )
+
         {:reply, {:error, reason}, state}
     end
   end

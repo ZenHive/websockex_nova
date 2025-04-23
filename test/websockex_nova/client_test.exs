@@ -36,17 +36,20 @@ defmodule WebsockexNova.ClientTest do
     end
 
     @impl true
-    def send_frame(_pid, _stream_ref, frame) do
-      # Send the frame back as a received message for testing purposes
+    def send_frame(_pid, stream_ref, frame) do
       case frame do
+        {:text, "NOECHO"} ->
+          # Suppress echo for timeout test
+          :ok
+
         {:text, content} ->
-          send(self(), {:websockex_nova, :response, content})
+          send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:text, content}}})
 
         :ping ->
-          send(self(), {:websockex_nova, :pong})
+          send(self(), {:websockex_nova, {:websocket_frame, stream_ref, :pong}})
 
         _ ->
-          send(self(), {:frame_received, frame})
+          send(self(), {:frame_received, stream_ref, frame})
       end
 
       :ok
@@ -333,6 +336,89 @@ defmodule WebsockexNova.ClientTest do
       {:ok, conn_with_callback} = Client.register_callback(conn, self())
       {:ok, conn_without_callback} = Client.unregister_callback(conn_with_callback, self())
       assert conn_without_callback.callback_pids == []
+    end
+  end
+
+  describe "wait_for_response/2 filtering and matcher" do
+    setup do
+      # Use the MockTransport and MockAdapter
+      Application.put_env(:websockex_nova, :transport, MockTransport)
+      {:ok, conn} = Client.connect(MockAdapter, %{host: "example.com", port: 443, path: "/ws"})
+      %{conn: conn}
+    end
+
+    test "filters out non-user messages and returns user message", %{conn: conn} do
+      stream_ref = conn.stream_ref
+      # Simulate non-user messages
+      send(self(), {:websockex_nova, {:connection_up, :http}})
+      send(self(), {:websockex_nova, {:websocket_upgrade, stream_ref, []}})
+      send(self(), {:websockex_nova, {:http_response, stream_ref, :fin, 200, []}})
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, :ping}})
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, :pong}})
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:binary, <<1, 2, 3>>}}})
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:close, 1000, "bye"}}})
+      # Now send the user message
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:text, "user response"}}})
+      assert Client.send_text(conn, "ignored") == {:ok, "user response"}
+    end
+
+    test "returns error on timeout if no user message", %{conn: conn} do
+      stream_ref = conn.stream_ref
+      send(self(), {:websockex_nova, {:connection_up, :http}})
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, :ping}})
+      opts = %{timeout: 50}
+      # Use special message to suppress echo in MockTransport
+      assert Client.send_text(conn, "NOECHO", opts) == {:error, :timeout}
+    end
+
+    test "returns error if error message received", %{conn: conn} do
+      send(self(), {:websockex_nova, :error, :some_error})
+      assert Client.send_text(conn, "ignored") == {:error, :some_error}
+    end
+
+    test "supports custom matcher function", %{conn: conn} do
+      stream_ref = conn.stream_ref
+      # Custom matcher: match only websocket_frame with {:text, "special"}
+      matcher = fn
+        {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "special"}}} -> {:ok, "special"}
+        _ -> :skip
+      end
+
+      # Send a normal user message (should be skipped)
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:text, "not special"}}})
+      # Send the special message
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:text, "special"}}})
+      opts = %{matcher: matcher}
+      assert Client.send_text(conn, "ignored", opts) == {:ok, "special"}
+    end
+
+    test "custom matcher can match on non-standard message", %{conn: conn} do
+      matcher = fn
+        {:websockex_nova, {:custom, :ok}} -> {:ok, :custom}
+        _ -> :skip
+      end
+
+      send(self(), {:websockex_nova, {:custom, :ok}})
+      opts = %{matcher: matcher}
+      # Should match custom message
+      assert Client.send_text(conn, "ignored", opts) == {:ok, :custom}
+    end
+
+    test "filters out multiple non-user messages before user message", %{conn: conn} do
+      stream_ref = conn.stream_ref
+
+      for msg <- [
+            {:websockex_nova, {:connection_up, :http}},
+            {:websockex_nova, {:websocket_frame, stream_ref, :ping}},
+            {:websockex_nova, {:websocket_frame, stream_ref, :pong}},
+            {:websockex_nova, {:websocket_frame, stream_ref, {:binary, <<1, 2, 3>>}}},
+            {:websockex_nova, {:websocket_frame, stream_ref, {:close, 1000, "bye"}}}
+          ] do
+        send(self(), msg)
+      end
+
+      send(self(), {:websockex_nova, {:websocket_frame, stream_ref, {:text, "final user msg"}}})
+      assert Client.send_text(conn, "ignored") == {:ok, "final user msg"}
     end
   end
 end

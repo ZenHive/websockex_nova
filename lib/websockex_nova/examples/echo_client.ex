@@ -35,6 +35,31 @@ defmodule WebsockexNova.Examples.EchoClient do
   end
 
   @doc """
+  Starts an echo client session with custom options (host, port, etc.).
+
+  Returns a tuple containing the connection for further interaction.
+
+  ## Examples
+
+      iex> {:ok, conn} = WebsockexNova.Examples.EchoClient.start(%{host: "localhost", port: 12345})
+      iex> WebsockexNova.Examples.EchoClient.send_message(conn, "Hello, WebSocket!")
+      {:ok, "Hello, WebSocket!"}
+  """
+  def start(opts) when is_map(opts) do
+    Logger.info("Connecting to custom echo server with opts: #{inspect(opts)}")
+
+    case EchoAdapter.connection_info(opts) do
+      {:ok, connection_info} ->
+        # Merge/override connection_info with opts for host/port/path/transport_opts
+        merged = Map.merge(connection_info, opts)
+        Client.connect(EchoAdapter, merged)
+
+      other ->
+        {:error, {:unexpected_connection_info, other}}
+    end
+  end
+
+  @doc """
   Sends a text message to the echo server and receives the echoed response.
 
   ## Parameters

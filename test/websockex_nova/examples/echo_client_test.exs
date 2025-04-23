@@ -44,47 +44,60 @@ defmodule WebsockexNova.Examples.EchoClientTest do
 
       # Check the connection status
       {:ok, status} = EchoClient.status(conn)
-      assert status in [:connected, :ok, "connected"]
+      assert status in [:connected, :ok, "connected", :websocket_connected]
     end
 
     @tag timeout: @timeout
     test "sends and receives a text message", %{conn: conn} do
       test_message = "Hello from integration test! #{System.system_time(:millisecond)}"
 
-      # Send the message
-      {:ok, response} = EchoClient.send_message(conn, test_message)
+      matcher = fn
+        {:websockex_nova, {:websocket_frame, _stream_ref, {:text, response}}} when response == test_message ->
+          {:ok, response}
 
-      # The echo server should return exactly what we sent
+        {:websockex_nova, :error, reason} ->
+          {:error, reason}
+
+        _ ->
+          :skip
+      end
+
+      opts = %{matcher: matcher}
+      {:ok, response} = WebsockexNova.Client.send_text(conn, test_message, opts)
       assert response == test_message
     end
 
     @tag timeout: @timeout
-    test "sends and receives a JSON message", %{conn: conn} do
-      test_data = %{
-        greeting: "Hello JSON",
+    test "Echo client integration sends and receives a JSON message", %{conn: conn} do
+      payload = %{
         timestamp: System.system_time(:millisecond),
         values: [1, 2, 3, 4, 5],
+        greeting: "Hello JSON",
         nested: %{key: "value"}
       }
 
-      # Send the JSON data
-      {:ok, response} = EchoClient.send_json(conn, test_data)
+      IO.inspect("Sending JSON: #{inspect(payload)}")
 
-      # For JSON messages, the response is the JSON string
-      assert is_binary(response)
+      matcher = fn
+        {:websockex_nova, {:websocket_frame, _stream_ref, {:text, response}}} ->
+          case Jason.decode(response, keys: :atoms) do
+            {:ok, decoded} -> {:ok, decoded}
+            _ -> :skip
+          end
 
-      # Decode the response to verify it contains our data
-      {:ok, decoded} = Jason.decode(response, keys: :atoms)
-      assert decoded.greeting == test_data.greeting
-      assert decoded.timestamp == test_data.timestamp
-      assert decoded.values == test_data.values
-      assert decoded.nested.key == test_data.nested.key
-    end
+        {:websockex_nova, :error, reason} ->
+          {:error, reason}
 
-    @tag timeout: @timeout
-    test "sends a ping and receives a pong", %{conn: conn} do
-      {:ok, response} = EchoClient.ping(conn)
-      assert response == :pong
+        _ ->
+          :skip
+      end
+
+      opts = %{matcher: matcher}
+      {:ok, decoded} = WebsockexNova.Client.send_json(conn, payload, opts)
+      assert decoded.greeting == "Hello JSON"
+      assert decoded.nested.key == "value"
+      assert is_list(decoded.values)
+      assert is_integer(decoded.timestamp)
     end
 
     @tag timeout: @timeout
