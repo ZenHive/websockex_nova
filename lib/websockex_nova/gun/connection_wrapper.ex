@@ -135,7 +135,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   use GenServer
 
-  alias WebsockexNova.Gun.ConnectionManage
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionOptions
   alias WebsockexNova.Gun.ConnectionState

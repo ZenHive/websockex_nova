@@ -576,31 +576,31 @@ defmodule WebsockexNova.Client do
       if is_map(options) and Map.has_key?(options, :matcher) do
         options.matcher
       else
-        fn msg ->
-          stream_ref = conn.stream_ref
-
-          case msg do
-            {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}} ->
-              Logger.debug("[Matcher] Matched text frame: #{inspect(msg)}")
-              {:ok, response}
-
-            {:websockex_nova, :response, response} ->
-              Logger.debug("[Matcher] Matched legacy response: #{inspect(msg)}")
-              {:ok, response}
-
-            {:websockex_nova, :error, reason} ->
-              Logger.debug("[Matcher] Matched error: #{inspect(msg)}")
-              {:error, reason}
-
-            _ ->
-              Logger.debug("[Matcher] Skipped message: #{inspect(msg)}")
-              :skip
-          end
-        end
+        fn msg -> default_matcher(conn.stream_ref, msg) end
       end
 
     start = System.monotonic_time(:millisecond)
     do_wait_for_response(matcher, timeout, start)
+  end
+
+  defp default_matcher(stream_ref, msg) do
+    case msg do
+      {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}} ->
+        Logger.debug("[Matcher] Matched text frame: #{inspect(msg)}")
+        {:ok, response}
+
+      {:websockex_nova, :response, response} ->
+        Logger.debug("[Matcher] Matched legacy response: #{inspect(msg)}")
+        {:ok, response}
+
+      {:websockex_nova, :error, reason} ->
+        Logger.debug("[Matcher] Matched error: #{inspect(msg)}")
+        {:error, reason}
+
+      _ ->
+        Logger.debug("[Matcher] Skipped message: #{inspect(msg)}")
+        :skip
+    end
   end
 
   defp do_wait_for_response(matcher, timeout, start) do

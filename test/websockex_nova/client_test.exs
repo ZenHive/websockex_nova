@@ -127,8 +127,13 @@ defmodule WebsockexNova.ClientTest do
     def message_type(_message), do: :text
 
     @impl MessageHandler
-    def encode_message(message_type, _state) do
-      {:ok, :text, to_string(message_type)}
+    def encode_message(message, _state) when is_map(message) do
+      {:ok, :text, message}
+    end
+
+    @impl MessageHandler
+    def encode_message(message, _state) do
+      {:ok, :text, to_string(message)}
     end
 
     # Support for the 3-parameter version
@@ -186,6 +191,7 @@ defmodule WebsockexNova.ClientTest do
     def classify_error(_error, _state), do: :recoverable
 
     # Connection info
+    @impl ConnectionHandler
     def connection_info(_state) do
       {:ok,
        %{
