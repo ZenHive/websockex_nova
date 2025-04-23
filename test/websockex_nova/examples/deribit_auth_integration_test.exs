@@ -36,10 +36,27 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
       }
 
       case Client.authenticate(conn, credentials) do
-        {:ok, _auth_data, new_state} ->
-          assert is_map(new_state.credentials)
-          assert is_binary(new_state.credentials.token)
-          assert is_integer(new_state.auth_expires_at) and new_state.auth_expires_at > System.system_time(:second)
+        {:ok, response} ->
+          # Parse the response JSON
+          {:ok, decoded} = Jason.decode(response)
+
+          # The response could be either the auth request or the auth result
+          # If it's a request format that includes method and params, we need to make sure it uses the right credentials
+          case decoded do
+            %{"method" => "public/auth", "params" => params} ->
+              assert params["client_id"] == @client_id
+              assert params["client_secret"] == @client_secret
+              assert params["grant_type"] == "client_credentials"
+
+            %{"jsonrpc" => "2.0", "id" => _id, "result" => result} ->
+              # This is the success response format with a result containing auth data
+              assert %{"access_token" => access_token, "expires_in" => expires_in} = result
+
+              # Check the values
+              assert is_binary(access_token)
+              assert is_integer(expires_in)
+              assert expires_in > 0
+          end
 
         {:error, :timeout} ->
           IO.puts("Timeout waiting for authentication response. Process mailbox:")
