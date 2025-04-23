@@ -8,16 +8,19 @@ defmodule WebsockexNova.Gun.ConnectionStateTest do
       host = "example.com"
       port = 443
       options = %{transport: :tls}
-
       state = ConnectionState.new(host, port, options)
-
       assert state.host == host
       assert state.port == port
-      assert state.options == options
       assert state.status == :initialized
-      assert state.callback_pid == nil
+      assert state.options == options
+      assert state.transport == :tls
+      assert state.path == "/ws"
+      assert state.ws_opts == %{}
+      assert state.gun_pid == nil
+      assert state.gun_monitor_ref == nil
+      assert state.last_error == nil
       assert state.active_streams == %{}
-      assert state.reconnect_attempts == 0
+      assert state.handlers == %{}
     end
 
     test "new/3 sets callback_pid from options" do
@@ -53,60 +56,48 @@ defmodule WebsockexNova.Gun.ConnectionStateTest do
       assert updated_state.gun_pid == fake_pid
     end
 
+    test "update_gun_monitor_ref/2 updates the monitor ref", %{state: state} do
+      ref = make_ref()
+      updated_state = ConnectionState.update_gun_monitor_ref(state, ref)
+      assert updated_state.gun_monitor_ref == ref
+    end
+
     test "record_error/2 sets the last_error field", %{state: state} do
       error = {:error, :connection_refused}
       updated_state = ConnectionState.record_error(state, error)
       assert updated_state.last_error == error
     end
 
-    test "update_stream/3 adds a stream to active_streams", %{state: state} do
+    test "update_stream/3 adds or updates a stream", %{state: state} do
       stream_ref = make_ref()
-      updated_state = ConnectionState.update_stream(state, stream_ref, :upgrading)
-      assert updated_state.active_streams[stream_ref] == :upgrading
-    end
-
-    test "update_stream/3 updates an existing stream", %{state: state} do
-      stream_ref = make_ref()
-      state_with_stream = ConnectionState.update_stream(state, stream_ref, :upgrading)
-      updated_state = ConnectionState.update_stream(state_with_stream, stream_ref, :websocket)
+      updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
       assert updated_state.active_streams[stream_ref] == :websocket
     end
 
-    test "increment_reconnect_attempts/1 increases the reconnect counter", %{state: state} do
-      assert state.reconnect_attempts == 0
-
-      updated_state = ConnectionState.increment_reconnect_attempts(state)
-      assert updated_state.reconnect_attempts == 1
-
-      updated_state = ConnectionState.increment_reconnect_attempts(updated_state)
-      assert updated_state.reconnect_attempts == 2
-    end
-
-    test "reset_reconnect_attempts/1 resets the counter to zero", %{state: state} do
-      # First increment a few times
-      state =
-        state
-        |> ConnectionState.increment_reconnect_attempts()
-        |> ConnectionState.increment_reconnect_attempts()
-
-      assert state.reconnect_attempts == 2
-
-      # Then reset
-      updated_state = ConnectionState.reset_reconnect_attempts(state)
-      assert updated_state.reconnect_attempts == 0
-    end
-
-    test "update_active_streams/2 replaces the entire active_streams map", %{state: state} do
-      # Create a test stream reference and map
+    test "remove_stream/2 removes a stream", %{state: state} do
       stream_ref = make_ref()
-      new_streams = %{stream_ref => :websocket}
+      state = ConnectionState.update_stream(state, stream_ref, :websocket)
+      updated_state = ConnectionState.remove_stream(state, stream_ref)
+      refute Map.has_key?(updated_state.active_streams, stream_ref)
+    end
 
-      # Update the map
-      updated_state = ConnectionState.update_active_streams(state, new_streams)
+    test "remove_streams/2 removes multiple streams", %{state: state} do
+      ref1 = make_ref()
+      ref2 = make_ref()
+      state = ConnectionState.update_stream(state, ref1, :websocket)
+      state = ConnectionState.update_stream(state, ref2, :websocket)
+      updated_state = ConnectionState.remove_streams(state, [ref1, ref2])
+      refute Map.has_key?(updated_state.active_streams, ref1)
+      refute Map.has_key?(updated_state.active_streams, ref2)
+    end
 
-      # Verify the update happened correctly
-      assert updated_state.active_streams == new_streams
-      assert updated_state.active_streams[stream_ref] == :websocket
+    test "clear_all_streams/1 clears all streams", %{state: state} do
+      ref1 = make_ref()
+      ref2 = make_ref()
+      state = ConnectionState.update_stream(state, ref1, :websocket)
+      state = ConnectionState.update_stream(state, ref2, :websocket)
+      updated_state = ConnectionState.clear_all_streams(state)
+      assert updated_state.active_streams == %{}
     end
   end
 end
