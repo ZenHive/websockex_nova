@@ -94,6 +94,15 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   end
   """
 
+  @typedoc "Handler state"
+  @type state :: map()
+
+  @typedoc "Authentication payload to send to the server"
+  @type auth_data :: map()
+
+  @typedoc "Authentication response from the server"
+  @type auth_response :: map()
+
   @doc """
   Generates authentication data to be sent to the WebSocket server.
 
@@ -113,9 +122,9 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
     - `reason`: Atom or string describing the error
     - `state`: Potentially updated state after the error
   """
-  @callback generate_auth_data(state :: map()) ::
-              {:ok, auth_data :: map(), updated_state :: map()}
-              | {:error, reason :: atom() | String.t(), updated_state :: map()}
+  @callback generate_auth_data(state) ::
+              {:ok, auth_data, state}
+              | {:error, term(), state}
 
   @doc """
   Processes an authentication response received from the WebSocket server.
@@ -137,9 +146,9 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
     - `reason`: Atom or string describing the error
     - `updated_state`: State updated with error information
   """
-  @callback handle_auth_response(response :: map(), state :: map()) ::
-              {:ok, updated_state :: map()}
-              | {:error, reason :: atom() | String.t(), updated_state :: map()}
+  @callback handle_auth_response(auth_response, state) ::
+              {:ok, state}
+              | {:error, term(), state}
 
   @doc """
   Determines if reauthentication is needed based on the current state.
@@ -156,7 +165,7 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   - `true`: Reauthentication is needed
   - `false`: Current authentication is still valid
   """
-  @callback needs_reauthentication?(state :: map()) :: boolean()
+  @callback needs_reauthentication?(state) :: boolean()
 
   @doc """
   Authenticates using the provided credentials and current state.

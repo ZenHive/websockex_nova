@@ -93,24 +93,16 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
   * `encode_message/2` - Encode a message for sending
   """
 
-  @typedoc """
-  Message content - typically a decoded JSON map
-  """
+  @typedoc "Handler state"
+  @type state :: map()
+
+  @typedoc "Message content"
   @type message :: map() | binary()
 
-  @typedoc """
-  Handler state - can be any term
-  """
-  @type state :: term()
-
-  @typedoc """
-  Message type - can be any term that identifies message categories
-  """
+  @typedoc "Message type"
   @type message_type :: atom() | String.t() | {atom(), term()}
 
-  @typedoc """
-  Frame types that can be sent
-  """
+  @typedoc "Frame type"
   @type frame_type :: :text | :binary | :ping | :pong | :close
 
   @typedoc """

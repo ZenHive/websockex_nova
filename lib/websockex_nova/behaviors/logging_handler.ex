@@ -91,70 +91,41 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
       :ok
     end
   end
-  ```
   """
 
-  @typedoc """
-  Event type for connection, message, or error events.
-  """
+  @typedoc "Handler state"
+  @type state :: map()
+
+  @typedoc "Event type for connection, message, or error events."
   @type event :: atom() | String.t() | map()
 
-  @typedoc """
-  Context information about the event (e.g., connection details, message payload, error info).
-  """
+  @typedoc "Context information about the event (e.g., connection details, message payload, error info)."
   @type context :: map()
 
-  @typedoc """
-  Handler state - can be any term.
-  """
-  @type state :: term()
-
-  @typedoc """
-  Log level (:debug, :info, :warn, :error).
-  """
+  @typedoc "Log level (:debug, :info, :warn, :error)."
   @type log_level :: :debug | :info | :warn | :error
 
-  @typedoc """
-  Log format (:plain, :json, or custom atom).
-  """
+  @typedoc "Log format (:plain, :json, or custom atom)."
   @type log_format :: :plain | :json | atom()
 
   @doc """
   Log a connection lifecycle event (e.g., connect, disconnect, reconnect).
-
-  ## Parameters
-  * `event` - The connection event (atom, string, or map)
-  * `context` - Additional context (map)
-  * `state` - Current handler state
-
-  ## Returns
-  * `:ok`
+  Returns:
+    - `:ok`
   """
-  @callback log_connection_event(event(), context(), state()) :: :ok
+  @callback log_connection_event(event, context, state) :: :ok
 
   @doc """
   Log a message event (send/receive).
-
-  ## Parameters
-  * `event` - The message event (atom, string, or map)
-  * `context` - Additional context (map)
-  * `state` - Current handler state
-
-  ## Returns
-  * `:ok`
+  Returns:
+    - `:ok`
   """
-  @callback log_message_event(event(), context(), state()) :: :ok
+  @callback log_message_event(event, context, state) :: :ok
 
   @doc """
   Log an error event with context.
-
-  ## Parameters
-  * `event` - The error event (atom, string, or map)
-  * `context` - Additional context (map)
-  * `state` - Current handler state
-
-  ## Returns
-  * `:ok`
+  Returns:
+    - `:ok`
   """
-  @callback log_error_event(event(), context(), state()) :: :ok
+  @callback log_error_event(event, context, state) :: :ok
 end
