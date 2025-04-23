@@ -218,56 +218,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @spec open(binary(), pos_integer(), binary(), options()) :: {:ok, WebsockexNova.ClientConn.t()} | {:error, term()}
   @impl WebsockexNova.Transport
   def open(host, port, path, options \\ %{}) do
-    # Start the connection process
-    case GenServer.start_link(__MODULE__, {host, port, options, nil}) do
-      {:ok, pid} ->
-        # Wait for connection to be established
-        status = wait_for_status(pid, :connected, Map.get(options, :timeout, 5000))
-
-        if status == :connected do
-          headers = Map.get(options, :headers, [])
-          # Perform WebSocket upgrade
-          case GenServer.call(pid, {:upgrade_to_websocket, path, headers}, Map.get(options, :timeout, 5000)) do
-            {:ok, stream_ref} ->
-              # Wait for websocket_connected status
-              ws_status = wait_for_status(pid, :websocket_connected, Map.get(options, :timeout, 5000))
-
-              if ws_status == :websocket_connected do
-                # Build ClientConn struct
-                state_result = GenServer.call(pid, :get_state)
-
-                case state_result do
-                  %WebsockexNova.Gun.ConnectionState{} = _state ->
-                    {:ok,
-                     %WebsockexNova.ClientConn{
-                       transport: __MODULE__,
-                       transport_pid: pid,
-                       stream_ref: stream_ref,
-                       adapter: Map.get(options, :adapter),
-                       adapter_state: Map.get(options, :adapter_state),
-                       callback_pids: Enum.filter([Map.get(options, :callback_pid)], & &1)
-                     }}
-
-                  _other ->
-                    GenServer.stop(pid)
-                    {:error, :connection_failed}
-                end
-              else
-                GenServer.stop(pid)
-                {:error, :websocket_upgrade_failed}
-              end
-
-            {:error, reason} ->
-              GenServer.stop(pid)
-              {:error, reason}
-          end
-        else
-          GenServer.stop(pid)
-          {:error, :connection_failed}
-        end
-
+    with {:ok, pid} <- start_connection(host, port, options),
+         :connected <- wait_for_connection(pid, options),
+         {:ok, stream_ref} <- upgrade_to_websocket_helper(pid, path, options),
+         :websocket_connected <- wait_for_websocket(pid, options),
+         {:ok, client_conn} <- build_client_conn(pid, stream_ref, options) do
+      {:ok, client_conn}
+    else
       {:error, reason} ->
         {:error, reason}
+
+      :timeout ->
+        # Only stop pid if it was started
+        {:error, :connection_failed}
+
+      :websocket_upgrade_failed ->
+        {:error, :websocket_upgrade_failed}
+
+      _ ->
+        {:error, :connection_failed}
     end
   end
 
@@ -1315,6 +1284,57 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         Process.sleep(50)
         do_wait_for_status(pid, expected_status, timeout, start)
       end
+    end
+  end
+
+  defp start_connection(host, port, options) do
+    case GenServer.start_link(__MODULE__, {host, port, options, nil}) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp wait_for_connection(pid, options) do
+    status = wait_for_status(pid, :connected, Map.get(options, :timeout, 5000))
+    status
+  end
+
+  defp upgrade_to_websocket_helper(pid, path, options) do
+    headers = Map.get(options, :headers, [])
+
+    case GenServer.call(pid, {:upgrade_to_websocket, path, headers}, Map.get(options, :timeout, 5000)) do
+      {:ok, stream_ref} ->
+        {:ok, stream_ref}
+
+      {:error, reason} ->
+        GenServer.stop(pid)
+        {:error, reason}
+    end
+  end
+
+  defp wait_for_websocket(pid, options) do
+    ws_status = wait_for_status(pid, :websocket_connected, Map.get(options, :timeout, 5000))
+    ws_status
+  end
+
+  defp build_client_conn(pid, stream_ref, options) do
+    state_result = GenServer.call(pid, :get_state)
+
+    case state_result do
+      %ConnectionState{} = _state ->
+        {:ok,
+         %WebsockexNova.ClientConn{
+           transport: __MODULE__,
+           transport_pid: pid,
+           stream_ref: stream_ref,
+           adapter: Map.get(options, :adapter),
+           adapter_state: Map.get(options, :adapter_state),
+           callback_pids: Enum.filter([Map.get(options, :callback_pid)], & &1)
+         }}
+
+      _other ->
+        GenServer.stop(pid)
+        {:error, :connection_failed}
     end
   end
 end
