@@ -46,7 +46,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
     response = receive_json_response(conn.stream_ref, @timeout)
     assert response["result"]["access_token"]
     assert response["result"]["expires_in"]
@@ -69,7 +69,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
     _auth_response = receive_json_response(conn.stream_ref, @timeout)
 
     for request_id <- [123, "abc-123", "request-#{:rand.uniform(1000)}"] do
@@ -80,7 +80,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
         "params" => %{}
       }
 
-      :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(message)})
+      :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(message)})
       response = receive_json_response(conn.stream_ref, @timeout)
       assert response["id"] == request_id
     end
@@ -102,7 +102,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       }
     }
 
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(auth_msg)})
     auth_response = receive_json_response(conn.stream_ref, @timeout)
     assert _access_token = auth_response["result"]["access_token"]
 
@@ -113,7 +113,7 @@ defmodule WebsockexNova.Integration.DeribitIntegrationTest do
       "params" => %{"currency" => "BTC"}
     }
 
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(summary_msg)})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(summary_msg)})
     summary_response = receive_json_response(conn.stream_ref, @timeout)
     assert summary_response["result"]["currency"] == "BTC"
   end

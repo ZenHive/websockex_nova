@@ -12,6 +12,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
   @moduletag :integration
 
   @websocket_path "/ws"
+  @host "localhost"
+
   @default_delay 200
 
   # Test implementation of ConnectionHandler
@@ -147,8 +149,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       try do
         # Start connection wrapper with test handler
-        {:ok, conn_pid} =
-          ConnectionWrapper.open("localhost", port, %{
+        {:ok, conn} =
+          ConnectionWrapper.open("localhost", port, "/ws", %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
             custom_option: "test_value",
@@ -162,11 +164,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         Process.sleep(@default_delay)
 
         # Verify handler was initialized with our options
-        state = ConnectionWrapper.get_state(conn_pid)
+        state = ConnectionWrapper.get_state(conn)
         assert state.handlers.connection_handler == TestConnectionHandler
 
         # Close the connection
-        ConnectionWrapper.close(conn_pid)
+        ConnectionWrapper.close(conn)
       after
         Process.sleep(@default_delay)
         MockWebSockServer.stop(server_pid)
@@ -178,8 +180,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       try do
         # Start connection wrapper with test handler
-        {:ok, conn_pid} =
-          ConnectionWrapper.open("localhost", port, %{
+        {:ok, conn} =
+          ConnectionWrapper.open(@host, port, @websocket_path, %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
             transport: :tcp
@@ -197,19 +199,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         assert conn_info.port == port
 
         # Upgrade to WebSocket
-        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path, [])
         Process.sleep(@default_delay * 2)
 
         # Send a text frame
-        :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, {:text, "Test message"})
+        :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "Test message"})
         Process.sleep(@default_delay)
 
         # Send a ping frame to test reply
-        :ok = ConnectionWrapper.send_frame(conn_pid, stream_ref, :ping)
+        :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, :ping)
         Process.sleep(@default_delay)
 
         # Close the connection normally
-        ConnectionWrapper.close(conn_pid)
+        ConnectionWrapper.close(conn)
       after
         Process.sleep(@default_delay)
         MockWebSockServer.stop(server_pid)
@@ -221,8 +222,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       try do
         # Start connection wrapper with test handler
-        {:ok, conn_pid} =
-          ConnectionWrapper.open("localhost", port, %{
+        {:ok, conn} =
+          ConnectionWrapper.open("localhost", port, "/ws", %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
             transport: :tcp
@@ -233,11 +234,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
         # Wait for connection to establish and upgrade to websocket
         Process.sleep(@default_delay)
-        {:ok, _stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn_pid, @websocket_path, [])
+
         Process.sleep(@default_delay)
 
         # Manually get state to verify test_pid is properly set
-        state = ConnectionWrapper.get_state(conn_pid)
+        state = ConnectionWrapper.get_state(conn)
         Logger.debug("State before disconnect: #{inspect(state.handlers)}")
 
         # Stop the server to force a disconnection
@@ -247,7 +248,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         Process.sleep(@default_delay * 3)
 
         # Close the connection wrapper
-        ConnectionWrapper.close(conn_pid)
+        ConnectionWrapper.close(conn)
       after
         # Server already stopped in test
         nil
@@ -259,8 +260,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
 
       try do
         # Start connection wrapper with test handler configured to reconnect
-        {:ok, conn_pid} =
-          ConnectionWrapper.open("localhost", port, %{
+        {:ok, conn} =
+          ConnectionWrapper.open("localhost", port, "/ws", %{
             callback_handler: TestConnectionHandler,
             test_pid: self(),
             should_reconnect: true,
@@ -287,7 +288,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         Process.sleep(@default_delay * 4)
 
         # Clean up
-        ConnectionWrapper.close(conn_pid)
+        ConnectionWrapper.close(conn)
         MockWebSockServer.stop(new_server_pid)
       after
         # Servers handled in test
@@ -296,40 +297,57 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     end
 
     setup do
-      {:ok, pid} =
-        ConnectionWrapper.open("localhost", 1234, %{
+      {:ok, server_pid, port} = MockWebSockServer.start_link()
+
+      {:ok, conn} =
+        ConnectionWrapper.open("localhost", port, "/ws", %{
           callback_handler: TestConnectionHandler,
           subscription_handler: TestSubscriptionHandler,
           auth_handler: TestAuthHandler,
           transport: :tcp
         })
 
-      {:ok, pid: pid}
+      {:ok, conn: conn, server_pid: server_pid}
     end
 
-    test "subscribe/4 delegates to subscription handler", %{pid: pid} do
+    test "subscribe/4 delegates to subscription handler", %{conn: conn, server_pid: server_pid} do
       assert {:subscribed, "chan", %{foo: 1}, %{}} =
-               ConnectionWrapper.subscribe(pid, :ref, "chan", %{foo: 1})
+               ConnectionWrapper.subscribe(conn, :ref, "chan", %{foo: 1})
+
+      ConnectionWrapper.close(conn)
+      MockWebSockServer.stop(server_pid)
     end
 
-    test "unsubscribe/3 delegates to subscription handler", %{pid: pid} do
+    test "unsubscribe/3 delegates to subscription handler", %{conn: conn, server_pid: server_pid} do
       assert {:unsubscribed, "chan", %{}} =
-               ConnectionWrapper.unsubscribe(pid, :ref, "chan")
+               ConnectionWrapper.unsubscribe(conn, :ref, "chan")
+
+      ConnectionWrapper.close(conn)
+      MockWebSockServer.stop(server_pid)
     end
 
-    test "authenticate/3 delegates to auth handler", %{pid: pid} do
+    test "authenticate/3 delegates to auth handler", %{conn: conn, server_pid: server_pid} do
       assert {:authenticated, :ref, %{user: "u"}, %{}} =
-               ConnectionWrapper.authenticate(pid, :ref, %{user: "u"})
+               ConnectionWrapper.authenticate(conn, :ref, %{user: "u"})
+
+      ConnectionWrapper.close(conn)
+      MockWebSockServer.stop(server_pid)
     end
 
-    test "ping/2 delegates to connection handler", %{pid: pid} do
+    test "ping/2 delegates to connection handler", %{conn: conn, server_pid: server_pid} do
       assert {:pinged, :ref, %{}} =
-               ConnectionWrapper.ping(pid, :ref)
+               ConnectionWrapper.ping(conn, :ref)
+
+      ConnectionWrapper.close(conn)
+      MockWebSockServer.stop(server_pid)
     end
 
-    test "status/2 delegates to connection handler", %{pid: pid} do
+    test "status/2 delegates to connection handler", %{conn: conn, server_pid: server_pid} do
       assert {:status, :ref, %{}} =
-               ConnectionWrapper.status(pid, :ref)
+               ConnectionWrapper.status(conn, :ref)
+
+      ConnectionWrapper.close(conn)
+      MockWebSockServer.stop(server_pid)
     end
   end
 end

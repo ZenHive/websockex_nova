@@ -44,7 +44,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   describe "connection lifecycle" do
     test "basic connection and WebSocket functionality", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       state = ConnectionWrapper.get_state(conn)
       assert is_pid(state.gun_pid)
       assert is_reference(state.gun_monitor_ref)
@@ -58,7 +57,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "handles different frame types", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{callback_pid: self(), transport: :tcp})
       Logger.warning("conn: #{inspect(conn)}")
-      conn_pid = conn.transport_pid
       stream_ref = conn.stream_ref
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "Text message"})
@@ -76,7 +74,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "handles connection status transitions", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
 
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.set_status(conn, :disconnected)
       assert_connection_status(conn, :disconnected)
@@ -96,7 +93,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "handles invalid stream references gracefully", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
 
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       invalid_stream_ref = make_ref()
       result = ConnectionWrapper.send_frame(conn, invalid_stream_ref, {:text, "test"})
@@ -106,7 +102,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
     test "handles websocket close frames correctly", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{callback_pid: self(), transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, :close)
       Process.sleep(@default_delay)
@@ -117,7 +112,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
     test "handles multiple frame sends in sequence", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{callback_pid: self(), transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       frames = [
@@ -152,7 +146,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       )
 
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "Telemetry Test"})
       assert_receive {:telemetry_event, ^event, meas, meta}, 200
@@ -172,15 +165,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   describe "callback notification" do
     test "sends messages to callback process when provided", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{callback_pid: self(), transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_receive({:websockex_nova, {:connection_up, :http}}, 500)
       assert_connection_status(conn, :websocket_connected)
       stream_ref = conn.stream_ref
-      assert_receive({:websockex_nova, {:websocket_upgrade, stream_ref, _headers}}, 500)
+      assert_receive({:websockex_nova, {:websocket_upgrade, ^stream_ref, _headers}}, 500)
       :ok = ConnectionWrapper.send_frame(conn, stream_ref, {:text, "Text message"})
 
       assert_receive(
-        {:websockex_nova, {:websocket_frame, stream_ref, {:text, "Text message"}}},
+        {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "Text message"}}},
         500
       )
 
@@ -196,7 +188,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "transfers ownership of Gun process", %{port: port} do
       test_receiver = spawn_link(fn -> ownership_transfer_test_process() end)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       state_before = ConnectionWrapper.get_state(conn)
       assert is_pid(state_before.gun_pid)
@@ -216,12 +207,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
     test "receives ownership from another process", %{port: port} do
       {:ok, conn1} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid1 = conn1.transport_pid
       assert_connection_status(conn1, :websocket_connected)
       state1 = ConnectionWrapper.get_state(conn1)
       gun_pid = state1.gun_pid
       {:ok, conn2} = ConnectionWrapper.open("localhost", port, "/ws", %{callback_pid: self(), transport: :tcp})
-      conn_pid2 = conn2.transport_pid
       Process.sleep(@default_delay)
       :ok = ConnectionWrapper.receive_ownership(conn2, gun_pid)
       Process.sleep(@default_delay)
@@ -257,7 +246,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       Process.exit(invalid_gun_pid, :kill)
       Process.sleep(50)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{retry: 0, transport: :tcp})
-      conn_pid = conn.transport_pid
       result = ConnectionWrapper.receive_ownership(conn, invalid_gun_pid)
       assert match?({:error, _}, result)
       ConnectionWrapper.close(conn)
@@ -266,8 +254,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "monitors are cleaned up during ownership transfer", %{port: port} do
       {:ok, conn1} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
       {:ok, conn2} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid1 = conn1.transport_pid
-      conn_pid2 = conn2.transport_pid
+
       assert_connection_status(conn1, :websocket_connected)
       assert_connection_status(conn2, :websocket_connected)
       state1_before = ConnectionWrapper.get_state(conn1)
@@ -316,7 +303,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
     test "handles wait_for_websocket_upgrade errors consistently", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       invalid_stream_ref = make_ref()
       result = ConnectionWrapper.wait_for_websocket_upgrade(conn, invalid_stream_ref, 100)
@@ -375,7 +361,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   describe "ownership transfer edge cases" do
     test "transfers ownership while stream is active", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       test_receiver = spawn_link(fn -> ownership_transfer_test_process() end)
@@ -389,7 +374,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
     test "rapid repeated ownership transfers", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       pids = for _ <- 1..3, do: spawn_link(fn -> ownership_transfer_test_process() end)
 
@@ -429,8 +413,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
           test_pid: self(),
           transport: :tcp
         })
-
-      conn_pid = conn.transport_pid
 
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "trigger custom handler"})
@@ -472,7 +454,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
   describe "edge cases" do
     test "double websocket upgrade fails gracefully", %{port: port} do
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       result = ConnectionWrapper.upgrade_to_websocket(conn, @websocket_path, [])
@@ -536,7 +517,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "allows frame when rate limiter allows", %{port: port, rate_limiter_name: rl_name} do
       {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_allow)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp, rate_limiter: rl_name})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "allowed"})
@@ -546,7 +526,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "queues frame when rate limiter queues", %{port: port, rate_limiter_name: rl_name} do
       {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_queue)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp, rate_limiter: rl_name})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "should queue"})
@@ -557,7 +536,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
     test "rejects frame when rate limiter rejects", %{port: port, rate_limiter_name: rl_name} do
       {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_reject)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp, rate_limiter: rl_name})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
       result = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "should reject"})
       assert result == {:error, :test_rejection}
@@ -574,7 +552,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
         )
 
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp, rate_limiter: rl_name})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       # Send frame, which will be queued
@@ -590,7 +567,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       # Use a handler that tracks all requests
       {:ok, _} = RateLimiting.start_link(name: rl_name, handler: RateLimitHandlers.TestHandler, mode: :always_allow)
       {:ok, conn} = ConnectionWrapper.open("localhost", port, "/ws", %{transport: :tcp, rate_limiter: rl_name})
-      conn_pid = conn.transport_pid
       assert_connection_status(conn, :websocket_connected)
 
       for i <- 1..3 do
@@ -614,7 +590,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       assert is_reference(conn.stream_ref)
       # adapter and adapter_state may be nil if not set
       assert is_list(conn.callback_pids)
-      WebsockexNova.Gun.ConnectionWrapper.close(conn.transport_pid)
+      WebsockexNova.Gun.ConnectionWrapper.close(conn)
     end
 
     test "returns error if connection fails" do

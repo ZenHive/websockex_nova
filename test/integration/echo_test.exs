@@ -22,7 +22,7 @@ defmodule WebsockexNova.Integration.EchoTest do
 
   test "echoes text frames", %{conn: conn} do
     msg = %{"type" => "echo", "payload" => "hello"}
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:text, Jason.encode!(msg)})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, Jason.encode!(msg)})
     response = receive_json_response(conn.stream_ref, @timeout)
     decoded = Jason.decode!(response)
     assert decoded["type"] == "echo"
@@ -32,7 +32,7 @@ defmodule WebsockexNova.Integration.EchoTest do
   @tag :skip
   test "echoes binary frames", %{conn: conn} do
     payload = <<1, 2, 3, 4, 5>>
-    :ok = ConnectionWrapper.send_frame(conn.transport_pid, conn.stream_ref, {:binary, payload})
+    :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:binary, payload})
     response = receive_binary_response(conn.stream_ref, @timeout)
     assert response == payload
   end
@@ -53,7 +53,7 @@ defmodule WebsockexNova.Integration.EchoTest do
 
       # Send a request
       json_request = Jason.encode!(request)
-      :ok = ConnectionWrapper.send_frame(conn.transport_pid, stream_ref, {:text, json_request})
+      :ok = ConnectionWrapper.send_frame(conn, stream_ref, {:text, json_request})
 
       # Wait to receive the echo frame directly from the handler
       assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, response}}}, @timeout

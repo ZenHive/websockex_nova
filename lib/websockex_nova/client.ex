@@ -570,7 +570,6 @@ defmodule WebsockexNova.Client do
     )
 
     timeout = get_timeout(options)
-    stream_ref = conn.stream_ref
 
     matcher =
       if is_map(options) and Map.has_key?(options, :matcher) do
