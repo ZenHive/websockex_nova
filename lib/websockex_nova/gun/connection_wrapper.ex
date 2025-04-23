@@ -135,6 +135,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   use GenServer
 
+  alias WebsockexNova.Gun.ConnectionManage
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionOptions
   alias WebsockexNova.Gun.ConnectionState
@@ -522,12 +523,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   @impl WebsockexNova.Transport
   def schedule_reconnection(state, callback) do
-    WebsockexNova.Gun.ConnectionManager.schedule_reconnection(state, callback)
+    ConnectionManager.schedule_reconnection(state, callback)
   end
 
   @impl WebsockexNova.Transport
   def start_connection(state) do
-    case WebsockexNova.Gun.ConnectionManager.start_connection(state) do
+    case ConnectionManager.start_connection(state) do
       {:ok, updated_state} -> updated_state
       {:error, _reason, error_state} -> error_state
     end

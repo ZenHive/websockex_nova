@@ -664,15 +664,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       path = "/ws"
       # Start a mock WebSocket server if needed, or use a known good port
       {:ok, conn} =
-        WebsockexNova.Gun.ConnectionWrapper.open("localhost", port, path, %{transport: :tcp})
+        ConnectionWrapper.open("localhost", port, path, %{transport: :tcp})
 
       assert %WebsockexNova.ClientConn{} = conn
-      assert conn.transport == WebsockexNova.Gun.ConnectionWrapper
+      assert conn.transport == ConnectionWrapper
       assert is_pid(conn.transport_pid)
       assert is_reference(conn.stream_ref)
       # adapter and adapter_state may be nil if not set
       assert is_list(conn.callback_pids)
-      WebsockexNova.Gun.ConnectionWrapper.close(conn)
+      ConnectionWrapper.close(conn)
     end
 
     test "returns error if connection fails" do
@@ -681,7 +681,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       path = "/ws"
 
       assert {:error, _reason} =
-               WebsockexNova.Gun.ConnectionWrapper.open("localhost", port, path, %{transport: :tcp, timeout: 500})
+               ConnectionWrapper.open("localhost", port, path, %{transport: :tcp, timeout: 500})
     end
 
     test "returns error if upgrade fails (bad path)" do
@@ -689,7 +689,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       bad_path = "/badpath"
       # Start a mock WebSocket server if needed, or use a known good port
       assert {:error, _reason} =
-               WebsockexNova.Gun.ConnectionWrapper.open("localhost", port, bad_path, %{transport: :tcp, timeout: 500})
+               ConnectionWrapper.open("localhost", port, bad_path, %{transport: :tcp, timeout: 500})
     end
   end
 

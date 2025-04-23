@@ -2,6 +2,7 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
   use ExUnit.Case, async: false
 
   alias WebsockexNova.Client
+  alias WebsockexNova.Examples.DeribitAdapter
   alias WebsockexNova.Examples.DeribitClient
 
   require Logger
@@ -15,7 +16,7 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
   @tag :external
   test "connects to the correct Deribit testnet host" do
     # Use the adapter directly to check connection info
-    {:ok, info} = WebsockexNova.Examples.DeribitAdapter.connection_info(%{})
+    {:ok, info} = DeribitAdapter.connection_info(%{})
     assert info.host == @deribit_host
     assert info.port == 443
     assert info.path == "/ws/api/v2"
