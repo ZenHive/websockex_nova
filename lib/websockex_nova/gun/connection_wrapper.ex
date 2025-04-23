@@ -275,15 +275,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
 
   ## Returns
 
   * `:ok`
   """
-  @spec close(pid()) :: :ok
+  @spec close(WebsockexNova.ClientConn.t()) :: :ok
   @impl WebsockexNova.Transport
-  def close(pid) do
+  def close(%WebsockexNova.ClientConn{transport_pid: pid}) do
     GenServer.cast(pid, :close)
   end
 
@@ -292,7 +292,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `path` - The WebSocket endpoint path
   * `headers` - Additional headers for the upgrade request
 
@@ -301,10 +301,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:ok, reference()}` on success
   * `{:error, reason}` on failure
   """
-  @spec upgrade_to_websocket(pid(), binary(), Keyword.t()) ::
+  @spec upgrade_to_websocket(WebsockexNova.ClientConn.t(), binary(), Keyword.t()) ::
           {:ok, reference()} | {:error, term()}
   @impl WebsockexNova.Transport
-  def upgrade_to_websocket(pid, path, headers) do
+  def upgrade_to_websocket(%WebsockexNova.ClientConn{transport_pid: pid}, path, headers) do
     GenServer.call(pid, {:upgrade_to_websocket, path, headers})
   end
 
@@ -313,7 +313,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `stream_ref` - The stream reference from the upgrade
   * `frame` - WebSocket frame to send
 
@@ -323,8 +323,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:error, reason}` on failure
   """
   @impl WebsockexNova.Transport
-  @spec send_frame(pid(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
-  def send_frame(pid, stream_ref, frame) do
+  @spec send_frame(WebsockexNova.ClientConn.t(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
+  def send_frame(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, frame) do
     Logger.debug(
       "[ConnectionWrapper.send_frame/3] Sending frame: #{inspect(frame)} to stream_ref: #{inspect(stream_ref)}"
     )
@@ -337,7 +337,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `message` - The Gun message to process
 
   ## Returns
@@ -345,8 +345,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `:ok`
   """
   @impl WebsockexNova.Transport
-  @spec process_transport_message(pid(), tuple()) :: :ok
-  def process_transport_message(pid, message) do
+  @spec process_transport_message(WebsockexNova.ClientConn.t(), tuple()) :: :ok
+  def process_transport_message(%WebsockexNova.ClientConn{transport_pid: pid}, message) do
     GenServer.cast(pid, {:process_gun_message, message})
   end
 
@@ -355,15 +355,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
 
   ## Returns
 
   * The current state struct
   """
   @impl WebsockexNova.Transport
-  @spec get_state(pid()) :: ConnectionState.t()
-  def get_state(pid) do
+  @spec get_state(WebsockexNova.ClientConn.t()) :: ConnectionState.t()
+  def get_state(%WebsockexNova.ClientConn{transport_pid: pid}) do
     GenServer.call(pid, :get_state)
   end
 
@@ -372,15 +372,15 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `status` - The new status to set
 
   ## Returns
 
   * `:ok`
   """
-  @spec set_status(pid(), status()) :: :ok
-  def set_status(pid, status) do
+  @spec set_status(WebsockexNova.ClientConn.t(), status()) :: :ok
+  def set_status(%WebsockexNova.ClientConn{transport_pid: pid}, status) do
     GenServer.cast(pid, {:set_status, status})
   end
 
@@ -410,7 +410,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `new_owner_pid` - PID of the process that should become the new owner
 
   ## Returns
@@ -421,8 +421,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:error, :gun_process_not_alive}` if the Gun process died
   * `{:error, reason}` for other Gun-specific errors
   """
-  @spec transfer_ownership(pid(), pid()) :: :ok | {:error, term()}
-  def transfer_ownership(pid, new_owner_pid) do
+  @spec transfer_ownership(WebsockexNova.ClientConn.t(), pid()) :: :ok | {:error, term()}
+  def transfer_ownership(%WebsockexNova.ClientConn{transport_pid: pid}, new_owner_pid) do
     GenServer.call(pid, {:transfer_ownership, new_owner_pid})
   end
 
@@ -446,7 +446,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `gun_pid` - PID of the Gun process being transferred
 
   ## Returns
@@ -455,20 +455,17 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:error, :invalid_gun_pid}` if the Gun process is invalid or dead
   * `{:error, reason}` for Gun-specific errors
   """
-  @spec receive_ownership(pid(), pid()) :: :ok | {:error, term()}
-  def receive_ownership(pid, gun_pid) do
+  @spec receive_ownership(WebsockexNova.ClientConn.t(), pid()) :: :ok | {:error, term()}
+  def receive_ownership(%WebsockexNova.ClientConn{transport_pid: pid}, gun_pid) do
     GenServer.call(pid, {:receive_ownership, gun_pid})
   end
 
   @doc """
   Waits for the WebSocket upgrade to complete.
 
-  This function uses gun:await/3 with an explicit monitor reference
-  to avoid potential deadlocks during ownership transfers.
-
   ## Parameters
 
-  * `pid` - The connection wrapper PID
+  * `conn` - The client connection struct
   * `stream_ref` - Stream reference from the upgrade
   * `timeout` - Timeout in milliseconds (default: 5000)
 
@@ -477,49 +474,49 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:ok, headers}` on successful upgrade
   * `{:error, reason}` on failure
   """
-  @spec wait_for_websocket_upgrade(pid(), reference(), non_neg_integer()) ::
+  @spec wait_for_websocket_upgrade(WebsockexNova.ClientConn.t(), reference(), non_neg_integer()) ::
           {:ok, list()} | {:error, term()}
-  def wait_for_websocket_upgrade(pid, stream_ref, timeout \\ 5000) do
+  def wait_for_websocket_upgrade(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, timeout \\ 5000) do
     GenServer.call(pid, {:wait_for_websocket_upgrade, stream_ref, timeout})
   end
 
   @doc """
   Subscribes to a channel using the configured subscription handler.
   """
-  @spec subscribe(pid(), reference(), String.t(), map()) :: any
-  def subscribe(pid, stream_ref, channel, params) do
+  @spec subscribe(WebsockexNova.ClientConn.t(), reference(), String.t(), map()) :: any
+  def subscribe(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, channel, params) do
     GenServer.call(pid, {:subscribe, stream_ref, channel, params})
   end
 
   @doc """
   Unsubscribes from a channel using the configured subscription handler.
   """
-  @spec unsubscribe(pid(), reference(), String.t()) :: any
-  def unsubscribe(pid, stream_ref, channel) do
+  @spec unsubscribe(WebsockexNova.ClientConn.t(), reference(), String.t()) :: any
+  def unsubscribe(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, channel) do
     GenServer.call(pid, {:unsubscribe, stream_ref, channel})
   end
 
   @doc """
   Authenticates using the configured auth handler.
   """
-  @spec authenticate(pid(), reference(), map()) :: any
-  def authenticate(pid, stream_ref, credentials) do
+  @spec authenticate(WebsockexNova.ClientConn.t(), reference(), map()) :: any
+  def authenticate(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, credentials) do
     GenServer.call(pid, {:authenticate, stream_ref, credentials})
   end
 
   @doc """
   Sends a ping using the configured connection handler.
   """
-  @spec ping(pid(), reference()) :: any
-  def ping(pid, stream_ref) do
+  @spec ping(WebsockexNova.ClientConn.t(), reference()) :: any
+  def ping(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref) do
     GenServer.call(pid, {:ping, stream_ref})
   end
 
   @doc """
   Gets the status using the configured connection handler.
   """
-  @spec status(pid(), reference()) :: any
-  def status(pid, stream_ref) do
+  @spec status(WebsockexNova.ClientConn.t(), reference()) :: any
+  def status(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref) do
     GenServer.call(pid, {:status, stream_ref})
   end
 
