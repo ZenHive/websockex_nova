@@ -140,7 +140,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl MessageHandler
   def handle_message(message, state) do
     # Simply echo the message back to the client
-    {:ok, message, state}
+    {:ok, %{state | last_message: message}}
   end
 
   @impl MessageHandler
@@ -167,17 +167,14 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl MessageHandler
   def encode_message(message_type, _state) do
     case message_type do
-      :text when is_binary(message_type) ->
-        {:ok, :text, message_type}
+      message when is_binary(message) ->
+        {:ok, :text, message}
 
       message when is_map(message) ->
         case Jason.encode(message) do
           {:ok, json} -> {:ok, :text, json}
           {:error, reason} -> {:error, reason}
         end
-
-      message when is_binary(message) ->
-        {:ok, :text, message}
 
       _ ->
         {:ok, :text, to_string(message_type)}
@@ -210,7 +207,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl ErrorHandler
   def handle_error(error, context, state) do
     Logger.error("Error: #{inspect(error)}, Context: #{inspect(context)}")
-    {:error, error, state}
+    {:stop, error, state}
   end
 
   @impl ErrorHandler
@@ -256,12 +253,12 @@ defmodule WebsockexNova.Examples.EchoAdapter do
 
   @impl SubscriptionHandler
   def handle_subscription_response(_response, state) do
-    {:ok, nil, state}
+    {:ok, state}
   end
 
   @impl SubscriptionHandler
   def active_subscriptions(_state) do
-    []
+    %{}
   end
 
   @impl SubscriptionHandler
@@ -276,12 +273,12 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl AuthHandler
   def generate_auth_data(state) do
     # Echo server doesn't require authentication
-    {:ok, nil, state}
+    {:ok, "", state}
   end
 
   @impl AuthHandler
   def handle_auth_response(_response, state) do
-    {:ok, :no_auth_required, state}
+    {:ok, state}
   end
 
   @impl AuthHandler
@@ -292,6 +289,6 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl AuthHandler
   def authenticate(_stream_ref, _credentials, state) do
     # Echo server doesn't require authentication
-    {:ok, :no_auth_required, state}
+    {:ok, state}
   end
 end

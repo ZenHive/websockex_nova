@@ -232,9 +232,6 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
           )
 
         {:ok, subscription_request, updated_state}
-
-      error ->
-        error
     end
   end
 

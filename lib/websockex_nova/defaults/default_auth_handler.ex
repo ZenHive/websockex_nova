@@ -201,17 +201,17 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     end
   end
 
-  @doc """
-  Generates authentication data based on the provided credentials.
+  # @doc """
+  # Generates authentication data based on the provided credentials.
 
-  This default implementation returns a map, but custom implementations can
-  return either a map or binary data depending on the WebSocket protocol requirements.
+  # This default implementation returns a map, but custom implementations can
+  # return either a map or binary data depending on the WebSocket protocol requirements.
 
-  Custom implementations might override this to return binary formats like:
-  - Raw binary token data
-  - Custom binary protocols
-  - Pre-encoded WebSocket frames
-  """
+  # Custom implementations might override this to return binary formats like:
+  # - Raw binary token data
+  # - Custom binary protocols
+  # - Pre-encoded WebSocket frames
+  # """
   defp build_auth_data(credentials, _state) do
     timestamp = System.system_time(:second)
 

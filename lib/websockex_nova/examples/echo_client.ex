@@ -25,13 +25,9 @@ defmodule WebsockexNova.Examples.EchoClient do
   def start do
     Logger.info("Connecting to echo.websocket.org...")
 
-    case EchoAdapter.connection_info(%{}) do
-      {:ok, connection_info} ->
-        WebsockexNova.Client.connect(EchoAdapter, connection_info)
-
-      other ->
-        {:error, {:unexpected_connection_info, other}}
-    end
+    # EchoAdapter.connection_info/1 returns {:ok, connection_info}
+    {:ok, connection_info} = EchoAdapter.connection_info(%{})
+    WebsockexNova.Client.connect(EchoAdapter, connection_info)
   end
 
   @doc """
@@ -48,15 +44,11 @@ defmodule WebsockexNova.Examples.EchoClient do
   def start(opts) when is_map(opts) do
     Logger.info("Connecting to custom echo server with opts: #{inspect(opts)}")
 
-    case EchoAdapter.connection_info(opts) do
-      {:ok, connection_info} ->
-        # Merge/override connection_info with opts for host/port/path/transport_opts
-        merged = Map.merge(connection_info, opts)
-        Client.connect(EchoAdapter, merged)
-
-      other ->
-        {:error, {:unexpected_connection_info, other}}
-    end
+    # EchoAdapter.connection_info/1 returns {:ok, connection_info}
+    {:ok, connection_info} = EchoAdapter.connection_info(opts)
+    # Merge/override connection_info with opts for host/port/path/transport_opts
+    merged = Map.merge(connection_info, opts)
+    Client.connect(EchoAdapter, merged)
   end
 
   @doc """

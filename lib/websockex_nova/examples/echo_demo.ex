@@ -219,26 +219,22 @@ defmodule WebsockexNova.Examples.EchoDemo do
   def close(session) do
     Logger.info("Closing connection...")
 
-    case EchoClient.close(session.conn) do
-      :ok ->
-        # Calculate session duration
-        ended_at = DateTime.utc_now()
-        duration = DateTime.diff(ended_at, session.started_at, :second)
+    # EchoClient.close/1 only returns :ok as documented
+    :ok = EchoClient.close(session.conn)
 
-        new_session = %{session | ended_at: ended_at, duration: duration}
+    # Calculate session duration
+    ended_at = DateTime.utc_now()
+    duration = DateTime.diff(ended_at, session.started_at, :second)
 
-        # Log a summary
-        Logger.info("Connection closed")
-        Logger.info("Session summary:")
-        Logger.info("- Total messages: #{new_session.message_count}")
-        Logger.info("- Session duration: #{duration} seconds")
+    new_session = %{session | ended_at: ended_at, duration: duration}
 
-        {:ok, new_session}
+    # Log a summary
+    Logger.info("Connection closed")
+    Logger.info("Session summary:")
+    Logger.info("- Total messages: #{new_session.message_count}")
+    Logger.info("- Session duration: #{duration} seconds")
 
-      {:error, reason} ->
-        Logger.error("Failed to close connection: #{inspect(reason)}")
-        {:error, reason}
-    end
+    {:ok, new_session}
   end
 
   @doc """
@@ -288,7 +284,7 @@ defmodule WebsockexNova.Examples.EchoDemo do
         {:ok, session, _response} = send_text(session, "Goodbye, WebSocket!")
         :timer.sleep(500)
 
-        # Close the connection
+        # Close the connection - we know close/1 only returns {:ok, session}
         {:ok, _final_session} = close(session)
 
         :ok
