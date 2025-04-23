@@ -1,24 +1,38 @@
 defmodule WebsockexNova.Examples.DeribitAdapter do
   @moduledoc """
   Minimal Deribit WebSocket API v2 adapter for demonstration/testing.
-  Implements connection, message, and authentication handling.
+
+  This adapter implements the following behaviors:
+  - ConnectionHandler - For managing WebSocket connections
+  - MessageHandler - For processing and formatting messages
+  - AuthHandler - For authentication with Deribit API
+  - SubscriptionHandler - For managing channel subscriptions
+
+  It leverages the default implementations where possible while adding
+  Deribit-specific functionality where needed.
   """
 
   @behaviour WebsockexNova.Behaviors.AuthHandler
   @behaviour WebsockexNova.Behaviors.ConnectionHandler
   @behaviour WebsockexNova.Behaviors.MessageHandler
+  @behaviour WebsockexNova.Behaviors.SubscriptionHandler
 
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.ConnectionHandler
   alias WebsockexNova.Behaviors.MessageHandler
+  alias WebsockexNova.Behaviors.SubscriptionHandler
   alias WebsockexNova.Defaults.DefaultAuthHandler
   alias WebsockexNova.Defaults.DefaultMessageHandler
+  alias WebsockexNova.Defaults.DefaultSubscriptionHandler
 
   require Logger
 
   @port 443
   @path "/ws/api/v2"
   @logger_prefix "[DeribitAdapter]"
+  @default_max_reconnect_attempts 5
+
+  # --- ConnectionHandler implementation ---
 
   @impl ConnectionHandler
   def connection_info(_opts) do
@@ -46,19 +60,45 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   @impl ConnectionHandler
   def init(_opts) do
     Logger.debug("#{@logger_prefix} Initializing adapter")
-    {:ok, %{messages: [], connected_at: nil, auth_status: :unauthenticated}}
+
+    # Initialize with a merged state containing Deribit-specific fields
+    # and standard fields used by default handlers
+    state = %{
+      messages: [],
+      connected_at: nil,
+      auth_status: :unauthenticated,
+      reconnect_attempts: 0,
+      max_reconnect_attempts: @default_max_reconnect_attempts,
+      subscriptions: %{},
+      subscription_requests: %{}
+    }
+
+    {:ok, state}
   end
 
   @impl ConnectionHandler
   def handle_connect(_conn_info, state) do
     Logger.info("#{@logger_prefix} Connected to Deribit WebSocket API v2")
-    {:ok, %{state | connected_at: System.system_time(:millisecond)}}
+    {:ok, %{state | connected_at: System.system_time(:millisecond), reconnect_attempts: 0}}
   end
 
   @impl ConnectionHandler
-  def handle_disconnect(_reason, state) do
-    Logger.info("#{@logger_prefix} Disconnected, will attempt reconnect")
-    {:reconnect, state}
+  def handle_disconnect(reason, state) do
+    Logger.info("#{@logger_prefix} Disconnected, will attempt reconnect. Reason: #{inspect(reason)}")
+
+    # Handle reconnect logic similar to DefaultConnectionHandler
+    current_attempts = Map.get(state, :reconnect_attempts, 0)
+    max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+
+    updated_state = Map.put(state, :last_disconnect_reason, reason)
+
+    if current_attempts < max_attempts do
+      updated_state = Map.put(updated_state, :reconnect_attempts, current_attempts + 1)
+      {:reconnect, updated_state}
+    else
+      Logger.warning("#{@logger_prefix} Max reconnect attempts (#{max_attempts}) reached")
+      {:ok, updated_state}
+    end
   end
 
   @impl ConnectionHandler
@@ -70,12 +110,30 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   end
 
   @impl ConnectionHandler
+  def handle_frame(:ping, frame_data, state) do
+    Logger.debug("#{@logger_prefix} Responding to ping")
+    # Automatically respond to pings with pongs (from DefaultConnectionHandler)
+    {:reply, :pong, frame_data, state}
+  end
+
+  @impl ConnectionHandler
   def handle_frame(_type, _data, state), do: {:ok, state}
 
   @impl ConnectionHandler
   def handle_timeout(state) do
     Logger.warning("#{@logger_prefix} Connection timeout")
-    {:reconnect, state}
+
+    # Handle timeout reconnect logic similar to DefaultConnectionHandler
+    current_attempts = Map.get(state, :reconnect_attempts, 0)
+    max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+
+    if current_attempts < max_attempts do
+      updated_state = Map.put(state, :reconnect_attempts, current_attempts + 1)
+      {:reconnect, updated_state}
+    else
+      Logger.error("#{@logger_prefix} Max reconnect attempts reached, stopping")
+      {:stop, :max_reconnect_attempts_reached, state}
+    end
   end
 
   @impl ConnectionHandler
@@ -87,7 +145,7 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
     {:ok, status, state}
   end
 
-  # --- MessageHandler ---
+  # --- MessageHandler implementation ---
   # Delegate to DefaultMessageHandler for message handling functionality
 
   @impl MessageHandler
@@ -97,13 +155,28 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   def handle_message(message, state) do
     Logger.debug("#{@logger_prefix} Processing message: #{inspect(message)}")
 
-    # Use DefaultMessageHandler but also store the message in our state
-    case DefaultMessageHandler.handle_message(message, state) do
-      {:ok, updated_state} ->
-        {:ok, Map.put(updated_state, :last_message, message)}
+    # Check if this is a subscription-related message first
+    if is_map(message) and
+         (Map.has_key?(message, "subscription") or
+            (Map.has_key?(message, "method") and String.contains?(Map.get(message, "method", ""), "subscribe"))) do
+      # Process as a subscription message
+      case handle_subscription_response(message, state) do
+        {:ok, updated_state} ->
+          # Also store the message in our state
+          {:ok, Map.put(updated_state, :last_message, message)}
 
-      error_response ->
-        error_response
+        error_response ->
+          error_response
+      end
+    else
+      # Use DefaultMessageHandler for non-subscription messages
+      case DefaultMessageHandler.handle_message(message, state) do
+        {:ok, updated_state} ->
+          {:ok, Map.put(updated_state, :last_message, message)}
+
+        error_response ->
+          error_response
+      end
     end
   end
 
@@ -119,7 +192,125 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
     DefaultMessageHandler.encode_message(message, state)
   end
 
-  # --- AuthHandler ---
+  # --- SubscriptionHandler implementation ---
+  # Use DefaultSubscriptionHandler with Deribit-specific customizations
+
+  @impl SubscriptionHandler
+  def subscription_init(opts) do
+    # Add subscription_requests to the default init
+    {:ok, state} = DefaultSubscriptionHandler.subscription_init(opts)
+    {:ok, Map.put(state, :subscription_requests, %{})}
+  end
+
+  @impl SubscriptionHandler
+  def subscribe(channel, params, state) do
+    Logger.info("#{@logger_prefix} Subscribing to channel: #{channel}")
+
+    # Get a subscription ID from DefaultSubscriptionHandler
+    case DefaultSubscriptionHandler.subscribe(channel, params, state) do
+      {:ok, subscription_id, updated_state} ->
+        # Create Deribit-specific subscription message
+        message = %{
+          "jsonrpc" => "2.0",
+          "id" => System.unique_integer([:positive]),
+          "method" => "public/subscribe",
+          "params" => %{
+            "channels" => [channel]
+          }
+        }
+
+        # Ensure subscription_requests exists in state
+        subscription_requests = Map.get(updated_state, :subscription_requests, %{})
+        subscription_request = Jason.encode!(message)
+
+        # Store the subscription_id with the formatted message for future reference
+        updated_state =
+          Map.put(
+            updated_state,
+            :subscription_requests,
+            Map.put(subscription_requests, subscription_id, subscription_request)
+          )
+
+        {:ok, subscription_request, updated_state}
+
+      error ->
+        error
+    end
+  end
+
+  @impl SubscriptionHandler
+  def unsubscribe(subscription_id, state) do
+    Logger.info("#{@logger_prefix} Unsubscribing from subscription: #{subscription_id}")
+
+    # Find channel for this subscription
+    subscription = get_in(state, [:subscriptions, subscription_id])
+
+    if subscription do
+      channel = subscription.channel
+
+      # Create Deribit-specific unsubscribe message
+      message = %{
+        "jsonrpc" => "2.0",
+        "id" => System.unique_integer([:positive]),
+        "method" => "public/unsubscribe",
+        "params" => %{
+          "channels" => [channel]
+        }
+      }
+
+      # Update state through DefaultSubscriptionHandler
+      case DefaultSubscriptionHandler.unsubscribe(subscription_id, state) do
+        {:ok, updated_state} ->
+          {:ok, Jason.encode!(message), updated_state}
+
+        error ->
+          error
+      end
+    else
+      {:error, :subscription_not_found, state}
+    end
+  end
+
+  @impl SubscriptionHandler
+  def handle_subscription_response(response, state) do
+    Logger.debug("#{@logger_prefix} Handling subscription response: #{inspect(response)}")
+
+    # Handle Deribit-specific subscription responses
+    # Deribit subscription confirmation format
+    if is_map(response) and Map.has_key?(response, "params") and Map.has_key?(response, "method") and
+         response["method"] == "subscription" do
+      channel = get_in(response, ["params", "channel"])
+      subscription_id = DefaultSubscriptionHandler.find_subscription_by_channel(channel, state)
+
+      if subscription_id do
+        # Mark as confirmed using DefaultSubscriptionHandler helper
+        subscriptions = Map.get(state, :subscriptions, %{})
+        updated_subscription = Map.put(subscriptions[subscription_id], :status, :confirmed)
+        updated_subscriptions = Map.put(subscriptions, subscription_id, updated_subscription)
+        updated_state = Map.put(state, :subscriptions, updated_subscriptions)
+
+        {:ok, updated_state}
+      else
+        # Unknown subscription, just pass through
+        {:ok, state}
+      end
+    else
+      # Delegate to DefaultSubscriptionHandler for standard formats
+      DefaultSubscriptionHandler.handle_subscription_response(response, state)
+    end
+  end
+
+  @impl SubscriptionHandler
+  def active_subscriptions(state) do
+    DefaultSubscriptionHandler.active_subscriptions(state)
+  end
+
+  @impl SubscriptionHandler
+  def find_subscription_by_channel(channel, state) do
+    DefaultSubscriptionHandler.find_subscription_by_channel(channel, state)
+  end
+
+  # --- AuthHandler implementation ---
   # Deribit-specific auth implementation with some delegation to DefaultAuthHandler
 
   @impl AuthHandler

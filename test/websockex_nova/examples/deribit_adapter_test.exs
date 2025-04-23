@@ -18,13 +18,16 @@ defmodule WebsockexNova.Examples.DeribitAdapterTest do
       assert is_map(state)
       assert state.messages == []
       assert state.connected_at == nil
+      assert state.reconnect_attempts == 0
+      assert state.subscriptions == %{}
     end
 
-    test "handle_connect/2 sets connected_at" do
-      state = %{messages: [], connected_at: nil}
+    test "handle_connect/2 sets connected_at and resets reconnect_attempts" do
+      state = %{messages: [], connected_at: nil, reconnect_attempts: 2}
       conn_info = %{host: "www.deribit.com", port: 443, path: "/ws/api/v2"}
       {:ok, new_state} = DeribitAdapter.handle_connect(conn_info, state)
       assert new_state.connected_at != nil
+      assert new_state.reconnect_attempts == 0
     end
 
     test "handle_frame/3 stores text messages" do
@@ -41,6 +44,19 @@ defmodule WebsockexNova.Examples.DeribitAdapterTest do
       assert is_binary(json)
       decoded = Jason.decode!(json)
       assert decoded["foo"] == "bar"
+    end
+
+    test "subscription functions follow Deribit format" do
+      {:ok, state} = DeribitAdapter.subscription_init(%{})
+      {:ok, subscription_text, _} = DeribitAdapter.subscribe("book.BTC-USD.100ms", %{}, state)
+
+      # Verify it's a valid JSON string
+      decoded = Jason.decode!(subscription_text)
+
+      # Verify it has the Deribit-specific format
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "public/subscribe"
+      assert decoded["params"]["channels"] == ["book.BTC-USD.100ms"]
     end
   end
 end
