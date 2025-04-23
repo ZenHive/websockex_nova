@@ -140,31 +140,41 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   # Extract reconnection options from state (prefer :reconnection map, fallback to legacy keys)
   defp extract_reconnection_opts(state) when is_map(state) do
-    rc =
-      case Map.get(state, :reconnection) do
-        nil -> %{}
-        rc when is_list(rc) -> Map.new(rc)
-        rc when is_map(rc) -> rc
-        _ -> %{}
-      end
+    rc = extract_reconnection_config(state)
 
-    max_attempts =
-      Map.get(rc, :max_attempts) ||
-        Map.get(rc, :max_reconnect_attempts) ||
-        Map.get(state, :max_reconnect_attempts) ||
-        @default_max_reconnect_attempts
-
-    base_delay =
-      Map.get(rc, :base_delay) ||
-        Map.get(rc, :initial_delay) ||
-        Map.get(state, :base_delay) ||
-        @default_base_delay
-
-    max_delay =
-      Map.get(rc, :max_delay) ||
-        Map.get(state, :max_delay) ||
-        @default_max_delay
+    max_attempts = extract_max_attempts(rc, state)
+    base_delay = extract_base_delay(rc, state)
+    max_delay = extract_max_delay(rc, state)
 
     {max_attempts, base_delay, max_delay}
+  end
+
+  defp extract_reconnection_config(state) do
+    case Map.get(state, :reconnection) do
+      nil -> %{}
+      rc when is_list(rc) -> Map.new(rc)
+      rc when is_map(rc) -> rc
+      _ -> %{}
+    end
+  end
+
+  defp extract_max_attempts(rc, state) do
+    Map.get(rc, :max_attempts) ||
+      Map.get(rc, :max_reconnect_attempts) ||
+      Map.get(state, :max_reconnect_attempts) ||
+      @default_max_reconnect_attempts
+  end
+
+  defp extract_base_delay(rc, state) do
+    Map.get(rc, :base_delay) ||
+      Map.get(rc, :initial_delay) ||
+      Map.get(state, :base_delay) ||
+      @default_base_delay
+  end
+
+  defp extract_max_delay(rc, state) do
+    Map.get(rc, :max_delay) ||
+      Map.get(state, :max_delay) ||
+      @default_max_delay
   end
 end
