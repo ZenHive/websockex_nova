@@ -117,24 +117,24 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
             {:ok, decoded}
 
           {:error, _} ->
-            # Failed to parse as JSON, treat as a raw binary
-            {:ok, message}
+            # Failed to parse as JSON, treat as binary data
+            {:ok, %{"content" => message, "type" => "binary_data"}}
         end
 
-      # If it's valid text but not JSON, keep as binary but mark it as text
+      # If it's valid text but not JSON, treat as binary data
       String.valid?(message) ->
-        {:ok, message}
+        {:ok, %{"content" => message, "type" => "binary_data"}}
 
-      # Otherwise it's non-text binary data, preserve as is
+      # Otherwise it's non-text binary data, preserve as binary data
       true ->
-        {:ok, message}
+        {:ok, %{"content" => message, "type" => "binary_data"}}
     end
   end
 
   @impl true
   def validate_message(message) do
-    # Any other format, stringify for consistency
-    {:ok, inspect(message)}
+    # Any other format, stringify and wrap in a structured map
+    {:ok, %{"content" => inspect(message), "type" => "binary_data"}}
   end
 
   @impl true

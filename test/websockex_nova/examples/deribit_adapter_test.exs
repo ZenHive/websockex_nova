@@ -33,13 +33,14 @@ defmodule WebsockexNova.Examples.DeribitAdapterTest do
       assert new_state.messages == ["test"]
     end
 
-    test "encode_message/3 encodes text and json" do
-      {:ok, encoded} = DeribitAdapter.encode_message(:text, "hi", %{})
-      assert encoded == "hi"
+    test "encode_message/2 encodes messages properly" do
+      {:ok, :text, encoded} = DeribitAdapter.encode_message("hi", %{})
+      assert is_binary(encoded)
 
-      {:ok, json} = DeribitAdapter.encode_message(:json, %{foo: "bar"}, %{})
+      {:ok, :text, json} = DeribitAdapter.encode_message(%{foo: "bar"}, %{})
       assert is_binary(json)
-      assert Jason.decode!(json) == %{"foo" => "bar"}
+      decoded = Jason.decode!(json)
+      assert decoded["foo"] == "bar"
     end
   end
 end

@@ -223,8 +223,8 @@ defmodule WebsockexNova.Client do
   def send_text(%ClientConn{} = conn, text, options \\ nil) when is_binary(text) do
     message_handler = get_message_handler(conn.adapter)
 
-    with {:ok, encoded} <- message_handler.encode_message(:text, text, conn.adapter_state),
-         :ok <- send_frame(conn, {:text, encoded}) do
+    with {:ok, frame_type, encoded} <- message_handler.encode_message(text, conn.adapter_state),
+         :ok <- send_frame(conn, {frame_type, encoded}) do
       wait_for_response(conn, options)
     end
   end
@@ -252,8 +252,8 @@ defmodule WebsockexNova.Client do
   def send_json(%ClientConn{} = conn, data, options \\ nil) when is_map(data) do
     message_handler = get_message_handler(conn.adapter)
 
-    with {:ok, encoded} <- message_handler.encode_message(:json, data, conn.adapter_state),
-         :ok <- send_frame(conn, {:text, encoded}) do
+    with {:ok, frame_type, encoded} <- message_handler.encode_message(data, conn.adapter_state),
+         :ok <- send_frame(conn, {frame_type, encoded}) do
       wait_for_response(conn, options)
     end
   end
@@ -349,9 +349,6 @@ defmodule WebsockexNova.Client do
       # Just return the raw response to match test expectations
     end
   end
-
-  defp parse_auth_response(response) when is_map(response), do: response
-  defp parse_auth_response(response), do: %{"error" => "invalid_response", "original" => response}
 
   @doc """
   Sends a ping message to the WebSocket server.

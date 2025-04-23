@@ -12,6 +12,7 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   alias WebsockexNova.Behaviors.ConnectionHandler
   alias WebsockexNova.Behaviors.MessageHandler
   alias WebsockexNova.Defaults.DefaultAuthHandler
+  alias WebsockexNova.Defaults.DefaultMessageHandler
 
   require Logger
 
@@ -86,49 +87,37 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
     {:ok, status, state}
   end
 
+  # --- MessageHandler ---
+  # Delegate to DefaultMessageHandler for most message handling functionality
+
   @impl MessageHandler
-  def message_init(_opts), do: {:ok, %{}}
+  def message_init(opts), do: DefaultMessageHandler.message_init(opts)
 
   @impl MessageHandler
   def handle_message(message, state) do
     Logger.debug("[DeribitAdapter] handle_message: #{inspect(message)}")
-    {:ok, Map.put(state, :last_message, message)}
-  end
+    # Use DefaultMessageHandler but also store the message in our state
+    case DefaultMessageHandler.handle_message(message, state) do
+      {:ok, updated_state} ->
+        {:ok, Map.put(updated_state, :last_message, message)}
 
-  @impl MessageHandler
-  def validate_message(message), do: {:ok, message}
-
-  @impl MessageHandler
-  def message_type(message) when is_binary(message), do: :text
-  @impl MessageHandler
-  def message_type(message) when is_map(message), do: :json
-  @impl MessageHandler
-  def message_type(_message), do: :unknown
-
-  @impl MessageHandler
-  def encode_message(:text, message) when is_binary(message), do: {:ok, message}
-  @impl MessageHandler
-  def encode_message(:json, message) when is_map(message) do
-    case Jason.encode(message) do
-      {:ok, json} -> {:ok, json}
-      {:error, reason} -> {:error, reason}
+      # Pass through errors
+      error_response ->
+        error_response
     end
   end
 
   @impl MessageHandler
-  def encode_message(_type, message), do: {:ok, to_string(message)}
+  def validate_message(message), do: DefaultMessageHandler.validate_message(message)
 
-  # 3-arity version for compatibility
-  def encode_message(:text, message, _state) when is_binary(message), do: {:ok, message}
+  @impl MessageHandler
+  def message_type(message), do: DefaultMessageHandler.message_type(message)
 
-  def encode_message(:json, message, _state) when is_map(message) do
-    case Jason.encode(message) do
-      {:ok, json} -> {:ok, json}
-      {:error, reason} -> {:error, reason}
-    end
+  @impl MessageHandler
+  def encode_message(message, state) do
+    Logger.debug("[DeribitAdapter] encode_message: #{inspect(message)}")
+    DefaultMessageHandler.encode_message(message, state)
   end
-
-  def encode_message(_type, message, _state), do: {:ok, to_string(message)}
 
   # --- AuthHandler ---
 
@@ -166,8 +155,6 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
     DefaultAuthHandler.needs_reauthentication?(state)
   end
 
-  # This new implementation matches the behavior callback signature
-  # and handles both map and binary inputs
   @impl AuthHandler
   def handle_auth_response(%{"result" => %{"access_token" => token, "expires_in" => expires_in}} = _response, state) do
     auth_expires_at = System.system_time(:second) + expires_in
