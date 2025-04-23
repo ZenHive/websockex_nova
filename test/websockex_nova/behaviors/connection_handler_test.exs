@@ -17,7 +17,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
 
     def handle_disconnect(reason, state) do
       send(self(), {:disconnect, reason})
-      {:reconnect, state}
+      {:ok, state}
     end
 
     def handle_frame(frame_type, frame_data, state) do
@@ -41,7 +41,7 @@ defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
     test "handle_disconnect/2 should process disconnection" do
       reason = {:remote, 1000, "Normal closure"}
 
-      assert {:reconnect, :test_state} =
+      assert {:ok, :test_state} =
                MockConnectionHandler.handle_disconnect(reason, :test_state)
 
       assert_received {:disconnect, ^reason}

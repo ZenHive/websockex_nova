@@ -93,7 +93,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       state
       |> ConnectionState.update_gun_pid(gun_pid)
       |> ConnectionState.update_status(:connected)
-      |> ConnectionState.reset_reconnect_attempts()
 
     # Notify callback using connection_up message which test is expecting
     Logger.debug("Sending connection_up notification with protocol: #{inspect(protocol)}")

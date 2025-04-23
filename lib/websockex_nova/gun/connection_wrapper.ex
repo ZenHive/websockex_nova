@@ -987,18 +987,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp initialize_error_handler(state, options) do
-    case Map.get(options, :error_handler) do
-      nil ->
-        state
+    handler_module =
+      case Map.get(options, :error_handler) do
+        nil -> WebsockexNova.Defaults.DefaultErrorHandler
+        mod -> mod
+      end
 
-      handler_module when is_atom(handler_module) ->
-        handler_options =
-          options
-          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
-          |> Map.put(:connection_wrapper_pid, self())
+    handler_options =
+      options
+      |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+      |> Map.put(:connection_wrapper_pid, self())
 
-        ConnectionState.setup_error_handler(state, handler_module, handler_options)
-    end
+    ConnectionState.setup_error_handler(state, handler_module, handler_options)
   end
 
   defp handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams) do

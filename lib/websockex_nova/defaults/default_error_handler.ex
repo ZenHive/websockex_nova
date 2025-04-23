@@ -8,7 +8,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   * Error classification by type
   * Reconnection logic with exponential backoff
   * Standardized error logging
-  * State tracking of errors
+  * State tracking of errors and reconnection attempts (single source of truth)
 
   ## Usage
 
@@ -36,6 +36,11 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
       * `:strategy` (currently only exponential supported)
   * Legacy keys (for backward compatibility):
       * `:max_reconnect_attempts`, `:base_delay`, `:max_delay`
+
+  ## Reconnection Attempt Tracking
+
+  This handler tracks the reconnection attempt count in its state under the `:reconnect_attempts` key.
+  Use `increment_reconnect_attempts/1` and `reset_reconnect_attempts/1` to update this count.
   """
 
   @behaviour WebsockexNova.Behaviors.ErrorHandler
@@ -56,6 +61,9 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
       |> Map.put(:last_error, error)
       |> Map.put(:error_context, context)
 
+    # Use the attempt count from state, defaulting to 1
+    attempt = Map.get(updated_state, :reconnect_attempts, 1)
+
     # Handle based on error classification
     case classify_error(error, context) do
       :critical ->
@@ -66,8 +74,6 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
         {:ok, updated_state}
 
       :transient ->
-        # For transient errors, calculate retry delay
-        attempt = Map.get(context, :attempt, 1)
         {max_attempts, base_delay, max_delay} = extract_reconnection_opts(updated_state)
 
         if attempt <= max_attempts do
@@ -80,7 +86,9 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   @impl true
-  def should_reconnect?(error, attempt, state) when is_integer(attempt) and is_map(state) do
+  def should_reconnect?(error, _attempt, state) when is_map(state) do
+    # Always use the attempt count from state
+    attempt = Map.get(state, :reconnect_attempts, 1)
     {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
 
     if attempt <= max_attempts && reconnectable_error?(error) do
@@ -116,6 +124,22 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   def classify_error({:auth_error, _}, _context), do: :critical
   def classify_error({:critical_error, _}, _context), do: :critical
   def classify_error(_, _), do: :transient
+
+  @doc """
+  Increment the reconnection attempt count in the handler state.
+  """
+  @impl true
+  def increment_reconnect_attempts(state) when is_map(state) do
+    Map.update(state, :reconnect_attempts, 2, &(&1 + 1))
+  end
+
+  @doc """
+  Reset the reconnection attempt count in the handler state.
+  """
+  @impl true
+  def reset_reconnect_attempts(state) when is_map(state) do
+    Map.put(state, :reconnect_attempts, 1)
+  end
 
   # Helper functions
 

@@ -2,6 +2,11 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   @moduledoc """
   Behaviour for connection handlers.
   All state is a map. All arguments and return values are explicit and documented.
+
+  ## Reconnection Policy
+  - The connection handler should NOT return `{:reconnect, state}` from any callback.
+  - All reconnection policy is handled exclusively by the error handler.
+  - On disconnect, simply return `{:ok, state}` or `{:stop, reason, state}` as appropriate.
   """
 
   @typedoc "Handler state"
@@ -39,12 +44,10 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   Handle disconnect event.
   Returns:
     - `{:ok, state}`
-    - `{:reconnect, state}`
     - `{:stop, reason, state}`
   """
   @callback handle_disconnect(disconnect_reason, state) ::
               {:ok, state}
-              | {:reconnect, state}
               | {:stop, term(), state}
 
   @doc """
@@ -65,12 +68,10 @@ defmodule WebsockexNova.Behaviors.ConnectionHandler do
   Optional: handle connection timeout.
   Returns:
     - `{:ok, state}`
-    - `{:reconnect, state}`
     - `{:stop, reason, state}`
   """
   @callback handle_timeout(state) ::
               {:ok, state}
-              | {:reconnect, state}
               | {:stop, term(), state}
 
   @doc """

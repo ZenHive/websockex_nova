@@ -4,6 +4,10 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   This module defines the state structure used by the ConnectionWrapper,
   providing better type safety and organization of state data.
+
+  ## Reconnection Policy
+  - The connection state no longer tracks reconnection attempts or delays.
+  - All reconnection policy and tracking is handled by the error handler.
   """
 
   alias WebsockexNova.Gun.ConnectionWrapper
@@ -24,7 +28,6 @@ defmodule WebsockexNova.Gun.ConnectionState do
           callback_pid: pid() | nil,
           last_error: term() | nil,
           active_streams: %{reference() => map()},
-          reconnect_attempts: non_neg_integer(),
           handlers: %{
             optional(:connection_handler) => module(),
             optional(:connection_handler_state) => term(),
@@ -54,7 +57,6 @@ defmodule WebsockexNova.Gun.ConnectionState do
     :callback_pid,
     :last_error,
     active_streams: %{},
-    reconnect_attempts: 0,
     handlers: %{}
   ]
 
@@ -86,7 +88,6 @@ defmodule WebsockexNova.Gun.ConnectionState do
       gun_pid: nil,
       gun_monitor_ref: nil,
       last_error: nil,
-      reconnect_attempts: 0,
       handlers: %{}
     }
   end
@@ -230,38 +231,6 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec clear_all_streams(t()) :: t()
   def clear_all_streams(state) do
     %{state | active_streams: %{}}
-  end
-
-  @doc """
-  Increments the reconnection attempt counter.
-
-  ## Parameters
-
-  * `state` - Current connection state
-
-  ## Returns
-
-  Updated connection state struct
-  """
-  @spec increment_reconnect_attempts(t()) :: t()
-  def increment_reconnect_attempts(state) do
-    %{state | reconnect_attempts: state.reconnect_attempts + 1}
-  end
-
-  @doc """
-  Resets the reconnection attempt counter.
-
-  ## Parameters
-
-  * `state` - Current connection state
-
-  ## Returns
-
-  Updated connection state struct
-  """
-  @spec reset_reconnect_attempts(t()) :: t()
-  def reset_reconnect_attempts(state) do
-    %{state | reconnect_attempts: 0}
   end
 
   @doc """

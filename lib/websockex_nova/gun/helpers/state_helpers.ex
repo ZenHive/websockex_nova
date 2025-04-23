@@ -42,7 +42,6 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
     state
     |> ConnectionState.update_gun_pid(gun_pid)
     |> ConnectionState.update_status(:connected)
-    |> ConnectionState.reset_reconnect_attempts()
   end
 
   @doc """
@@ -154,10 +153,7 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
   """
   @spec handle_reconnection_attempt(ConnectionState.t()) :: ConnectionState.t()
   def handle_reconnection_attempt(state) do
-    new_state =
-      state
-      |> ConnectionState.increment_reconnect_attempts()
-      |> ConnectionState.update_status(:reconnecting)
+    new_state = ConnectionState.update_status(state, :reconnecting)
 
     log_state_transition(
       state,

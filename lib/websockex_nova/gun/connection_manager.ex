@@ -7,41 +7,12 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @moduledoc """
   Manages the WebSocket connection lifecycle using a state machine approach.
 
-  This module is responsible for:
-  1. Tracking connection state through well-defined state transitions
-  2. Managing reconnection attempts with configurable backoff strategies
-  3. Enforcing retry limits and connection policies
-  4. Handling various failure scenarios
-
-  The connection lifecycle follows this state machine:
-
-  ```
-                   ┌─────────────────┐
-                   │                 │
-                   ▼                 │
-  ┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌────────────────┐
-  │          │     │              │     │              │     │                │
-  │ INITIAL  ├────►│  CONNECTING  ├────►│  CONNECTED   ├────►│  WEBSOCKET     │
-  │          │     │              │     │              │     │  CONNECTED     │
-  └──────────┘     └──────────────┘     └──────────────┘     └────────────────┘
-                     │                   │                     │
-                     │                   │                     │
-                     │                   │                     │
-                     ▼                   ▼                     ▼
-              ┌────────────┐     ┌────────────┐     ┌─────────────────┐
-              │            │     │            │     │                 │
-              │ RECONNECT  │◄────┤ DISCONNECTED◄────┤ WS DISCONNECTED │
-              │            │     │            │     │                 │
-              └────────────┘     └────────────┘     └─────────────────┘
-                     │
-                     │
-                     ▼
-              ┌────────────┐
-              │            │
-              │ ERROR      │
-              │            │
-              └────────────┘
-  ```
+  ## Responsibilities
+  - Handles connection state transitions.
+  - Delegates all reconnection policy decisions to the error handler (single source of truth).
+  - On disconnect/error, calls the error handler's `should_reconnect?/3`.
+  - If allowed, calls the transport adapter's `schedule_reconnection/2`.
+  - Does not track reconnection attempts or delays; this is handled by the error handler.
   """
 
   @behaviour WebsockexNova.ConnectionManagerBehaviour
@@ -52,51 +23,16 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   require Logger
 
-  # Define all possible connection states for reference
-  # @connection_states [
-  #   # Initial state before connection attempt
-  #   :initialized,
-  #   # Connection attempt in progress
-  #   :connecting,
-  #   # HTTP connection established
-  #   :connected,
-  #   # WebSocket upgrade successful
-  #   :websocket_connected,
-  #   # Connection lost/closed
-  #   :disconnected,
-  #   # Attempting to reconnect
-  #   :reconnecting,
-  #   # Terminal error state
-  #   :error
-  # ]
-
-  # Terminal errors that should not trigger reconnection
-  @terminal_errors [
-    # Connection closed by user
-    :closed,
-    # Domain does not exist
-    :nxdomain,
-    # Connection refused
-    :econnrefused,
-    # Generic fatal error
-    :fatal_error
-  ]
-
-  # Valid state transitions map - updating to fix test failures
   @valid_transitions %{
     :initialized => [:connecting, :error],
     :connecting => [:connected, :disconnected, :error],
     :connected => [:websocket_connected, :disconnected, :error],
     :websocket_connected => [:disconnected, :error],
-    # Allow direct connecting from disconnected
     :disconnected => [:reconnecting, :connecting, :error],
-    # Allow transition back to disconnected
     :reconnecting => [:connecting, :disconnected, :error],
-    # Terminal state - no transitions out
     :error => []
   }
 
-  # Map of state transitions to effect functions
   @transition_effects %{
     connected: &ConnectionManager.apply_connected_effects/2,
     disconnected: &ConnectionManager.apply_disconnected_effects/2,
@@ -158,84 +94,17 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   """
   @spec can_transition?(atom(), atom()) :: boolean()
   def can_transition?(from_state, to_state) do
-    # Special case: any state can transition to error
     if to_state == :error do
       true
     else
-      # Otherwise, check valid transitions map
       valid_to_states = Map.get(@valid_transitions, from_state, [])
       Enum.member?(valid_to_states, to_state)
     end
   end
 
   @doc """
-  Handles reconnection logic when a connection is lost.
-
-  ## Parameters
-
-  * `state` - Current connection state
-
-  ## Returns
-
-  * `{:ok, reconnect_after, updated_state}` when reconnection should be attempted
-  * `{:error, reason, updated_state}` when reconnection should not be attempted
-  """
-  @spec handle_reconnection(ConnectionState.t()) ::
-          {:ok, non_neg_integer(), ConnectionState.t()}
-          | {:error, atom(), ConnectionState.t()}
-  def handle_reconnection(%ConnectionState{status: :error} = state) do
-    log_event(:connection, :reconnect_skip, %{reason: :already_in_error_state}, state)
-    {:error, :terminal_error, state}
-  end
-
-  def handle_reconnection(%ConnectionState{last_error: last_error} = state) do
-    if not is_nil(last_error) and terminal_error?(last_error) do
-      log_event(:connection, :reconnect_skip, %{reason: :terminal_error, last_error: last_error}, state)
-      error_state = ConnectionState.update_status(state, :error)
-      {:error, :terminal_error, error_state}
-    else
-      handle_reconnection_attempts(state)
-    end
-  end
-
-  defp handle_reconnection_attempts(state) do
-    if max_attempts_reached?(state) do
-      log_event(
-        :connection,
-        :reconnect_skip,
-        %{reason: :max_attempts, attempts: state.reconnect_attempts, max: state.options.retry},
-        state
-      )
-
-      error_state = ConnectionState.update_status(state, :error)
-      {:error, :max_attempts_reached, error_state}
-    else
-      reconnect_after = calculate_backoff_delay(state)
-
-      log_event(
-        :connection,
-        :reconnect_scheduled,
-        %{delay: reconnect_after, attempt: state.reconnect_attempts + 1},
-        state
-      )
-
-      updated_state =
-        state
-        |> ConnectionState.increment_reconnect_attempts()
-        |> ConnectionState.update_status(:reconnecting)
-
-      {:ok, reconnect_after, updated_state}
-    end
-  end
-
-  @doc """
-  Schedules a reconnection attempt and executes the provided callback.
-
-  This function centralizes the reconnection scheduling logic by:
-  1. Determining if reconnection should be attempted
-  2. Setting the appropriate state
-  3. Calculating the delay time
-  4. Executing the callback function with the delay and attempt number
+  Schedules a reconnection attempt by delegating policy to the error handler.
+  This function is the only place reconnection is scheduled.
 
   ## Parameters
 
@@ -251,14 +120,55 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   def schedule_reconnection(state, callback) when is_function(callback, 2) do
     log_event(:connection, :schedule_reconnect, %{status: StateHelpers.get_status(state)}, state)
 
-    case handle_reconnection(state) do
-      {:ok, reconnect_after, reconnecting_state} ->
-        callback.(reconnect_after, reconnecting_state.reconnect_attempts)
-        reconnecting_state
+    error_handler = Map.get(state.handlers, :error_handler)
+    error_handler_state = Map.get(state.handlers, :error_handler_state)
+    last_error = Map.get(state, :last_error)
 
-      {:error, reason, error_state} ->
-        log_event(:connection, :reconnect_not_scheduled, %{reason: reason}, state)
-        error_state
+    # Ensure error_handler_state is never nil
+    error_handler_state =
+      cond do
+        is_map(error_handler_state) ->
+          error_handler_state
+
+        function_exported?(error_handler, :error_handler_init, 1) ->
+          case error_handler.error_handler_init(%{}) do
+            {:ok, s} -> s
+            _ -> %{}
+          end
+
+        true ->
+          %{}
+      end
+
+    # Use the attempt count from error handler state
+    attempt = Map.get(error_handler_state, :reconnect_attempts, 1)
+
+    case error_handler.should_reconnect?(last_error, attempt, error_handler_state) do
+      {true, delay} when is_integer(delay) and delay > 0 ->
+        callback.(delay, attempt)
+        # Increment attempt count in error handler state
+        new_error_handler_state =
+          if function_exported?(error_handler, :increment_reconnect_attempts, 1) do
+            error_handler.increment_reconnect_attempts(error_handler_state)
+          else
+            error_handler_state
+          end
+
+        # Update state with new error handler state
+        new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
+        ConnectionState.update_status(new_state, :reconnecting)
+
+      {false, _} ->
+        # Reset attempt count in error handler state
+        new_error_handler_state =
+          if function_exported?(error_handler, :reset_reconnect_attempts, 1) do
+            error_handler.reset_reconnect_attempts(error_handler_state)
+          else
+            error_handler_state
+          end
+
+        new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
+        ConnectionState.update_status(new_state, :error)
     end
   end
 
@@ -330,35 +240,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   # Private functions
 
-  @doc """
-  Determines if an error should be considered terminal (non-recoverable).
-
-  Terminal errors will prevent reconnection attempts, while non-terminal errors
-  may allow reconnection based on the retry policy.
-
-  ## Returns
-
-  * `true` if the error is terminal
-  * `false` if the error is transient and reconnection can be attempted
-  """
-  @spec terminal_error?(term()) :: boolean()
-  def terminal_error?(nil), do: false
-
-  def terminal_error?(error) when is_atom(error) do
-    Enum.member?(@terminal_errors, error)
-  end
-
-  # Handle complex error structures (tuples, maps)
-  def terminal_error?({:error, reason}) when is_atom(reason) do
-    Enum.member?(@terminal_errors, reason)
-  end
-
-  def terminal_error?(%{reason: reason}) when is_atom(reason) do
-    Enum.member?(@terminal_errors, reason)
-  end
-
-  def terminal_error?(_), do: false
-
   # Apply side effects when transitioning to specific states
   defp apply_transition_effects(state, to_state, params) do
     case Map.get(@transition_effects, to_state) do
@@ -371,7 +252,18 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @doc false
   def apply_connected_effects(state, _params) do
     log_event(:connection, :connected_effects, %{action: :reset_reconnect_attempts}, state)
-    ConnectionState.reset_reconnect_attempts(state)
+    # Reset attempt count in error handler state if supported
+    error_handler = Map.get(state.handlers, :error_handler)
+    error_handler_state = Map.get(state.handlers, :error_handler_state)
+
+    new_error_handler_state =
+      if error_handler && function_exported?(error_handler, :reset_reconnect_attempts, 1) do
+        error_handler.reset_reconnect_attempts(error_handler_state)
+      else
+        error_handler_state
+      end
+
+    put_in(state.handlers[:error_handler_state], new_error_handler_state)
   end
 
   # Effect function for disconnected state
@@ -429,7 +321,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           "[Gun] Failed to open connection to #{inspect(StateHelpers.get_host(state))}:#{inspect(StateHelpers.get_port(state))}: #{inspect(reason)}"
         )
 
-        # Use a minimal state struct with handlers if available, otherwise skip handler logging
         log_event(:error, :gun_open_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}
     end
@@ -460,7 +351,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         {:ok, pid}
 
       {:error, reason} ->
-        # Use a minimal state struct with handlers if available, otherwise skip handler logging
         log_event(:error, :gun_open_failed, %{reason: reason}, %{handlers: %{}})
         {:error, reason}
     end
@@ -468,63 +358,8 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   defp monitor_gun_process(pid) do
     gun_monitor_ref = Process.monitor(pid)
-    # Use a minimal state struct with handlers if available, otherwise skip handler logging
     log_event(:connection, :monitor_gun_process, %{gun_monitor_ref: gun_monitor_ref}, %{handlers: %{}})
     {:ok, gun_monitor_ref}
-  end
-
-  # Calculate backoff delay based on reconnection attempts
-  #
-  # This function uses the WebsockexNova.Transport.Reconnection module to implement
-  # different backoff strategies:
-  # - `:linear` - Fixed delay regardless of attempt number
-  # - `:exponential` - Delay grows as 2^n with a random jitter
-  # - `:jittered` - Linear increase with random jitter
-  #
-  # The jitter is added to prevent the "thundering herd" problem where multiple clients
-  # attempt to reconnect at exactly the same time following a server outage.
-  defp calculate_backoff_delay(state) do
-    alias WebsockexNova.Transport.Reconnection
-
-    # Get backoff configuration from options
-    backoff_type = Map.get(state.options, :backoff_type, :linear)
-
-    # Map the connection options to reconnection strategy options
-    strategy_opts =
-      case backoff_type do
-        :linear ->
-          [
-            delay: Map.get(state.options, :base_backoff, 1000),
-            max_retries: Map.get(state.options, :retry, 5)
-          ]
-
-        :exponential ->
-          [
-            initial_delay: Map.get(state.options, :base_backoff, 1000),
-            max_delay: Map.get(state.options, :max_backoff, 30_000),
-            jitter_factor: Map.get(state.options, :jitter_factor, 0.1),
-            max_retries: Map.get(state.options, :retry, 5)
-          ]
-
-        :jittered ->
-          [
-            base_delay: Map.get(state.options, :base_backoff, 1000),
-            jitter_factor: Map.get(state.options, :jitter_factor, 0.2),
-            max_retries: Map.get(state.options, :retry, 5)
-          ]
-      end
-
-    # Get the appropriate strategy and calculate delay
-    strategy = Reconnection.get_strategy(backoff_type, strategy_opts)
-    Reconnection.calculate_delay(strategy, state.reconnect_attempts + 1)
-  end
-
-  # Check if max reconnection attempts have been reached
-  defp max_attempts_reached?(%{options: %{retry: :infinity}}), do: false
-
-  defp max_attempts_reached?(state) do
-    max_attempts = state.options.retry
-    state.reconnect_attempts >= max_attempts
   end
 
   defp log_event(:connection, event, context, state) do
@@ -535,14 +370,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     end
   end
 
-  # defp log_event(:message, event, context, state) do
-  #   if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
-  #     state.logging_handler.log_message_event(event, context, state)
-  #   else
-  #     Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
-  #   end
-  # end
-
   defp log_event(:error, event, context, state) do
     if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
       state.logging_handler.log_error_event(event, context, state)
@@ -551,7 +378,6 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     end
   end
 
-  # Helper to update the gun monitor reference in the connection state
   defp update_gun_monitor_ref(state, monitor_ref) do
     ConnectionState.update_gun_monitor_ref(state, monitor_ref)
   end

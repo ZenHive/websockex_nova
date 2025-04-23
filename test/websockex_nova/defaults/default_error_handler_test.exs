@@ -6,10 +6,10 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
   require Logger
 
   describe "DefaultErrorHandler.handle_error/3" do
-    test "handles connection errors" do
+    test "handles connection errors and uses attempt from state" do
       error = {:connection_error, :timeout}
-      context = %{attempt: 1}
-      state = %{max_reconnect_attempts: 5}
+      context = %{}
+      state = %{max_reconnect_attempts: 5, reconnect_attempts: 3}
 
       assert {:retry, delay, new_state} = DefaultErrorHandler.handle_error(error, context, state)
       assert is_integer(delay)
@@ -42,42 +42,59 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
   end
 
   describe "DefaultErrorHandler.should_reconnect?/3" do
-    test "allows reconnection for transient errors" do
+    test "allows reconnection for transient errors using attempt from state" do
       error = {:connection_error, :timeout}
-      attempt = 1
-      state = %{max_reconnect_attempts: 5}
+      state = %{max_reconnect_attempts: 5, reconnect_attempts: 2}
 
-      assert {true, delay} = DefaultErrorHandler.should_reconnect?(error, attempt, state)
+      assert {true, delay} = DefaultErrorHandler.should_reconnect?(error, 999, state)
       assert is_integer(delay)
       assert delay > 0
     end
 
-    test "respects max reconnection attempts" do
+    test "respects max reconnection attempts from state" do
       error = {:connection_error, :timeout}
-      attempt = 6
-      state = %{max_reconnect_attempts: 5}
+      state = %{max_reconnect_attempts: 5, reconnect_attempts: 6}
 
-      assert {false, _} = DefaultErrorHandler.should_reconnect?(error, attempt, state)
+      assert {false, _} = DefaultErrorHandler.should_reconnect?(error, 1, state)
     end
 
     test "doesn't reconnect for authentication errors" do
       error = {:auth_error, :invalid_credentials}
-      attempt = 1
-      state = %{max_reconnect_attempts: 5}
+      state = %{max_reconnect_attempts: 5, reconnect_attempts: 1}
 
-      assert {false, _} = DefaultErrorHandler.should_reconnect?(error, attempt, state)
+      assert {false, _} = DefaultErrorHandler.should_reconnect?(error, 1, state)
     end
 
     test "uses exponential backoff for reconnection delays" do
       error = {:connection_error, :timeout}
-      state = %{max_reconnect_attempts: 10}
+      state = %{max_reconnect_attempts: 10, reconnect_attempts: 1}
 
-      {true, delay1} = DefaultErrorHandler.should_reconnect?(error, 1, state)
-      {true, delay2} = DefaultErrorHandler.should_reconnect?(error, 2, state)
-      {true, delay3} = DefaultErrorHandler.should_reconnect?(error, 3, state)
+      {true, delay1} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 1})
+      {true, delay2} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 2})
+      {true, delay3} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 3})
 
       assert delay2 > delay1
       assert delay3 > delay2
+    end
+  end
+
+  describe "DefaultErrorHandler.increment_reconnect_attempts/1 and reset_reconnect_attempts/1" do
+    test "increments the attempt count in state" do
+      state = %{reconnect_attempts: 2}
+      new_state = DefaultErrorHandler.increment_reconnect_attempts(state)
+      assert new_state.reconnect_attempts == 3
+    end
+
+    test "increments from default if not present" do
+      state = %{}
+      new_state = DefaultErrorHandler.increment_reconnect_attempts(state)
+      assert new_state.reconnect_attempts == 2
+    end
+
+    test "resets the attempt count in state" do
+      state = %{reconnect_attempts: 5}
+      new_state = DefaultErrorHandler.reset_reconnect_attempts(state)
+      assert new_state.reconnect_attempts == 1
     end
   end
 

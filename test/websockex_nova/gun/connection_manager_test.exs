@@ -4,6 +4,26 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
   alias WebsockexNova.Gun.ConnectionManager
   alias WebsockexNova.Gun.ConnectionState
 
+  defmodule MockErrorHandler do
+    @moduledoc false
+    @behaviour WebsockexNova.Behaviors.ErrorHandler
+
+    def should_reconnect?(_error, attempt, state) do
+      # Allow up to 2 attempts
+      if attempt < 3 do
+        {true, 100 * attempt}
+      else
+        {false, 0}
+      end
+    end
+
+    def increment_reconnect_attempts(state), do: Map.update(state, :reconnect_attempts, 2, &(&1 + 1))
+    def reset_reconnect_attempts(_state), do: %{reconnect_attempts: 1}
+    def handle_error(_, _, state), do: {:ok, state}
+    def log_error(_, _, _), do: :ok
+    def classify_error(_, _), do: :transient
+  end
+
   describe "state transitions" do
     test "allows transition from :initialized to :connecting" do
       state = ConnectionState.new("example.com", 80, %{})
@@ -132,160 +152,50 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
     end
   end
 
-  describe "reconnection logic" do
-    test "reconnects on temporary failures" do
-      state = ConnectionState.new("example.com", 80, %{retry: 3})
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-      {:ok, state} = ConnectionManager.transition_to(state, :connected)
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected, %{reason: :normal})
+  describe "reconnection delegation to error handler" do
+    test "delegates reconnection policy to error handler and updates error handler state" do
+      # Initial error handler state
+      error_handler_state = %{reconnect_attempts: 1}
+      handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
 
-      # With a normal disconnect reason, should allow reconnection
-      assert {:ok, _reconnect_after, new_state} = ConnectionManager.handle_reconnection(state)
-      assert new_state.status == :reconnecting
-      assert new_state.reconnect_attempts == 1
-    end
+      state = %ConnectionState{
+        host: "example.com",
+        port: 80,
+        status: :disconnected,
+        options: %{},
+        handlers: handlers,
+        active_streams: %{}
+      }
 
-    test "doesn't reconnect on terminal failures" do
-      state = ConnectionState.new("example.com", 80, %{retry: 3})
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-
-      # Terminal error scenario
-      {:ok, state} = ConnectionManager.transition_to(state, :error, %{reason: :fatal_error})
-
-      assert {:error, :terminal_error, new_state} = ConnectionManager.handle_reconnection(state)
-      assert new_state.status == :error
-    end
-
-    test "respects max reconnection attempts" do
-      state = ConnectionState.new("example.com", 80, %{retry: 2})
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-      {:ok, state} = ConnectionManager.transition_to(state, :connected)
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # First attempt
-      {:ok, _reconnect_after, state} = ConnectionManager.handle_reconnection(state)
-      assert state.reconnect_attempts == 1
-
-      # Set back to disconnected for another attempt
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # Second attempt
-      {:ok, _reconnect_after, state} = ConnectionManager.handle_reconnection(state)
-      assert state.reconnect_attempts == 2
-
-      # Set back to disconnected for third attempt, which should fail
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # Third attempt - exceeds the limit of 2
-      assert {:error, :max_attempts_reached, new_state} =
-               ConnectionManager.handle_reconnection(state)
-
-      assert new_state.status == :error
-      # Shouldn't be incremented after failure
-      assert new_state.reconnect_attempts == 2
-    end
-
-    test "implements exponential backoff" do
-      state =
-        ConnectionState.new("example.com", 80, %{
-          retry: 3,
-          backoff_type: :exponential,
-          base_backoff: 100
-        })
-
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-      {:ok, state} = ConnectionManager.transition_to(state, :connected)
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # First attempt
-      {:ok, first_delay, state} = ConnectionManager.handle_reconnection(state)
-
-      # Should be around 100ms (base_backoff) with jitter
-      assert first_delay >= 100
-      assert first_delay <= 120
-
-      # Set back to disconnected for second attempt
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # Second attempt should have increased delay
-      {:ok, second_delay, _state} = ConnectionManager.handle_reconnection(state)
-
-      # Should be around 200ms (2^1 * base_backoff) with jitter
-      assert second_delay >= 200
-      assert second_delay <= 240
-    end
-
-    test "handles reconnection scheduling" do
-      # Create a test process to receive messages
       test_pid = self()
-
-      # Create a callback function that will be called when reconnect is scheduled
       callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
-
-      # Create initial state
-      state =
-        ConnectionState.new("example.com", 80, %{
-          retry: 2,
-          backoff_type: :linear,
-          base_backoff: 100
-        })
-
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-      {:ok, state} = ConnectionManager.transition_to(state, :connected)
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # Test scheduling a reconnection
       new_state = ConnectionManager.schedule_reconnection(state, callback)
-
-      # Verify the state is updated properly
       assert new_state.status == :reconnecting
-      assert new_state.reconnect_attempts == 1
-
-      # Verify the callback was called with the right parameters
-      assert_receive {:reconnect_scheduled, delay, 1}
-      assert delay >= 100
-
-      # Test what happens when max attempts is reached
-      {:ok, state} = ConnectionManager.transition_to(new_state, :disconnected)
-
-      # This should be the last attempt (max_retries = 2)
-      new_state = ConnectionManager.schedule_reconnection(state, callback)
-      assert new_state.reconnect_attempts == 2
-      assert_receive {:reconnect_scheduled, _delay, 2}
-
-      # One more attempt should fail and go to error state
-      {:ok, state} = ConnectionManager.transition_to(new_state, :disconnected)
-
-      final_state = ConnectionManager.schedule_reconnection(state, callback)
-      assert final_state.status == :error
-      # No callback message should be sent
-      refute_receive {:reconnect_scheduled, _delay, _attempt}
+      assert_receive {:reconnect_scheduled, 100, 1}
+      # The error handler state should be incremented
+      assert new_state.handlers.error_handler_state.reconnect_attempts == 2
     end
 
-    test "does not schedule reconnection for terminal errors" do
-      # Create a test process to receive messages
+    test "does not schedule reconnection if error handler says no" do
+      error_handler_state = %{reconnect_attempts: 3}
+      handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
+
+      state = %ConnectionState{
+        host: "example.com",
+        port: 80,
+        status: :disconnected,
+        options: %{},
+        handlers: handlers,
+        active_streams: %{}
+      }
+
       test_pid = self()
-
-      # Create a callback function
       callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
-
-      # Create initial state with a terminal error
-      state =
-        "example.com"
-        |> ConnectionState.new(80, %{retry: 3})
-        |> ConnectionState.record_error(:econnrefused)
-
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
-      {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
-
-      # Try to schedule reconnection with a terminal error
       new_state = ConnectionManager.schedule_reconnection(state, callback)
-
-      # Should transition to error state
       assert new_state.status == :error
-
-      # No callback should have been called
-      refute_receive {:reconnect_scheduled, _delay, _attempt}
+      refute_receive {:reconnect_scheduled, _, _}
+      # The error handler state should be reset
+      assert new_state.handlers.error_handler_state.reconnect_attempts == 1
     end
   end
 
@@ -311,12 +221,18 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
       {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
       assert state.status == :disconnected
 
-      # Reconnecting
-      {:ok, _reconnect_after, state} = ConnectionManager.handle_reconnection(state)
-      assert state.status == :reconnecting
+      # Reconnecting (use mock error handler and callback)
+      error_handler_state = %{reconnect_attempts: 1}
+      handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
+      state = %{state | handlers: handlers}
+      test_pid = self()
+      callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
+      new_state = ConnectionManager.schedule_reconnection(state, callback)
+      assert new_state.status == :reconnecting
+      assert_receive {:reconnect_scheduled, 100, 1}
 
       # Reconnected
-      {:ok, state} = ConnectionManager.transition_to(state, :connecting)
+      {:ok, state} = ConnectionManager.transition_to(new_state, :connecting)
       {:ok, state} = ConnectionManager.transition_to(state, :connected)
       assert state.status == :connected
 
