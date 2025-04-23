@@ -217,24 +217,56 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @spec open(binary(), pos_integer(), binary(), options()) :: {:ok, WebsockexNova.ClientConn.t()} | {:error, term()}
   @impl WebsockexNova.Transport
   def open(host, port, path, options \\ %{}) do
-    with {:ok, pid} <- start_connection(host, port, options),
-         :connected <- wait_for_connection(pid, options),
-         {:ok, stream_ref} <- upgrade_to_websocket_helper(pid, path, options),
-         :websocket_connected <- wait_for_websocket(pid, options),
-         {:ok, client_conn} <- build_client_conn(pid, stream_ref, options) do
+    Logger.debug(
+      "[ConnectionWrapper.open/4] called with host=#{inspect(host)}, port=#{inspect(port)}, path=#{inspect(path)}, options=#{inspect(options)}"
+    )
+
+    with {:ok, pid} <-
+           (
+             result = start_connection(host, port, options)
+             Logger.debug("[ConnectionWrapper.open/4] start_connection result: #{inspect(result)}")
+             result
+           ),
+         :connected <-
+           (
+             result = wait_for_connection(pid, options)
+             Logger.debug("[ConnectionWrapper.open/4] wait_for_connection result: #{inspect(result)}")
+             result
+           ),
+         {:ok, stream_ref} <-
+           (
+             result = upgrade_to_websocket_helper(pid, path, options)
+             Logger.debug("[ConnectionWrapper.open/4] upgrade_to_websocket_helper result: #{inspect(result)}")
+             result
+           ),
+         :websocket_connected <-
+           (
+             result = wait_for_websocket(pid, options)
+             Logger.debug("[ConnectionWrapper.open/4] wait_for_websocket result: #{inspect(result)}")
+             result
+           ),
+         {:ok, client_conn} <-
+           (
+             result = build_client_conn(pid, stream_ref, options)
+             Logger.debug("[ConnectionWrapper.open/4] build_client_conn result: #{inspect(result)}")
+             result
+           ) do
+      Logger.debug("[ConnectionWrapper.open/4] success: #{inspect(client_conn)}")
       {:ok, client_conn}
     else
+      {:error, {:http_response, status, headers}} ->
+        Logger.debug(
+          "[ConnectionWrapper.open/4] non-WebSocket HTTP response: status=#{inspect(status)}, headers=#{inspect(headers)}"
+        )
+
+        {:error, {:http_response, status, headers}}
+
       {:error, reason} ->
+        Logger.debug("[ConnectionWrapper.open/4] error: #{inspect(reason)}")
         {:error, reason}
 
-      :timeout ->
-        # Only stop pid if it was started
-        {:error, :connection_failed}
-
-      :websocket_upgrade_failed ->
-        {:error, :websocket_upgrade_failed}
-
       _ ->
+        Logger.debug("[ConnectionWrapper.open/4] unknown error branch")
         {:error, :connection_failed}
     end
   end
@@ -1158,8 +1190,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         updated_state = ConnectionState.update_stream(state, stream_ref, :websocket)
         {:reply, {:ok, headers}, updated_state}
 
-      {:response, :fin, status, headers} when status >= 400 ->
-        reason = {:http_error, status, headers}
+      {:response, :fin, status, headers} ->
+        # Distinguish non-WebSocket HTTP response (e.g., 200, 400, etc.)
+        reason = {:http_response, status, headers}
         ErrorHandler.handle_upgrade_error(stream_ref, reason, state)
 
       {:error, reason} ->
@@ -1304,6 +1337,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     case GenServer.call(pid, {:upgrade_to_websocket, path, headers}, Map.get(options, :timeout, 5000)) do
       {:ok, stream_ref} ->
         {:ok, stream_ref}
+
+      {:error, {:http_response, status, headers}} ->
+        GenServer.stop(pid)
+        {:error, {:http_response, status, headers}}
 
       {:error, reason} ->
         GenServer.stop(pid)

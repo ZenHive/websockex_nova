@@ -84,9 +84,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl ConnectionHandler
   def handle_disconnect(reason, state) do
     Logger.info("Disconnected from echo.websocket.org: #{inspect(reason)}")
-
-    # Request reconnection
-    {:reconnect, state}
+    {:ok, state}
   end
 
   @impl ConnectionHandler
@@ -114,7 +112,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   @impl ConnectionHandler
   def handle_timeout(state) do
     Logger.warning("Connection timeout")
-    {:reconnect, state}
+    {:ok, state}
   end
 
   @impl ConnectionHandler

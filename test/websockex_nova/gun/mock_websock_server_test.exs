@@ -2,7 +2,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
   use ExUnit.Case
 
   alias WebsockexNova.Gun.ConnectionWrapper
-  alias WebsockexNova.Test.Support.CertificateHelper
+  # alias WebsockexNova.Test.Support.CertificateHelper
   alias WebsockexNova.Test.Support.MockWebSockServer
 
   @websocket_path "/ws"
@@ -33,7 +33,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
       ## GUN does not support websocket upgrades over HTTP/2
       try do
         # Connect with HTTP/2 protocol
-        {:error, :websocket_upgrade_failed} =
+        {:error, :connection_failed} =
           ConnectionWrapper.open(@host, port, @websocket_path, %{protocols: [:http2], transport: :tcp})
 
         # Verify connection
@@ -73,7 +73,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
       ## GUN does not support websocket upgrades over HTTP/2
       try do
         # Connect with HTTP/2 over TLS
-        {:error, :websocket_upgrade_failed} =
+        {:error, :connection_failed} =
           ConnectionWrapper.open(@host, port, @websocket_path, %{
             transport: :tls,
             transport_opts: [verify: :verify_none],
@@ -102,36 +102,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
           })
 
         # Wait for connection to be established (up to 1000ms)
-        start = System.monotonic_time(:millisecond)
-        timeout = 1000
-
-        state = ConnectionWrapper.get_state(conn)
-        Logger.debug("state: #{inspect(state)}")
-
-        connected? = fn ->
-          ConnectionWrapper.get_state(conn).status == :connected
-        end
-
-        until_connected = fn until_connected ->
-          cond do
-            connected?.() ->
-              :ok
-
-            System.monotonic_time(:millisecond) - start > timeout ->
-              flunk("Connection did not reach :connected state within #{timeout}ms")
-
-            true ->
-              Process.sleep(25)
-              until_connected.(until_connected)
-          end
-        end
-
-        until_connected.(until_connected)
-
-        # Upgrade to websocket
-        {:ok, stream_ref} = ConnectionWrapper.upgrade_to_websocket(conn, @websocket_path, [])
-        {:ok, _} = ConnectionWrapper.wait_for_websocket_upgrade(conn, stream_ref, 1000)
-        assert :ok == ConnectionWrapper.send_frame(conn, stream_ref, {:text, "hello over tls"})
+        # The connection is already upgraded to websocket by open/4
+        assert Process.alive?(conn.transport_pid)
+        assert :ok == ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "hello over tls"})
 
         # Cleanup
         ConnectionWrapper.close(conn)
@@ -147,59 +120,40 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
     end
 
     test "connects with wildcard certificate to subdomain" do
-      {certfile, keyfile} =
-        CertificateHelper.generate_self_signed_certificate(common_name: "*.deribit.com")
+      # No need to generate a cert or start a mock server for real server test
 
-      {:ok, server_pid, port} =
-        MockWebSockServer.start_link(
-          protocol: :tls,
-          certfile: certfile,
-          keyfile: keyfile
-        )
-
-      try do
-        # Connect to a matching subdomain
-        {:ok, conn} =
-          ConnectionWrapper.open("test.deribit.com", port, @websocket_path, %{
-            transport: :tls,
-            transport_opts: [
-              verify: :verify_peer,
-              cacerts: :certifi.cacerts(),
-              server_name_indication: ~c"test.deribit.com"
-            ]
-          })
-
-        assert Process.alive?(conn.transport_pid)
-        ConnectionWrapper.close(conn)
-      after
-        MockWebSockServer.stop(server_pid)
-      end
-    end
-
-    @tag :skip
-    test "fails to connect to root domain with wildcard certificate" do
-      # Skipped: Known limitation of local self-signed certs. In production, connecting to example.com with a *.example.com cert should fail verification.
-      # This test may pass locally due to how self-signed certs and CA trust are handled in the test environment.
-    end
-
-    test "connects to test.deribit.com with wildcard certificate" do
-      # This test uses a real-world server with a wildcard certificate (*.deribit.com)
-      # and verifies that Gun can connect with proper hostname verification.
-      port = 443
-
-      ## GUN does not support websocket upgrades over TLS
-      {:error, :websocket_upgrade_failed} =
-        ConnectionWrapper.open("test.deribit.com", port, %{
+      {:ok, conn} =
+        ConnectionWrapper.open("test.deribit.com", 443, "/ws/api/v2", %{
           transport: :tls,
           transport_opts: [
             verify: :verify_peer,
             cacerts: :certifi.cacerts(),
             server_name_indication: ~c"test.deribit.com"
+          ],
+          callback_pid: self()
+        })
+
+      assert Process.alive?(conn.transport_pid)
+      ConnectionWrapper.close(conn)
+    end
+
+    test "connects to www.deribit.com with wildcard certificate" do
+      # This test uses a real-world server with a wildcard certificate (*.deribit.com)
+      # and verifies that Gun can connect with proper hostname verification.
+
+      ## GUN does not support websocket upgrades over TLS
+      {:ok, conn} =
+        ConnectionWrapper.open("www.deribit.com", 443, "/ws/api/v2", %{
+          transport: :tls,
+          transport_opts: [
+            verify: :verify_peer,
+            cacerts: :certifi.cacerts(),
+            server_name_indication: ~c"www.deribit.com"
           ]
         })
 
-      # assert Process.alive?(conn.transport_pid)
-      # ConnectionWrapper.close(conn)
+      assert Process.alive?(conn.transport_pid)
+      ConnectionWrapper.close(conn)
     end
   end
 end
