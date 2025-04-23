@@ -92,7 +92,7 @@ defmodule WebsockexNova.Examples.EchoAdapter do
   def handle_frame(:text, data, state) do
     Logger.debug("Received text frame: #{inspect(data)}")
 
-    # Store the message and forward to the client
+    # Store the message
     new_state = %{state | messages: [data | state.messages]}
 
     {:ok, new_state}

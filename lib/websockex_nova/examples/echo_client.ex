@@ -6,7 +6,6 @@ defmodule WebsockexNova.Examples.EchoClient do
   echo.websocket.org WebSocket Echo Server.
   """
 
-  alias WebsockexNova.Client
   alias WebsockexNova.Examples.EchoAdapter
 
   require Logger
@@ -27,7 +26,7 @@ defmodule WebsockexNova.Examples.EchoClient do
 
     case EchoAdapter.connection_info(%{}) do
       {:ok, connection_info} ->
-        Client.connect(EchoAdapter, connection_info)
+        WebsockexNova.Client.connect(EchoAdapter, connection_info)
 
       other ->
         {:error, {:unexpected_connection_info, other}}

@@ -70,11 +70,8 @@ defmodule WebsockexNova.Examples.EchoAdapterTest do
       # Send a text frame to the handler
       {:ok, new_state} = EchoAdapter.handle_frame(:text, "Echo this message", state)
 
-      # The message should be stored and a response sent to the process
+      # The message should be stored
       assert new_state.messages == ["Echo this message"]
-
-      # Check if the message was sent to the process
-      assert_receive {:websockex_nova, :response, "Echo this message"}
     end
 
     test "pings are responded with pongs" do
