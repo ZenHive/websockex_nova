@@ -8,6 +8,8 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
   @websocket_path "/ws"
   @host "localhost"
   describe "protocol options" do
+    require Logger
+
     test "starts server with HTTP/1.1 (default)" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
 
@@ -103,6 +105,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
         start = System.monotonic_time(:millisecond)
         timeout = 1000
 
+        state = ConnectionWrapper.get_state(conn)
+        Logger.debug("state: #{inspect(state)}")
+
         connected? = fn ->
           ConnectionWrapper.get_state(conn).status == :connected
         end
@@ -159,7 +164,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
             transport: :tls,
             transport_opts: [
               verify: :verify_peer,
-              cacertfile: certfile,
+              cacerts: :certifi.cacerts(),
               server_name_indication: ~c"test.deribit.com"
             ]
           })

@@ -197,7 +197,7 @@ defmodule WebsockexNova.Client do
   """
   @spec send_frame(ClientConn.t(), WebsockexNova.Transport.frame()) :: :ok | {:error, term()}
   def send_frame(%ClientConn{} = conn, frame) do
-    conn.transport.send_frame(conn.transport_pid, conn.stream_ref, frame)
+    conn.transport.send_frame(conn, conn.stream_ref, frame)
   end
 
   @doc """
@@ -431,7 +431,7 @@ defmodule WebsockexNova.Client do
   """
   @spec close(ClientConn.t()) :: :ok
   def close(%ClientConn{} = conn) do
-    conn.transport.close(conn.transport_pid)
+    conn.transport.close(conn)
   end
 
   @doc """
