@@ -37,8 +37,9 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
 
       case Client.authenticate(conn, credentials) do
         {:ok, _auth_data, new_state} ->
-          assert is_binary(new_state.access_token)
-          assert is_integer(new_state.expires_in) and new_state.expires_in > 0
+          assert is_map(new_state.credentials)
+          assert is_binary(new_state.credentials.token)
+          assert is_integer(new_state.auth_expires_at) and new_state.auth_expires_at > System.system_time(:second)
 
         {:error, :timeout} ->
           IO.puts("Timeout waiting for authentication response. Process mailbox:")
@@ -55,33 +56,44 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
   describe "DeribitAdapter.needs_reauthentication?/1" do
     alias WebsockexNova.Examples.DeribitAdapter
 
-    test "returns true if access_token is nil" do
-      state = %{access_token: nil, expires_in: 3600}
+    test "returns true if auth_status is failed" do
+      state = %{auth_status: :failed, credentials: %{token: "token"}}
       assert DeribitAdapter.needs_reauthentication?(state)
     end
 
-    test "returns true if expires_in is nil" do
-      state = %{access_token: "token", expires_in: nil}
-      assert DeribitAdapter.needs_reauthentication?(state)
+    test "returns false if not authenticated yet" do
+      state = %{auth_status: :unauthenticated, credentials: %{token: "token"}}
+      refute DeribitAdapter.needs_reauthentication?(state)
     end
 
-    test "returns true if authenticated is false or failed" do
-      state = %{access_token: "token", expires_in: 3600, authenticated: false}
-      assert DeribitAdapter.needs_reauthentication?(state)
-
-      state = %{access_token: "token", expires_in: 3600, authenticated: :failed}
-      assert DeribitAdapter.needs_reauthentication?(state)
+    test "returns false if no auth_expires_at" do
+      state = %{auth_status: :authenticated, credentials: %{token: "token"}}
+      refute DeribitAdapter.needs_reauthentication?(state)
     end
 
-    test "returns true if token is expired (using access_token_obtained_at and expires_in)" do
+    test "returns true if token is expiring soon" do
       now = System.system_time(:second)
-      state = %{access_token: "token", expires_in: 10, access_token_obtained_at: now - 100}
+
+      state = %{
+        auth_status: :authenticated,
+        auth_expires_at: now + 30,
+        credentials: %{token: "token"},
+        auth_refresh_threshold: 60
+      }
+
       assert DeribitAdapter.needs_reauthentication?(state)
     end
 
     test "returns false if token is valid and not expiring soon" do
       now = System.system_time(:second)
-      state = %{access_token: "token", expires_in: 3600, access_token_obtained_at: now}
+
+      state = %{
+        auth_status: :authenticated,
+        auth_expires_at: now + 3600,
+        credentials: %{token: "token"},
+        auth_refresh_threshold: 60
+      }
+
       refute DeribitAdapter.needs_reauthentication?(state)
     end
   end

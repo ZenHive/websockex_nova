@@ -11,10 +11,10 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.ConnectionHandler
   alias WebsockexNova.Behaviors.MessageHandler
+  alias WebsockexNova.Defaults.DefaultAuthHandler
 
   require Logger
 
-  @host "www.deribit.com"
   @port 443
   @path "/ws/api/v2"
 
@@ -40,9 +40,6 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
       _ -> "www.deribit.com"
     end
   end
-
-  @impl ConnectionHandler
-  def connection_init(opts), do: init(opts)
 
   @impl ConnectionHandler
   def init(_opts) do
@@ -141,6 +138,9 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
     client_secret = System.get_env("DERIBIT_CLIENT_SECRET")
     id = 42
 
+    credentials = %{api_key: client_id, secret: client_secret}
+    state = Map.put(state, :credentials, credentials)
+
     payload = %{
       "jsonrpc" => "2.0",
       "id" => id,
@@ -159,9 +159,22 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   def handle_auth_response(response, state) do
     case Jason.decode(response) do
       {:ok, %{"result" => %{"access_token" => token, "expires_in" => expires_in}}} ->
-        {:ok, %{state | access_token: token, expires_in: expires_in}}
+        auth_expires_at = System.system_time(:second) + expires_in
+
+        state =
+          state
+          |> Map.put(:auth_status, :authenticated)
+          |> Map.put(:auth_expires_at, auth_expires_at)
+          |> put_in([:credentials, :token], token)
+
+        {:ok, state}
 
       {:ok, %{"error" => error}} ->
+        state =
+          state
+          |> Map.put(:auth_status, :failed)
+          |> Map.put(:auth_error, error)
+
         {:error, error, state}
 
       _ ->
@@ -173,5 +186,10 @@ defmodule WebsockexNova.Examples.DeribitAdapter do
   def authenticate(_stream_ref, _credentials, state) do
     # The client will use generate_auth_data/1 and handle_auth_response/2
     {:ok, state}
+  end
+
+  @impl AuthHandler
+  def needs_reauthentication?(state) do
+    DefaultAuthHandler.needs_reauthentication?(state)
   end
 end
