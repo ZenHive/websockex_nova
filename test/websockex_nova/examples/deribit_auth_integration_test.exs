@@ -4,6 +4,8 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
   alias WebsockexNova.Client
   alias WebsockexNova.Examples.DeribitClient
 
+  require Logger
+
   @moduletag :integration
 
   @deribit_host System.get_env("DERIBIT_HOST", "test.deribit.com")
@@ -60,7 +62,7 @@ defmodule WebsockexNova.Examples.DeribitAuthIntegrationTest do
 
         {:error, :timeout} ->
           IO.puts("Timeout waiting for authentication response. Process mailbox:")
-          IO.inspect(Process.info(self(), :messages))
+          Logger.debug(Process.info(self(), :messages))
           flunk("Authentication failed: :timeout")
 
         {:error, reason} ->

@@ -79,7 +79,15 @@ defmodule WebsockexNova.Gun.ConnectionState do
       status: :initialized,
       options: options,
       callback_pid: Map.get(options, :callback_pid),
-      active_streams: %{}
+      active_streams: %{},
+      transport: Map.get(options, :transport, :tcp),
+      path: Map.get(options, :path, "/ws"),
+      ws_opts: Map.get(options, :ws_opts, %{}),
+      gun_pid: nil,
+      gun_monitor_ref: nil,
+      last_error: nil,
+      reconnect_attempts: 0,
+      handlers: %{}
     }
   end
 

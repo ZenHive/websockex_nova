@@ -5,6 +5,8 @@ defmodule WebsockexNova.Examples.EchoClientTest do
   alias WebsockexNova.Examples.EchoAdapter
   alias WebsockexNova.Examples.EchoClient
 
+  require Logger
+
   # Mark these tests as integration tests - they can be excluded with --exclude integration
   @moduletag :integration
 
@@ -76,7 +78,7 @@ defmodule WebsockexNova.Examples.EchoClientTest do
         nested: %{key: "value"}
       }
 
-      IO.inspect("Sending JSON: #{inspect(payload)}")
+      Logger.debug("Sending JSON: #{inspect(payload)}")
 
       matcher = fn
         {:websockex_nova, {:websocket_frame, _stream_ref, {:text, response}}} ->

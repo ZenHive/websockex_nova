@@ -62,10 +62,10 @@ defmodule WebsockexNova.Transport do
   ## Parameters
     * host - Hostname or IP address to connect to
     * port - Port number
+    * path - WebSocket endpoint path
     * options - Transport-specific options (map or keyword)
-    * supervisor - Optional supervisor pid (may be nil)
   """
-  @callback open(host :: binary, port :: pos_integer, options :: map | keyword, supervisor :: pid | nil) ::
+  @callback open(host :: binary, port :: pos_integer, path :: binary, options :: map | keyword) ::
               {:ok, state} | {:error, term()}
 
   @doc """
