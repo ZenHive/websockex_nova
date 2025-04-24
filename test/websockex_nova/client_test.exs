@@ -169,7 +169,7 @@ defmodule WebsockexNova.ClientTest do
     def generate_auth_data(state), do: {:ok, "{\"auth\":true}", state}
 
     @impl AuthHandler
-    def handle_auth_response(response, state), do: {:ok, response, state}
+    def handle_auth_response(_response, state), do: {:ok, state}
 
     @impl AuthHandler
     def needs_reauthentication?(_state), do: false
@@ -343,6 +343,60 @@ defmodule WebsockexNova.ClientTest do
       {:ok, conn_with_callback} = Client.register_callback(conn, self())
       {:ok, conn_without_callback} = Client.unregister_callback(conn_with_callback, self())
       assert conn_without_callback.callback_pids == []
+    end
+
+    test "authenticate/3 updates auth_status to :authenticated" do
+      defmodule AuthStatusAdapter do
+        @moduledoc false
+        @behaviour AuthHandler
+        @behaviour ConnectionHandler
+        @behaviour ErrorHandler
+        @behaviour MessageHandler
+        @behaviour SubscriptionHandler
+
+        def init(_), do: {:ok, %{}}
+        def connection_info(_), do: {:ok, %{host: "example.com", port: 443, path: "/ws"}}
+        def encode_message(msg, _), do: {:ok, :text, msg}
+        def subscribe(_, state, _), do: {:ok, "sub", state}
+        def unsubscribe(_, state), do: {:ok, "unsub", state}
+        def handle_message(msg, state), do: {:ok, msg, state}
+        def validate_message(msg), do: {:ok, msg}
+        def message_type(_), do: :text
+        def subscription_init(_), do: {:ok, %{}}
+        def handle_subscription_response(resp, state), do: {:ok, resp, state}
+        def active_subscriptions(_), do: []
+        def find_subscription_by_channel(_, _), do: nil
+        def handle_error(_, _, state), do: {:ok, state}
+        def should_reconnect?(_, _, _), do: {false, 0}
+        def log_error(_, _, _), do: :ok
+        def classify_error(_, _), do: :normal
+
+        def generate_auth_data(state) do
+          {:ok, "{\"auth\":true}", state}
+        end
+
+        def handle_auth_response(_response, state) do
+          {:ok, Map.put(state, :auth_status, :authenticated)}
+        end
+
+        def needs_reauthentication?(_), do: false
+        def authenticate(_, _, state), do: {:ok, state}
+      end
+
+      Application.put_env(:websockex_nova, :transport, WebsockexNova.ClientTest.MockTransport)
+
+      {:ok, conn} =
+        WebsockexNova.Client.connect(AuthStatusAdapter, %{
+          host: "example.com",
+          port: 443,
+          path: "/ws"
+        })
+
+      # Simulate the expected response in the mailbox
+      send(self(), {:websockex_nova, {:websocket_frame, conn.stream_ref, {:text, "{\"auth\":true}"}}})
+
+      {:ok, updated_conn, _response} = WebsockexNova.Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+      assert updated_conn.adapter_state.auth_status == :authenticated
     end
   end
 

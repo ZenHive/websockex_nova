@@ -337,16 +337,30 @@ defmodule WebsockexNova.Client do
   * `{:ok, conn, auth_result}` on success (with updated connection)
   * `{:error, reason}` on failure
   """
-  @spec authenticate(ClientConn.t(), map(), auth_options() | nil) :: {:ok, ClientConn.t(), term()} | {:error, term()}
+  @spec authenticate(ClientConn.t(), map(), auth_options() | nil) ::
+          {:ok, ClientConn.t(), term()} | {:error, term()} | {:error, term(), ClientConn.t()}
   def authenticate(%ClientConn{} = conn, credentials, options \\ nil) when is_map(credentials) do
     auth_handler = get_auth_handler(conn.adapter)
 
     with {:ok, auth_data, new_state} <-
            auth_handler.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
-         {:ok, updated_conn} <- update_adapter_state(conn, new_state),
-         :ok <- send_frame(updated_conn, {:text, auth_data}),
-         {:ok, response} <- wait_for_response(updated_conn, options) do
-      {:ok, updated_conn, response}
+         {:ok, conn1} <- update_adapter_state(conn, new_state),
+         :ok <- send_frame(conn1, {:text, auth_data}),
+         {:ok, response} <- wait_for_response(conn1, options) do
+      # Try to decode JSON, fallback to raw response
+      parsed_response =
+        case Jason.decode(response) do
+          {:ok, decoded} -> decoded
+          _ -> response
+        end
+
+      case auth_handler.handle_auth_response(parsed_response, conn1.adapter_state) do
+        {:ok, updated_state} ->
+          {:ok, %{conn1 | adapter_state: updated_state}, response}
+
+        {:error, reason, updated_state} ->
+          {:error, reason, %{conn1 | adapter_state: updated_state}}
+      end
     end
   end
 
