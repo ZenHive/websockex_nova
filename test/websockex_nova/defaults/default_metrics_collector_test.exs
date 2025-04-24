@@ -1,8 +1,11 @@
 defmodule WebsockexNova.Defaults.DefaultMetricsCollectorTest do
   use ExUnit.Case, async: false
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultMetricsCollector
   alias WebsockexNova.Telemetry.TelemetryEvents
+
+  defp conn_with_metrics(metrics \\ %{}), do: %ClientConn{metrics: metrics}
 
   setup do
     # Ensure the collector is started and ETS is clean
@@ -10,6 +13,8 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollectorTest do
 
     if !started? do
       {:ok, _pid} = DefaultMetricsCollector.start_link([])
+      # Synchronize to ensure GenServer is fully started and telemetry handlers are attached
+      DefaultMetricsCollector.get_metric(:__sync__)
 
       on_exit(fn ->
         case Process.whereis(DefaultMetricsCollector) do
@@ -104,5 +109,14 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollectorTest do
 
   test "get_metric/2 returns default if metric is missing" do
     assert DefaultMetricsCollector.get_metric(:nonexistent, 123) == 123
+  end
+
+  # Example direct handler API usage (if needed)
+  test "handler API accepts canonical struct" do
+    conn = conn_with_metrics()
+    event = [:websockex_nova, :connection, :open]
+    measurements = %{duration: 10}
+    metadata = %{connection_id: 1}
+    assert {:ok, ^conn} = DefaultMetricsCollector.handle_connection_event(event, measurements, metadata, conn)
   end
 end

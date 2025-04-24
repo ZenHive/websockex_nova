@@ -5,6 +5,9 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   Subscribes to all relevant telemetry events and aggregates metrics in ETS tables.
   Provides a public API for querying metrics (for testing/demo purposes).
 
+  All metrics handler API now uses the canonical WebsockexNova.ClientConn struct,
+  with metrics-specific state in the :metrics field.
+
   ## Metrics Tracked
 
     * Connection statistics (open/close counts, durations)
@@ -24,6 +27,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
 
   use GenServer
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Telemetry.TelemetryEvents
 
   @table :websockex_nova_metrics
@@ -37,7 +41,12 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
   @doc """
   Get a metric by key (for testing/demo).
   """
-  def get_metric(key), do: :ets.lookup_element(@table, key, 2)
+  def get_metric(key) do
+    case :ets.lookup(@table, key) do
+      [{^key, value}] -> value
+      _ -> 0
+    end
+  end
 
   def get_metric(key, default) do
     case(:ets.lookup(@table, key)) do
@@ -55,11 +64,52 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
     {:ok, %{}}
   end
 
-  # Telemetry event handlers
-
+  # --- MetricsCollector behaviour (3-arity) for telemetry/behaviour compliance ---
   @impl true
   def handle_connection_event(event, measurements, metadata)
       when is_list(event) and is_map(measurements) and is_map(metadata) do
+    do_handle_connection_event(event, measurements, metadata)
+    :ok
+  end
+
+  @impl true
+  def handle_message_event(event, measurements, metadata)
+      when is_list(event) and is_map(measurements) and is_map(metadata) do
+    do_handle_message_event(event, measurements, metadata)
+    :ok
+  end
+
+  @impl true
+  def handle_error_event(event, measurements, metadata)
+      when is_list(event) and is_map(measurements) and is_map(metadata) do
+    do_handle_error_event(event, measurements, metadata)
+    :ok
+  end
+
+  # --- Canonical struct API (4-arity) for explicit handler usage ---
+  @impl true
+  def handle_connection_event(event, measurements, metadata, %ClientConn{metrics: metrics} = conn)
+      when is_list(event) and is_map(measurements) and is_map(metadata) and is_map(metrics) do
+    do_handle_connection_event(event, measurements, metadata)
+    {:ok, conn}
+  end
+
+  @impl true
+  def handle_message_event(event, measurements, metadata, %ClientConn{metrics: metrics} = conn)
+      when is_list(event) and is_map(measurements) and is_map(metadata) and is_map(metrics) do
+    do_handle_message_event(event, measurements, metadata)
+    {:ok, conn}
+  end
+
+  @impl true
+  def handle_error_event(event, measurements, metadata, %ClientConn{metrics: metrics} = conn)
+      when is_list(event) and is_map(measurements) and is_map(metadata) and is_map(metrics) do
+    do_handle_error_event(event, measurements, metadata)
+    {:ok, conn}
+  end
+
+  # Internal event logic (unchanged)
+  def do_handle_connection_event(event, measurements, _metadata) do
     case event do
       [:websockex_nova, :connection, :open] ->
         incr(:connections_opened)
@@ -80,9 +130,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
     :ok
   end
 
-  @impl true
-  def handle_message_event(event, measurements, metadata)
-      when is_list(event) and is_map(measurements) and is_map(metadata) do
+  def do_handle_message_event(event, measurements, _metadata) do
     case event do
       [:websockex_nova, :message, :sent] ->
         incr(:messages_sent)
@@ -101,8 +149,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
     :ok
   end
 
-  @impl true
-  def handle_error_event(_event, _measurements, metadata) when is_map(metadata) do
+  def do_handle_error_event(_event, _measurements, metadata) when is_map(metadata) do
     reason = Map.get(metadata, :reason, :unknown)
     incr({:error, reason})
     incr(:errors_total)
@@ -133,13 +180,13 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
 
     cond do
       List.starts_with?(event, [:websockex_nova, :connection]) ->
-        __MODULE__.handle_connection_event(event, measurements_map, metadata_map)
+        __MODULE__.do_handle_connection_event(event, measurements_map, metadata_map)
 
       List.starts_with?(event, [:websockex_nova, :message]) ->
-        __MODULE__.handle_message_event(event, measurements_map, metadata_map)
+        __MODULE__.do_handle_message_event(event, measurements_map, metadata_map)
 
       List.starts_with?(event, [:websockex_nova, :error]) ->
-        __MODULE__.handle_error_event(event, measurements_map, metadata_map)
+        __MODULE__.do_handle_error_event(event, measurements_map, metadata_map)
 
       true ->
         :ok
@@ -148,7 +195,6 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
 
   # ETS metric helpers
   defp incr(key), do: :ets.update_counter(@table, key, {2, 1}, {key, 0})
-
   defp add(key, value) when is_integer(value), do: :ets.update_counter(@table, key, {2, value}, {key, 0})
   defp add(_key, _), do: :ok
 
