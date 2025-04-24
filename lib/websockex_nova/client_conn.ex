@@ -28,6 +28,9 @@ defmodule WebsockexNova.ClientConn do
     * `:logging` - Logging configuration
     * `:metrics` - Metrics configuration
     * `:extras` - Extensible/optional state
+    * `:auth_expires_at` - Authentication expiration timestamp
+    * `:auth_refresh_threshold` - Authentication refresh threshold
+    * `:auth_error` - Authentication error
   """
 
   @typedoc "WebSocket transport module"
@@ -54,6 +57,9 @@ defmodule WebsockexNova.ClientConn do
           subscriptions: map(),
           reconnect_attempts: non_neg_integer(),
           last_error: any(),
+          auth_expires_at: integer() | nil,
+          auth_refresh_threshold: integer() | nil,
+          auth_error: any() | nil,
           # Handler/feature-specific state
           rate_limit: map(),
           logging: map(),
@@ -77,6 +83,9 @@ defmodule WebsockexNova.ClientConn do
     subscriptions: %{},
     reconnect_attempts: 0,
     last_error: nil,
+    auth_expires_at: nil,
+    auth_refresh_threshold: nil,
+    auth_error: nil,
     rate_limit: %{},
     logging: %{},
     metrics: %{},

@@ -1,6 +1,7 @@
 defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
   use ExUnit.Case, async: true
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultAuthHandler
 
   describe "DefaultAuthHandler.auth_init/1" do
@@ -67,7 +68,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
   describe "DefaultAuthHandler.generate_auth_data/1" do
     test "generates auth data with API key and secret" do
-      state = %{
+      state = %ClientConn{
         credentials: %{
           api_key: "test_key",
           secret: "test_secret"
@@ -83,7 +84,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
     end
 
     test "generates auth data with token" do
-      state = %{
+      state = %ClientConn{
         credentials: %{
           token: "test_token"
         },
@@ -97,12 +98,12 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
     end
 
     test "fails with missing credentials" do
-      state = %{auth_status: :unauthenticated}
+      state = %ClientConn{auth_status: :unauthenticated}
       assert {:error, :missing_credentials, ^state} = DefaultAuthHandler.generate_auth_data(state)
     end
 
     test "fails with invalid credentials" do
-      state = %{
+      state = %ClientConn{
         # Missing secret
         credentials: %{api_key: "test_key"},
         auth_status: :unauthenticated
@@ -114,7 +115,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
   describe "DefaultAuthHandler.handle_auth_response/2" do
     setup do
-      state = %{
+      state = %ClientConn{
         credentials: %{
           api_key: "test_key",
           secret: "test_secret"
@@ -186,7 +187,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
   describe "DefaultAuthHandler.needs_reauthentication?/1" do
     test "detects failed authentication status" do
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         auth_status: :failed
       }
@@ -195,7 +196,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
     end
 
     test "detects expiring authentication" do
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         auth_status: :authenticated,
         # 30 seconds from now
@@ -207,7 +208,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
     test "respects custom refresh threshold" do
       # Set threshold to 120 seconds
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         auth_status: :authenticated,
         # 90 seconds from now
@@ -218,12 +219,12 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
       assert DefaultAuthHandler.needs_reauthentication?(state) == true
 
       # Now with default threshold (60), this shouldn't need refresh
-      state = Map.delete(state, :auth_refresh_threshold)
+      state = %{state | auth_refresh_threshold: nil}
       assert DefaultAuthHandler.needs_reauthentication?(state) == false
     end
 
     test "returns false for valid authentication" do
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         auth_status: :authenticated,
         # 10 minutes from now
@@ -234,7 +235,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
     end
 
     test "returns false when not authenticated yet" do
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         auth_status: :unauthenticated
       }
@@ -243,7 +244,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
     end
 
     test "returns false when no expiration time is set" do
-      state = %{
+      state = %ClientConn{
         credentials: %{api_key: "test_key", secret: "test_secret"},
         # No auth_expires_at
         auth_status: :authenticated
@@ -255,7 +256,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
 
   describe "DefaultAuthHandler.authenticate/3" do
     test "updates state with credentials" do
-      state = %{auth_status: :unauthenticated}
+      state = %ClientConn{auth_status: :unauthenticated}
       credentials = %{api_key: "test_key", secret: "test_secret"}
       stream_ref = make_ref()
 
