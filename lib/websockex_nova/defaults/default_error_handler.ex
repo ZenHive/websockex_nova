@@ -53,43 +53,55 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   # 30 seconds
   @default_max_delay 30_000
 
+  # State initialization helper
+  def error_init(opts) when is_map(opts) or is_list(opts) do
+    opts_map = if is_list(opts), do: Map.new(opts), else: opts
+    known_keys = MapSet.new(Map.keys(%WebsockexNova.ClientConn{}))
+    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
+    known_map = Map.new(known)
+    custom_map = Map.new(custom)
+    conn = struct(WebsockexNova.ClientConn, known_map)
+    conn = %{conn | error_handler_settings: Map.merge(conn.error_handler_settings || %{}, custom_map)}
+    {:ok, conn}
+  end
+
   @impl true
-  def handle_error(error, context, state) when is_map(context) and is_map(state) do
+  def handle_error(error, context, %WebsockexNova.ClientConn{} = conn) when is_map(context) do
     # Track the error in the state
-    updated_state =
-      state
+    updated_conn =
+      conn
       |> Map.put(:last_error, error)
       |> Map.put(:error_context, context)
 
     # Use the attempt count from state, defaulting to 1
-    attempt = Map.get(updated_state, :reconnect_attempts, 1)
+    attempt = Map.get(updated_conn, :reconnect_attempts, 1)
 
     # Handle based on error classification
     case classify_error(error, context) do
       :critical ->
-        {:stop, :critical_error, updated_state}
+        {:stop, :critical_error, updated_conn}
 
       :normal ->
         # Non-critical errors don't need special handling
-        {:ok, updated_state}
+        {:ok, updated_conn}
 
       :transient ->
-        {max_attempts, base_delay, max_delay} = extract_reconnection_opts(updated_state)
+        {max_attempts, base_delay, max_delay} = extract_reconnection_opts(updated_conn)
 
         if attempt <= max_attempts do
           delay = calculate_backoff_delay(attempt, base_delay, max_delay)
-          {:retry, delay, updated_state}
+          {:retry, delay, updated_conn}
         else
-          {:stop, :max_retry_attempts_reached, updated_state}
+          {:stop, :max_retry_attempts_reached, updated_conn}
         end
     end
   end
 
   @impl true
-  def should_reconnect?(error, _attempt, state) when is_map(state) do
+  def should_reconnect?(error, _attempt, %WebsockexNova.ClientConn{} = conn) do
     # Always use the attempt count from state
-    attempt = Map.get(state, :reconnect_attempts, 1)
-    {max_attempts, base_delay, max_delay} = extract_reconnection_opts(state)
+    attempt = Map.get(conn, :reconnect_attempts, 1)
+    {max_attempts, base_delay, max_delay} = extract_reconnection_opts(conn)
 
     if attempt <= max_attempts && reconnectable_error?(error) do
       delay = calculate_backoff_delay(attempt, base_delay, max_delay)
@@ -100,7 +112,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   @impl true
-  def log_error(error, context, state) when is_map(context) and is_map(state) do
+  def log_error(error, context, %WebsockexNova.ClientConn{} = conn) when is_map(context) do
     error_type = extract_error_type(error)
     context_str = format_context(context)
 
@@ -129,16 +141,16 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   Increment the reconnection attempt count in the handler state.
   """
   @impl true
-  def increment_reconnect_attempts(state) when is_map(state) do
-    Map.update(state, :reconnect_attempts, 2, &(&1 + 1))
+  def increment_reconnect_attempts(%WebsockexNova.ClientConn{} = conn) do
+    %{conn | reconnect_attempts: (conn.reconnect_attempts || 1) + 1}
   end
 
   @doc """
   Reset the reconnection attempt count in the handler state.
   """
   @impl true
-  def reset_reconnect_attempts(state) when is_map(state) do
-    Map.put(state, :reconnect_attempts, 1)
+  def reset_reconnect_attempts(%WebsockexNova.ClientConn{} = conn) do
+    %{conn | reconnect_attempts: 1}
   end
 
   # Helper functions
@@ -163,18 +175,18 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   # Extract reconnection options from state (prefer :reconnection map, fallback to legacy keys)
-  defp extract_reconnection_opts(state) when is_map(state) do
-    rc = extract_reconnection_config(state)
+  defp extract_reconnection_opts(%WebsockexNova.ClientConn{} = conn) do
+    rc = extract_reconnection_config(conn)
 
-    max_attempts = extract_max_attempts(rc, state)
-    base_delay = extract_base_delay(rc, state)
-    max_delay = extract_max_delay(rc, state)
+    max_attempts = extract_max_attempts(rc, conn)
+    base_delay = extract_base_delay(rc, conn)
+    max_delay = extract_max_delay(rc, conn)
 
     {max_attempts, base_delay, max_delay}
   end
 
-  defp extract_reconnection_config(state) do
-    case Map.get(state, :reconnection) do
+  defp extract_reconnection_config(%WebsockexNova.ClientConn{} = conn) do
+    case Map.get(conn, :reconnection) do
       nil -> %{}
       rc when is_list(rc) -> Map.new(rc)
       rc when is_map(rc) -> rc
@@ -182,23 +194,22 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     end
   end
 
-  defp extract_max_attempts(rc, state) do
+  defp extract_max_attempts(rc, conn) do
     Map.get(rc, :max_attempts) ||
       Map.get(rc, :max_reconnect_attempts) ||
-      Map.get(state, :max_reconnect_attempts) ||
+      Map.get(conn, :max_reconnect_attempts) ||
       @default_max_reconnect_attempts
   end
 
-  defp extract_base_delay(rc, state) do
+  defp extract_base_delay(rc, conn) do
     Map.get(rc, :base_delay) ||
       Map.get(rc, :initial_delay) ||
-      Map.get(state, :base_delay) ||
+      Map.get(conn, :base_delay) ||
       @default_base_delay
   end
 
-  defp extract_max_delay(rc, state) do
+  defp extract_max_delay(rc, conn) do
     Map.get(rc, :max_delay) ||
-      Map.get(state, :max_delay) ||
       @default_max_delay
   end
 end
