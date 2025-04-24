@@ -8,7 +8,7 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
     @moduledoc false
     @behaviour WebsockexNova.Behaviors.ErrorHandler
 
-    def should_reconnect?(_error, attempt, state) do
+    def should_reconnect?(_error, attempt, _state) do
       # Allow up to 2 attempts
       if attempt < 3 do
         {true, 100 * attempt}
@@ -155,7 +155,8 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
   describe "reconnection delegation to error handler" do
     test "delegates reconnection policy to error handler and updates error handler state" do
       # Initial error handler state
-      error_handler_state = %{reconnect_attempts: 1}
+      # error_handler_state = %{reconnect_attempts: 1}
+      error_handler_state = struct(WebsockexNova.ClientConn, %{reconnect_attempts: 1})
       handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
 
       state = %ConnectionState{
@@ -177,7 +178,7 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
     end
 
     test "does not schedule reconnection if error handler says no" do
-      error_handler_state = %{reconnect_attempts: 3}
+      error_handler_state = struct(WebsockexNova.ClientConn, %{reconnect_attempts: 3})
       handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
 
       state = %ConnectionState{
@@ -221,10 +222,11 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
       {:ok, state} = ConnectionManager.transition_to(state, :disconnected)
       assert state.status == :disconnected
 
-      # Reconnecting (use mock error handler and callback)
-      error_handler_state = %{reconnect_attempts: 1}
+      error_handler_state = struct(WebsockexNova.ClientConn, %{reconnect_attempts: 1})
+
       handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
       state = %{state | handlers: handlers}
+
       test_pid = self()
       callback = fn delay, attempt -> send(test_pid, {:reconnect_scheduled, delay, attempt}) end
       new_state = ConnectionManager.schedule_reconnection(state, callback)

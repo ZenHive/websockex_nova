@@ -141,17 +141,17 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     end
   end
 
-  defp ensure_error_handler_state(_error_handler, error_handler_state) when is_map(error_handler_state),
+  defp ensure_error_handler_state(_error_handler, %WebsockexNova.ClientConn{} = error_handler_state),
     do: error_handler_state
 
   defp ensure_error_handler_state(error_handler, _nil) do
     if function_exported?(error_handler, :error_handler_init, 1) do
       case error_handler.error_handler_init(%{}) do
-        {:ok, s} -> s
-        _ -> %{}
+        {:ok, s} when is_map(s) -> struct(WebsockexNova.ClientConn, s)
+        _ -> %WebsockexNova.ClientConn{}
       end
     else
-      %{}
+      %WebsockexNova.ClientConn{}
     end
   end
 
