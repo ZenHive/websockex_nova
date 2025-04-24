@@ -21,18 +21,19 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   end
 
   @impl ConnectionHandler
-  def connection_info(_opts) do
-    host = System.get_env("DERIBIT_HOST") || default_host()
+  def connection_info(opts) do
+    host = Map.get(opts, :host) || System.get_env("DERIBIT_HOST") || default_host()
 
-    {:ok,
-     %{
-       host: host,
-       port: @port,
-       path: @path,
-       headers: [],
-       timeout: 30_000,
-       transport_opts: %{transport: :tls}
-     }}
+    defaults = %{
+      host: host,
+      port: @port,
+      path: @path,
+      headers: [],
+      timeout: 30_000,
+      transport_opts: %{transport: :tls}
+    }
+
+    {:ok, Map.merge(defaults, opts)}
   end
 
   @impl ConnectionHandler

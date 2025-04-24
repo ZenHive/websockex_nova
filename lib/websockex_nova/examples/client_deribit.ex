@@ -9,11 +9,22 @@ defmodule WebsockexNova.Examples.ClientDeribit do
   alias WebsockexNova.Client
   alias WebsockexNova.Examples.AdapterDeribit
 
+  @default_opts %{
+    host: "test.deribit.com",
+    port: 443,
+    path: "/ws/api/v2",
+    headers: [],
+    timeout: 30_000,
+    transport_opts: %{transport: :tls}
+  }
+
   @doc """
   Connect to Deribit WebSocket API with sensible defaults.
+  User-supplied opts override defaults.
   """
-  def connect(opts \\ %{}) do
-    Client.connect(AdapterDeribit, opts)
+  def connect(opts \\ %{}) when is_map(opts) do
+    merged_opts = Map.merge(@default_opts, opts)
+    Client.connect(AdapterDeribit, merged_opts)
   end
 
   @doc """

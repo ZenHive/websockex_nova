@@ -20,96 +20,99 @@ defmodule WebsockexNova.Adapter do
 
   defmacro __using__(_opts) do
     quote do
+      @behaviour WebsockexNova.Behaviors.AuthHandler
       # Behaviours
       @behaviour WebsockexNova.Behaviors.ConnectionHandler
+      @behaviour WebsockexNova.Behaviors.ErrorHandler
       @behaviour WebsockexNova.Behaviors.MessageHandler
       @behaviour WebsockexNova.Behaviors.SubscriptionHandler
-      @behaviour WebsockexNova.Behaviors.AuthHandler
-      @behaviour WebsockexNova.Behaviors.ErrorHandler
+
+      alias WebsockexNova.Behaviors.AuthHandler
+      alias WebsockexNova.Behaviors.ConnectionHandler
+      alias WebsockexNova.Behaviors.ErrorHandler
+      alias WebsockexNova.Behaviors.MessageHandler
+      alias WebsockexNova.Behaviors.SubscriptionHandler
+      alias WebsockexNova.Defaults.DefaultAuthHandler
+      alias WebsockexNova.Defaults.DefaultConnectionHandler
+      alias WebsockexNova.Defaults.DefaultErrorHandler
+      alias WebsockexNova.Defaults.DefaultMessageHandler
+      alias WebsockexNova.Defaults.DefaultSubscriptionHandler
 
       # --- ConnectionHandler defaults ---
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def init(opts), do: WebsockexNova.Defaults.DefaultConnectionHandler.init(opts)
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def connection_info(opts), do: WebsockexNova.Defaults.DefaultConnectionHandler.connection_info(opts)
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def handle_connect(conn_info, state),
-        do: WebsockexNova.Defaults.DefaultConnectionHandler.handle_connect(conn_info, state)
+      @impl ConnectionHandler
+      def init(opts), do: DefaultConnectionHandler.init(opts)
+      @impl ConnectionHandler
+      def connection_info(opts), do: DefaultConnectionHandler.connection_info(opts)
+      @impl ConnectionHandler
+      def handle_connect(conn_info, state), do: DefaultConnectionHandler.handle_connect(conn_info, state)
 
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def handle_disconnect(reason, state),
-        do: WebsockexNova.Defaults.DefaultConnectionHandler.handle_disconnect(reason, state)
+      @impl ConnectionHandler
+      def handle_disconnect(reason, state), do: DefaultConnectionHandler.handle_disconnect(reason, state)
 
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def handle_frame(type, data, state),
-        do: WebsockexNova.Defaults.DefaultConnectionHandler.handle_frame(type, data, state)
+      @impl ConnectionHandler
+      def handle_frame(type, data, state), do: DefaultConnectionHandler.handle_frame(type, data, state)
 
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def handle_timeout(state), do: WebsockexNova.Defaults.DefaultConnectionHandler.handle_timeout(state)
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def ping(stream_ref, state), do: WebsockexNova.Defaults.DefaultConnectionHandler.ping(stream_ref, state)
-      @impl WebsockexNova.Behaviors.ConnectionHandler
-      def status(stream_ref, state), do: WebsockexNova.Defaults.DefaultConnectionHandler.status(stream_ref, state)
+      @impl ConnectionHandler
+      def handle_timeout(state), do: DefaultConnectionHandler.handle_timeout(state)
+      @impl ConnectionHandler
+      def ping(stream_ref, state), do: DefaultConnectionHandler.ping(stream_ref, state)
+      @impl ConnectionHandler
+      def status(stream_ref, state), do: DefaultConnectionHandler.status(stream_ref, state)
 
       # --- MessageHandler defaults ---
-      @impl WebsockexNova.Behaviors.MessageHandler
-      def message_init(opts), do: WebsockexNova.Defaults.DefaultMessageHandler.message_init(opts)
-      @impl WebsockexNova.Behaviors.MessageHandler
-      def handle_message(message, state), do: WebsockexNova.Defaults.DefaultMessageHandler.handle_message(message, state)
-      @impl WebsockexNova.Behaviors.MessageHandler
-      def validate_message(message), do: WebsockexNova.Defaults.DefaultMessageHandler.validate_message(message)
-      @impl WebsockexNova.Behaviors.MessageHandler
-      def message_type(message), do: WebsockexNova.Defaults.DefaultMessageHandler.message_type(message)
-      @impl WebsockexNova.Behaviors.MessageHandler
-      def encode_message(message, state), do: WebsockexNova.Defaults.DefaultMessageHandler.encode_message(message, state)
+      @impl MessageHandler
+      def message_init(opts), do: DefaultMessageHandler.message_init(opts)
+      @impl MessageHandler
+      def handle_message(message, state), do: DefaultMessageHandler.handle_message(message, state)
+      @impl MessageHandler
+      def validate_message(message), do: DefaultMessageHandler.validate_message(message)
+      @impl MessageHandler
+      def message_type(message), do: DefaultMessageHandler.message_type(message)
+      @impl MessageHandler
+      def encode_message(message, state), do: DefaultMessageHandler.encode_message(message, state)
 
       # --- SubscriptionHandler defaults ---
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
-      def subscription_init(opts), do: WebsockexNova.Defaults.DefaultSubscriptionHandler.subscription_init(opts)
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
-      def subscribe(channel, params, state),
-        do: WebsockexNova.Defaults.DefaultSubscriptionHandler.subscribe(channel, params, state)
+      @impl SubscriptionHandler
+      def subscription_init(opts), do: DefaultSubscriptionHandler.subscription_init(opts)
+      @impl SubscriptionHandler
+      def subscribe(channel, params, state), do: DefaultSubscriptionHandler.subscribe(channel, params, state)
 
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
-      def unsubscribe(channel, state), do: WebsockexNova.Defaults.DefaultSubscriptionHandler.unsubscribe(channel, state)
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
+      @impl SubscriptionHandler
+      def unsubscribe(channel, state), do: DefaultSubscriptionHandler.unsubscribe(channel, state)
+      @impl SubscriptionHandler
       def handle_subscription_response(response, state),
-        do: WebsockexNova.Defaults.DefaultSubscriptionHandler.handle_subscription_response(response, state)
+        do: DefaultSubscriptionHandler.handle_subscription_response(response, state)
 
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
-      def active_subscriptions(state), do: WebsockexNova.Defaults.DefaultSubscriptionHandler.active_subscriptions(state)
-      @impl WebsockexNova.Behaviors.SubscriptionHandler
+      @impl SubscriptionHandler
+      def active_subscriptions(state), do: DefaultSubscriptionHandler.active_subscriptions(state)
+      @impl SubscriptionHandler
       def find_subscription_by_channel(channel, state),
-        do: WebsockexNova.Defaults.DefaultSubscriptionHandler.find_subscription_by_channel(channel, state)
+        do: DefaultSubscriptionHandler.find_subscription_by_channel(channel, state)
 
       # --- AuthHandler defaults ---
-      @impl WebsockexNova.Behaviors.AuthHandler
-      def generate_auth_data(state), do: WebsockexNova.Defaults.DefaultAuthHandler.generate_auth_data(state)
-      @impl WebsockexNova.Behaviors.AuthHandler
-      def handle_auth_response(response, state),
-        do: WebsockexNova.Defaults.DefaultAuthHandler.handle_auth_response(response, state)
+      @impl AuthHandler
+      def generate_auth_data(state), do: DefaultAuthHandler.generate_auth_data(state)
+      @impl AuthHandler
+      def handle_auth_response(response, state), do: DefaultAuthHandler.handle_auth_response(response, state)
 
-      @impl WebsockexNova.Behaviors.AuthHandler
-      def needs_reauthentication?(state), do: WebsockexNova.Defaults.DefaultAuthHandler.needs_reauthentication?(state)
-      @impl WebsockexNova.Behaviors.AuthHandler
+      @impl AuthHandler
+      def needs_reauthentication?(state), do: DefaultAuthHandler.needs_reauthentication?(state)
+      @impl AuthHandler
       def authenticate(stream_ref, credentials, state),
-        do: WebsockexNova.Defaults.DefaultAuthHandler.authenticate(stream_ref, credentials, state)
+        do: DefaultAuthHandler.authenticate(stream_ref, credentials, state)
 
       # --- ErrorHandler defaults ---
-      @impl WebsockexNova.Behaviors.ErrorHandler
-      def handle_error(error, context, state),
-        do: WebsockexNova.Defaults.DefaultErrorHandler.handle_error(error, context, state)
+      @impl ErrorHandler
+      def handle_error(error, context, state), do: DefaultErrorHandler.handle_error(error, context, state)
 
-      @impl WebsockexNova.Behaviors.ErrorHandler
-      def should_reconnect?(error, attempt, state),
-        do: WebsockexNova.Defaults.DefaultErrorHandler.should_reconnect?(error, attempt, state)
+      @impl ErrorHandler
+      def should_reconnect?(error, attempt, state), do: DefaultErrorHandler.should_reconnect?(error, attempt, state)
 
-      @impl WebsockexNova.Behaviors.ErrorHandler
-      def log_error(error, context, state),
-        do: WebsockexNova.Defaults.DefaultErrorHandler.log_error(error, context, state)
+      @impl ErrorHandler
+      def log_error(error, context, state), do: DefaultErrorHandler.log_error(error, context, state)
 
-      @impl WebsockexNova.Behaviors.ErrorHandler
-      def classify_error(error, state), do: WebsockexNova.Defaults.DefaultErrorHandler.classify_error(error, state)
+      @impl ErrorHandler
+      def classify_error(error, state), do: DefaultErrorHandler.classify_error(error, state)
 
       # Allow adapter authors to override any callback
       defoverridable init: 1,
