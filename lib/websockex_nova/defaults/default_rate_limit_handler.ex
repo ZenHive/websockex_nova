@@ -1,6 +1,8 @@
 defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   @moduledoc """
   Default implementation of the RateLimitHandler behavior.
+  This module now stores all rate limit state in the canonical WebsockexNova.ClientConn struct,
+  under the :rate_limit field.
 
   This module provides a standard token bucket algorithm implementation for rate limiting
   WebSocket requests. It supports:
@@ -40,6 +42,8 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   @behaviour WebsockexNova.Behaviors.RateLimitHandler
 
+  alias WebsockexNova.ClientConn
+
   require Logger
 
   @default_capacity 60
@@ -56,22 +60,18 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   # Define possible rate limiting modes
   @modes [:normal, :always_allow, :always_queue, :always_reject]
 
+  @doc """
+  Initialize the rate limit handler's state in the canonical struct.
+  """
   @impl true
   def rate_limit_init(opts) do
-    # Convert to map if passed as keyword list
     opts_map = if is_list(opts), do: Map.new(opts), else: opts
-
-    # Extract rate limiting mode
     mode = extract_mode(opts_map)
     Logger.debug("Default rate limiter initialized with mode: #{inspect(mode)}")
-
-    # Extract specific key used both for capacity and initial tokens
     capacity = Map.get(opts_map, :capacity, @default_capacity)
-
-    # Allow configuring initial token count separately from capacity
     initial_tokens = Map.get(opts_map, :tokens, capacity)
 
-    state = %{
+    rate_limit_state = %{
       mode: mode,
       bucket: %{
         capacity: capacity,
@@ -85,54 +85,61 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
       cost_map: Map.get(opts_map, :cost_map, @default_cost_map)
     }
 
-    {:ok, state}
+    {:ok, %ClientConn{rate_limit: rate_limit_state}}
   end
 
+  @doc """
+  Check if a request can proceed based on current rate limits.
+  Accepts and returns the canonical struct.
+  """
   @impl true
-  def check_rate_limit(request, state) when is_map(request) and is_map(state) do
-    Logger.debug("Checking rate limit for request: #{inspect(request)}, mode: #{inspect(state.mode)}")
+  def check_rate_limit(request, %ClientConn{rate_limit: rl} = conn) when is_map(request) and is_map(rl) do
+    Logger.debug("Checking rate limit for request: #{inspect(request)}, mode: #{inspect(rl.mode)}")
 
-    case state.mode do
+    case rl.mode do
       :always_allow ->
         # Always allow all requests, regardless of rate limits
-        {:allow, state}
+        {:allow, conn}
 
       :always_queue ->
         # Always queue all requests, regardless of rate limits
-        new_queue = insert_with_priority(state.queue, {request, 1})
-        new_state = %{state | queue: new_queue}
-        {:queue, new_state}
+        new_queue = insert_with_priority(rl.queue, {request, 1})
+        new_rl = %{rl | queue: new_queue}
+        {:queue, %{conn | rate_limit: new_rl}}
 
       :always_reject ->
         # Always reject all requests, regardless of rate limits
-        {:reject, :rate_limit_exceeded, state}
+        {:reject, :rate_limit_exceeded, conn}
 
       :normal ->
         # Use normal rate limiting logic
-        normal_check_rate_limit(request, state)
+        normal_check_rate_limit(request, conn)
     end
   end
 
+  @doc """
+  Process queued requests on a periodic tick.
+  Accepts and returns the canonical struct.
+  """
   @impl true
-  def handle_tick(state) when is_map(state) do
-    # Logger.debug("Handling tick with mode: #{inspect(state.mode)}")
+  def handle_tick(%ClientConn{rate_limit: rl} = conn) when is_map(rl) do
+    # Logger.debug("Handling tick with mode: #{inspect(rl.mode)}")
 
-    case state.mode do
+    case rl.mode do
       :always_allow ->
         # No need to process queue, as all requests are allowed immediately
-        {:ok, state}
+        {:ok, conn}
 
       :always_reject ->
         # No need to process queue, as all requests are rejected
-        {:ok, state}
+        {:ok, conn}
 
       _ ->
         # Process queued requests for :normal and :always_queue modes
         # Process queued requests if we have tokens available
-        updated_bucket = refill_bucket(state.bucket)
-        updated_state = %{state | bucket: updated_bucket}
-
-        process_queue(updated_state)
+        updated_bucket = refill_bucket(rl.bucket)
+        updated_rl = %{rl | bucket: updated_bucket}
+        process_queue(%{conn | rate_limit: updated_rl})
     end
   end
 
@@ -152,12 +159,12 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   defp extract_mode(_), do: :normal
 
-  defp normal_check_rate_limit(request, state) when is_map(request) and is_map(state) do
+  defp normal_check_rate_limit(request, %ClientConn{rate_limit: rl} = conn) when is_map(request) and is_map(rl) do
     # Calculate available tokens since last refill
-    updated_bucket = refill_bucket(state.bucket)
+    updated_bucket = refill_bucket(rl.bucket)
 
     # Check if we have enough tokens
-    cost = calculate_cost(request, state.cost_map)
+    cost = calculate_cost(request, rl.cost_map)
 
     Logger.debug("Normal rate limit check - tokens: #{updated_bucket.tokens}, cost: #{cost}")
 
@@ -165,18 +172,18 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
       updated_bucket.tokens >= cost ->
         # We have enough tokens, allow the request
         new_bucket = %{updated_bucket | tokens: updated_bucket.tokens - cost}
-        new_state = %{state | bucket: new_bucket}
-        {:allow, new_state}
+        new_rl = %{rl | bucket: new_bucket}
+        {:allow, %{conn | rate_limit: new_rl}}
 
-      :queue.len(state.queue) < state.queue_limit ->
+      :queue.len(rl.queue) < rl.queue_limit ->
         # Queue the request for later
-        new_queue = insert_with_priority(state.queue, {request, cost})
-        new_state = %{state | bucket: updated_bucket, queue: new_queue}
-        {:queue, new_state}
+        new_queue = insert_with_priority(rl.queue, {request, cost})
+        new_rl = %{rl | bucket: updated_bucket, queue: new_queue}
+        {:queue, %{conn | rate_limit: new_rl}}
 
       true ->
         # Queue is full, reject the request
-        {:reject, :rate_limit_exceeded, %{state | bucket: updated_bucket}}
+        {:reject, :rate_limit_exceeded, %{conn | rate_limit: %{rl | bucket: updated_bucket}}}
     end
   end
 
@@ -225,22 +232,22 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
     end
   end
 
-  defp process_queue(state) when is_map(state) do
-    case :queue.out(state.queue) do
+  defp process_queue(%ClientConn{rate_limit: rl} = conn) do
+    case :queue.out(rl.queue) do
       {{:value, {request, cost}}, new_queue} ->
-        if state.bucket.tokens >= cost do
+        if rl.bucket.tokens >= cost do
           # We have enough tokens for the next queued request
-          new_bucket = %{state.bucket | tokens: state.bucket.tokens - cost}
-          new_state = %{state | bucket: new_bucket, queue: new_queue}
-          {:process, request, new_state}
+          new_bucket = %{rl.bucket | tokens: rl.bucket.tokens - cost}
+          new_rl = %{rl | bucket: new_bucket, queue: new_queue}
+          {:process, request, %{conn | rate_limit: new_rl}}
         else
           # Not enough tokens yet
-          {:ok, state}
+          {:ok, conn}
         end
 
       {:empty, _} ->
         # No queued requests
-        {:ok, state}
+        {:ok, conn}
     end
   end
 end

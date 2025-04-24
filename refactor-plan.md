@@ -5,8 +5,41 @@
 - [x] DefaultAuthHandler refactored to use canonical state struct with `auth_handler_settings`
 - [x] DefaultSubscriptionHandler refactored to use canonical state struct with `subscription_handler_settings`
 - [x] DefaultConnectionHandler refactored to use canonical state struct with `connection_handler_settings`
-- [ ] Other handlers (error, message, rate limit, logging, metrics) still pending
-- [x] Tests for auth, subscription, and connection handlers updated and passing
+- [x] DefaultErrorHandler refactored to use canonical state struct with `error_handler_settings`
+- [x] DefaultMessageHandler refactored to use canonical state struct with `message_handler_settings`
+- [x] DefaultRateLimitHandler refactored to use canonical state struct with `rate_limit` (tests updated and passing)
+- [x] DefaultLoggingHandler refactored to use canonical state struct with `logging` (tests updated and passing)
+- [ ] Other handlers (metrics) still pending
+- [x] Tests for auth, subscription, connection, error, message, rate limit, and logging handlers updated and passing
+
+---
+
+## Status Summary
+
+All major handlers (auth, subscription, connection, error, message, rate limit, logging) are now refactored to use the canonical `%WebsockexNova.ClientConn{}` struct as the single source of truth, with handler-specific state namespaced in dedicated fields. All tests for these handlers are updated and passing. Continue with the next handler (metrics) using the same conventions and process.
+
+---
+
+## Next Steps
+
+- [ ] Refactor DefaultMetricsCollector to use canonical state struct with `metrics` or `metrics_collector_settings`
+- [ ] Update or add tests for each handler as you go
+- [ ] Review and update this plan as progress continues
+
+---
+
+## Prompt for New Chat
+
+You are continuing a refactor of a Phoenix/Elixir codebase to ensure all handler and application state is stored in a single, canonical struct (`WebsockexNova.ClientConn`).
+
+- All handler-specific state must be namespaced in dedicated fields (e.g., `*_handler_settings`) in the struct.
+- All tests must use the canonical struct for state setup and assertions.
+- Each handler and its tests should be refactored one at a time, following Phoenix/Elixir best practices and idioms.
+- Use clear, descriptive field names and leverage pattern matching for clarity and correctness.
+- Confirm each handler's tests pass before moving to the next.
+- Document progress and update the refactor plan as you go.
+
+Continue with the next handler (rate limit, logging, or metrics) using this process.
 
 ---
 
@@ -105,8 +138,4 @@ end
 
 ## 5. Refactor Handlers
 
-- [x] Update all handler modules in `lib/websockex_nova/defaults/`:
-  - [x] `default_auth_handler.ex`
-  - [x] `default_subscription_handler.ex`
-  - [x] `default_connection_handler.ex`
-  - [ ] `
+## 6. Refactor Client.ex

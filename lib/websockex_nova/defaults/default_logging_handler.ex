@@ -11,52 +11,55 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
       %{log_level: :info, log_format: :plain}
 
   If not set, defaults are :info and :plain.
+  All logging state is now stored in the canonical WebsockexNova.ClientConn struct under the :logging field.
   """
 
   @behaviour WebsockexNova.Behaviors.LoggingHandler
 
+  alias WebsockexNova.ClientConn
+
   require Logger
 
   @impl true
-  def log_connection_event(event, context, state) when is_map(context) and is_map(state) do
-    # Ensure event is a map
+  def log_connection_event(event, context, %ClientConn{logging: logging} = _conn)
+      when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
-    log(:connection, event_map, context, state)
+    log(:connection, event_map, context, logging)
+    :ok
   end
 
   @impl true
-  def log_message_event(event, context, state) when is_map(context) and is_map(state) do
-    # Ensure event is a map
+  def log_message_event(event, context, %ClientConn{logging: logging} = conn) when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
-    log(:message, event_map, context, state)
+    log(:message, event_map, context, logging)
+    :ok
   end
 
   @impl true
-  def log_error_event(event, context, state) when is_map(context) and is_map(state) do
-    # Ensure event is a map
+  def log_error_event(event, context, %ClientConn{logging: logging} = conn) when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
-    log(:error, event_map, context, state)
+    log(:error, event_map, context, logging)
+    :ok
   end
 
   @doc """
-  Initializes the DefaultLoggingHandler state.
-
-  Returns {:ok, opts} where opts is the options map (or empty map).
+  Initializes the DefaultLoggingHandler state in the canonical struct.
+  Returns {:ok, conn} where conn is the canonical struct with logging config set.
   """
-  @spec logging_init(map()) :: {:ok, map()}
-  def logging_init(opts) when is_map(opts), do: {:ok, opts}
-  def logging_init(_), do: {:ok, %{}}
+  @spec logging_init(map()) :: {:ok, ClientConn.t()}
+  def logging_init(opts) when is_map(opts), do: {:ok, %ClientConn{logging: opts}}
+  def logging_init(_), do: {:ok, %ClientConn{logging: %{}}}
 
   # Private helper functions
 
-  defp log(category, event, context, state) when is_map(event) and is_map(context) and is_map(state) do
+  defp log(category, event, context, logging) when is_map(event) and is_map(context) and is_map(logging) do
     level =
-      case Map.get(state, :log_level, :info) do
+      case Map.get(logging, :log_level, :info) do
         l when l in [:debug, :info, :warn, :warning, :error] -> l
         _ -> :info
       end
 
-    format = Map.get(state, :log_format, :plain)
+    format = Map.get(logging, :log_format, :plain)
     msg = format_log(category, event, context, format)
     Logger.log(level, msg)
     :ok

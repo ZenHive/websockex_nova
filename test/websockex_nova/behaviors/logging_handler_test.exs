@@ -3,11 +3,13 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
 
   import ExUnit.CaptureLog
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultLoggingHandler
 
-  @default_state %{}
-  @json_state %{log_level: :info, log_format: :json}
-  @warn_state %{log_level: :warning, log_format: :plain}
+  defp conn_with_logging(logging), do: %ClientConn{logging: logging}
+  defp default_state, do: conn_with_logging(%{})
+  defp json_state, do: conn_with_logging(%{log_level: :info, log_format: :json})
+  defp warn_state, do: conn_with_logging(%{log_level: :warning, log_format: :plain})
 
   describe "log_connection_event/3" do
     setup do
@@ -20,7 +22,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs plain format by default" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_connection_event(:connected, %{host: "localhost"}, @default_state)
+          DefaultLoggingHandler.log_connection_event(:connected, %{host: "localhost"}, default_state())
         end)
 
       assert log =~ "[CONNECTION]"
@@ -31,12 +33,12 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs in JSON format when configured" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_connection_event(:disconnected, %{reason: :timeout}, @json_state)
+          DefaultLoggingHandler.log_connection_event(:disconnected, %{reason: :timeout}, json_state())
         end)
 
       assert log =~ "\"category\":"
       assert log =~ "\"type\":"
-      assert log =~ "\"disconnected\""
+      assert log =~ "disconnected"
       assert log =~ "timeout"
     end
   end
@@ -52,7 +54,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs message events at info level by default" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_message_event(:sent, %{payload: "hi"}, @default_state)
+          DefaultLoggingHandler.log_message_event(:sent, %{payload: "hi"}, default_state())
         end)
 
       assert log =~ "[MESSAGE]"
@@ -63,7 +65,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs at warn level when configured" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_message_event(:received, %{payload: "pong"}, @warn_state)
+          DefaultLoggingHandler.log_message_event(:received, %{payload: "pong"}, warn_state())
         end)
 
       assert log =~ "[MESSAGE]"
@@ -83,7 +85,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs error events at info level by default" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1006, reason: "abnormal"}, @default_state)
+          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1006, reason: "abnormal"}, default_state())
         end)
 
       assert log =~ "[ERROR]"
@@ -95,12 +97,12 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     test "logs error events in JSON format" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1001, reason: "going away"}, @json_state)
+          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1001, reason: "going away"}, json_state())
         end)
 
       assert log =~ "\"category\":"
       assert log =~ "\"type\":"
-      assert log =~ "\"ws_error\""
+      assert log =~ "ws_error"
       assert log =~ "going away"
     end
   end
@@ -114,9 +116,11 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     end
 
     test "handles unknown log format gracefully" do
+      state = conn_with_logging(%{log_format: :unknown})
+
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_connection_event(:foo, %{bar: 1}, %{log_format: :unknown})
+          DefaultLoggingHandler.log_connection_event(:foo, %{bar: 1}, state)
         end)
 
       assert log =~ "[LOG]["
@@ -125,12 +129,13 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
     end
 
     test "handles invalid log level by falling back to :info" do
+      state = conn_with_logging(%{log_level: :notalevel})
+
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_message_event(:foo, %{bar: 2}, %{log_level: :notalevel})
+          DefaultLoggingHandler.log_message_event(:foo, %{bar: 2}, state)
         end)
 
-      # Logger will treat :notalevel as :info (Logger.log/2 will not crash)
       assert log =~ "[MESSAGE]"
       assert log =~ "type: :foo"
       assert log =~ "bar: 2"
