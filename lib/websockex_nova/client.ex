@@ -30,6 +30,58 @@ defmodule WebsockexNova.Client do
   :ok = WebsockexNova.Client.close(conn)
   ```
 
+  ## Comprehensive Example for a Trading/Financial App
+
+  ```elixir
+  {:ok, conn} = WebsockexNova.Client.connect(MyApp.WebSocket.Adapter, %{
+    host: System.get_env("EXCHANGE_HOST") || "api.exchange.com",
+    port: 443,
+    path: "/ws/v1",
+    headers: [{"X-API-KEY", System.get_env("EXCHANGE_API_KEY") || "demo-key"}],
+    timeout: 10_000,
+    transport_opts: %{transport: :tls},
+    protocols: [:http],
+    retry: 10,
+    backoff_type: :exponential,
+    base_backoff: 1_000,
+    ws_opts: %{},
+    # Rate limiting
+    rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
+    rate_limit_opts: %{
+      capacity: 120,
+      refill_rate: 10,
+      refill_interval: 1_000,
+      queue_limit: 200,
+      cost_map: %{
+        subscription: 5,
+        auth: 10,
+        query: 1,
+        order: 10
+      }
+    },
+    # Logging
+    log_level: :info,
+    log_format: :plain,
+    # Metrics
+    metrics_collector: MyApp.CustomMetricsCollector,
+    # Authentication
+    credentials: %{
+      api_key: System.get_env("EXCHANGE_API_KEY"),
+      secret: System.get_env("EXCHANGE_API_SECRET")
+    },
+    # Handler overrides (optional)
+    auth_handler: MyApp.CustomAuthHandler,
+    message_handler: MyApp.CustomMessageHandler,
+    subscription_handler: MyApp.CustomSubscriptionHandler,
+    error_handler: MyApp.CustomErrorHandler,
+    logging_handler: MyApp.CustomLoggingHandler,
+    # Connection handler options
+    max_reconnect_attempts: 10,
+    ping_interval: 15_000,
+    auth_refresh_threshold: 120
+  })
+  ```
+
   ## Adapter Integration
 
   The client API works with any adapter that implements the required behaviors:
@@ -75,14 +127,64 @@ defmodule WebsockexNova.Client do
   @default_transport WebsockexNova.Gun.ConnectionWrapper
   @default_timeout 30_000
 
-  @typedoc "Connection configuration options"
+  @typedoc """
+  Connection configuration options. Must include at least :host, :port, and :path.
+  May include any additional keys required by handlers, adapters, or transports.
+
+  ## Required keys
+    * :host - Hostname or IP address (string)
+    * :port - Port number (integer)
+    * :path - WebSocket endpoint path (string)
+
+  ## Common optional keys
+    * :headers - Additional headers (keyword list or map)
+    * :timeout - Connection timeout in ms (integer)
+    * :transport_opts - Transport-specific options (map)
+    * :protocols - List of protocols (e.g., [:http])
+    * :retry - Number of connection retries (integer or :infinity)
+    * :backoff_type - :linear | :exponential | :jittered
+    * :base_backoff - Initial backoff in ms (integer)
+    * :ws_opts - WebSocket-specific options (map)
+    * :rate_limit_handler - Module implementing RateLimitHandler
+    * :rate_limit_opts - Map of rate limiting options (see DefaultRateLimitHandler)
+    * :log_level - :debug | :info | :warn | :error
+    * :log_format - :plain | :json
+    * :metrics_collector - Module implementing MetricsCollector
+    * :auth_handler, :message_handler, :subscription_handler, :error_handler, :logging_handler - Custom handler modules
+    * :credentials - Map with :api_key/:secret or :token for authentication
+    * :max_reconnect_attempts, :reconnect_attempts, :ping_interval, :auth_refresh_threshold, etc.
+    * Any other keys required by your custom handlers or adapters
+
+  All additional keys are passed to the relevant handler, adapter, or transport module.
+  """
   @type connect_options :: %{
-          host: String.t(),
-          port: pos_integer(),
-          path: String.t(),
-          headers: Keyword.t() | map(),
-          transport_opts: map() | nil,
-          timeout: pos_integer() | nil
+          required(:host) => String.t(),
+          required(:port) => pos_integer(),
+          required(:path) => String.t(),
+          optional(:headers) => Keyword.t() | map(),
+          optional(:timeout) => pos_integer() | nil,
+          optional(:transport_opts) => map() | nil,
+          optional(:protocols) => [atom()],
+          optional(:retry) => non_neg_integer() | :infinity,
+          optional(:backoff_type) => atom(),
+          optional(:base_backoff) => non_neg_integer(),
+          optional(:ws_opts) => map(),
+          optional(:rate_limit_handler) => module(),
+          optional(:rate_limit_opts) => map(),
+          optional(:log_level) => :debug | :info | :warn | :error,
+          optional(:log_format) => :plain | :json | atom(),
+          optional(:metrics_collector) => module(),
+          optional(:auth_handler) => module(),
+          optional(:message_handler) => module(),
+          optional(:subscription_handler) => module(),
+          optional(:error_handler) => module(),
+          optional(:logging_handler) => module(),
+          optional(:credentials) => map(),
+          optional(:max_reconnect_attempts) => pos_integer(),
+          optional(:reconnect_attempts) => non_neg_integer(),
+          optional(:ping_interval) => pos_integer(),
+          optional(:auth_refresh_threshold) => pos_integer(),
+          optional(atom()) => any()
         }
 
   @typedoc "Message options"
