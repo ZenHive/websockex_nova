@@ -221,6 +221,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       "[ConnectionWrapper.open/4] called with host=#{inspect(host)}, port=#{inspect(port)}, path=#{inspect(path)}, options=#{inspect(options)}"
     )
 
+    # Ensure the path argument is always merged into options
+    options = Map.put(options, :path, path)
+
     with {:ok, pid} <-
            (
              result = start_connection(host, port, options)

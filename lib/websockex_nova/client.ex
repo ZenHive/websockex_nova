@@ -256,6 +256,9 @@ defmodule WebsockexNova.Client do
       transport_opts = Map.put(transport_opts, :adapter, adapter)
       transport_opts = Map.put(transport_opts, :adapter_state, adapter_state)
 
+      # Merge all connection_info (adapter + user) with transport_opts (handlers etc)
+      full_opts = Map.merge(connection_info, transport_opts)
+
       Logger.debug(
         "[Client.connect] Opening connection with info: #{inspect(connection_info)}, transport_opts: #{inspect(transport_opts)}"
       )
@@ -264,7 +267,7 @@ defmodule WebsockexNova.Client do
       port = Map.fetch!(connection_info, :port)
       path = Map.fetch!(connection_info, :path)
 
-      case transport().open(host, port, path, transport_opts) do
+      case transport().open(host, port, path, full_opts) do
         {:ok, conn} ->
           Logger.debug("[Client.connect] Connection established: #{inspect(conn)}")
           {:ok, conn}
