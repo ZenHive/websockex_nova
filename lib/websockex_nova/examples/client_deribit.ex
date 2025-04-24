@@ -9,34 +9,10 @@ defmodule WebsockexNova.Examples.ClientDeribit do
   alias WebsockexNova.Client
   alias WebsockexNova.Examples.AdapterDeribit
 
-  @default_opts %{
-    host: System.get_env("DERIBIT_HOST") || "www.deribit.com",
-    port: 443,
-    path: "/ws/api/v2",
-    headers: [],
-    timeout: 10_000,
-    transport_opts: %{transport: :tls},
-    protocols: [:http],
-    retry: 10,
-    backoff_type: :exponential,
-    base_backoff: 1_000,
-    ws_opts: %{},
-    rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
-    rate_limit_opts: %{
-      capacity: 120,
-      refill_rate: 10,
-      refill_interval: 1_000,
-      queue_limit: 200,
-      cost_map: %{
-        subscription: 5,
-        auth: 10,
-        query: 1,
-        order: 10
-      }
-    },
-    log_level: :info,
-    log_format: :plain
-  }
+  # This is intentionally left as an empty map to satisfy Dialyzer's type checks.
+  # All Deribit protocol-level defaults (host, port, path, transport, etc.) are now set in the adapter.
+  # Only add app-level or user-facing defaults here if needed for your application.
+  @default_opts %{}
 
   @doc """
   Connect to Deribit WebSocket API with sensible defaults.
