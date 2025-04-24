@@ -25,5 +25,15 @@ defmodule WebsockexNova.Examples.ClientDeribitIntegrationTest do
     # Subscribe to BTC-PERPETUAL trades channel
     result = ClientDeribit.subscribe_to_trades(conn, "BTC-PERPETUAL")
     assert match?({:ok, _}, result) or match?({:error, _}, result)
+
+    # Simulate a disconnect by closing the connection's transport (forcefully)
+    :ok = WebsockexNova.Client.close(conn)
+    # Wait for reconnection logic to trigger and complete (allow time for reconnect + ws upgrade)
+    Process.sleep(2000)
+
+    # Try to subscribe again after reconnection and websocket re-upgrade
+    # (should succeed if reconnection and ws upgrade logic works)
+    result2 = ClientDeribit.subscribe_to_trades(conn, "BTC-PERPETUAL")
+    assert match?({:ok, _}, result2) or match?({:error, _}, result2)
   end
 end

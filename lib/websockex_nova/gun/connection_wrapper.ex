@@ -745,7 +745,24 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
     # Use MessageHandlers to ensure consistent callback notification format
     # Simply delegate to handler, no need for manual extraction of return value
-    MessageHandlers.handle_connection_up(gun_pid, protocol, state)
+    new_state = gun_pid |> MessageHandlers.handle_connection_up(protocol, state) |> elem(1)
+    # If we just reconnected, re-upgrade to websocket
+    prev_status = state.status
+
+    if prev_status in [:disconnected, :reconnecting] and is_binary(state.path) do
+      headers = Map.get(state.options, :headers, [])
+      ws_opts = Map.get(state.options, :ws_opts, %{})
+      stream_ref = :gun.ws_upgrade(gun_pid, state.path, headers_to_gun_format(headers), ws_opts)
+
+      Logger.debug(
+        "[ConnectionWrapper] Re-upgrading to websocket after reconnect: path=#{inspect(state.path)}, headers=#{inspect(headers)}, stream_ref=#{inspect(stream_ref)}"
+      )
+
+      updated_state = ConnectionState.update_stream(new_state, stream_ref, :upgrading)
+      {:noreply, updated_state}
+    else
+      {:noreply, new_state}
+    end
   end
 
   @impl true
@@ -753,8 +770,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
         %{gun_pid: gun_pid, callback_pid: callback_pid} = state
       ) do
+    Logger.debug(
+      "[ConnectionWrapper] 6-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
+    )
+
     result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
-    if callback_pid, do: send(callback_pid, {:connection_down, reason})
+    if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
+    result
+  end
+
+  def handle_info(
+        {:gun_down, gun_pid, protocol, reason, killed_streams},
+        %{gun_pid: gun_pid, callback_pid: callback_pid} = state
+      ) do
+    Logger.debug(
+      "[ConnectionWrapper] 5-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
+    )
+
+    result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, [])
+    if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
     result
   end
 
