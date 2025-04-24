@@ -22,6 +22,7 @@ defmodule WebsockexNova.ClientConn do
     * `:access_token` - Access token for authentication
     * `:credentials` - Credentials for authentication
     * `:subscriptions` - Set of subscribed topics
+    * `:subscription_timeout` - Subscription timeout
     * `:reconnect_attempts` - Number of reconnection attempts
     * `:last_error` - Last error encountered
     * `:rate_limit` - Rate limit configuration
@@ -55,6 +56,7 @@ defmodule WebsockexNova.ClientConn do
           access_token: String.t() | nil,
           credentials: map() | nil,
           subscriptions: map(),
+          subscription_timeout: integer() | nil,
           reconnect_attempts: non_neg_integer(),
           last_error: any(),
           auth_expires_at: integer() | nil,
@@ -81,6 +83,7 @@ defmodule WebsockexNova.ClientConn do
     access_token: nil,
     credentials: nil,
     subscriptions: %{},
+    subscription_timeout: nil,
     reconnect_attempts: 0,
     last_error: nil,
     auth_expires_at: nil,

@@ -7,8 +7,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
     setup do
       now = System.system_time(:second)
 
-      state = %{
-        # High timeout to avoid test timeouts
+      state = %WebsockexNova.ClientConn{
         subscription_timeout: 600,
         subscriptions: %{
           "existing_sub_1" => %{
@@ -32,7 +31,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
         }
       }
 
-      {:ok, state: state}
+      {:ok, state: state, empty_state: %WebsockexNova.ClientConn{}}
     end
 
     test "subscription_init/1 initializes state with defaults" do
@@ -184,8 +183,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       # Create a state with a short timeout and an old subscription
       now = System.system_time(:second)
 
-      timeout_state = %{
-        # 5 seconds timeout
+      timeout_state = %WebsockexNova.ClientConn{
         subscription_timeout: 5,
         subscriptions: %{
           "timeout_sub" => %{
@@ -213,7 +211,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
     end
 
     test "works with empty state" do
-      empty_state = %{}
+      empty_state = %WebsockexNova.ClientConn{}
 
       # Subscribe should work with empty state
       assert {:ok, subscription_id, updated_state} =

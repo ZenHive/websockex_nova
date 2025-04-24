@@ -1,5 +1,14 @@
 # Refactor Plan: Single Source of Truth for State in WebsockexNova
 
+## Progress Summary (as of now)
+
+- [x] DefaultAuthHandler refactored to use canonical state struct
+- [x] DefaultSubscriptionHandler refactored to use canonical state struct
+- [ ] Other handlers (connection, error, message, rate limit, logging, metrics) still pending
+- [x] Tests for auth and subscription handlers updated and passing
+
+---
+
 ## Goal
 
 Refactor the codebase so that:
@@ -76,17 +85,25 @@ end
 
 ## 5. Refactor Handlers
 
-- [ ] Update all handler modules in `lib/websockex_nova/defaults/`:
-  - `default_connection_handler.ex`
-  - `default_error_handler.ex`
-  - `default_auth_handler.ex`
-  - `default_subscription_handler.ex`
-  - `default_message_handler.ex`
-  - `default_metrics_collector.ex`
-  - `default_rate_limit_handler.ex`
-  - `default_logging_handler.ex`
-- [ ] Ensure handlers receive the canonical state as an argument and do not maintain their own copies of application/session state.
-- [ ] When a handler needs to update state, it should return the updated canonical state to the connection/client process.
+- [x] Update all handler modules in `lib/websockex_nova/defaults/`:
+  - [x] `default_auth_handler.ex`
+  - [x] `default_subscription_handler.ex`
+  - [ ] `default_connection_handler.ex`
+  - [ ] `default_error_handler.ex`
+  - [ ] `default_message_handler.ex`
+  - [ ] `default_metrics_collector.ex`
+  - [ ] `default_rate_limit_handler.ex`
+  - [ ] `default_logging_handler.ex`
+- [x] Ensure handlers receive the canonical state as an argument and do not maintain their own copies of application/session state (for completed handlers).
+- [x] When a handler needs to update state, it should return the updated canonical state to the connection/client process (for completed handlers).
+
+---
+
+## Next Steps
+
+- Continue refactoring the remaining handlers to use the canonical state struct.
+- Update tests for each handler as you go.
+- Review and update this plan as progress continues.
 
 ---
 
