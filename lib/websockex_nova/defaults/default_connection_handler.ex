@@ -18,9 +18,9 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
         use WebsockexNova.Defaults.DefaultConnectionHandler
 
         # Override specific callbacks as needed
-        def handle_frame(:text, frame_data, state) do
+        def handle_frame(:text, frame_data, conn) do
           # Custom text frame handling
-          {:ok, state}
+          {:ok, conn}
         end
       end
 
@@ -35,102 +35,119 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   @behaviour WebsockexNova.Behaviors.ConnectionHandler
 
+  alias WebsockexNova.ClientConn
+
   @default_max_reconnect_attempts 5
 
   @impl true
   @doc """
-  Initializes the handler state.
+  Initializes the handler state as a ClientConn struct.
+  Any unknown fields are placed in connection_handler_settings.
   """
   def init(opts) do
-    state =
+    opts_map =
       case opts do
         opts when is_list(opts) -> Map.new(opts)
         opts when is_map(opts) -> opts
         _ -> %{}
       end
 
-    {:ok, state}
+    # Split known fields and custom fields
+    known_keys = MapSet.new(Map.keys(%ClientConn{}))
+    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
+    known_map = Map.new(known)
+    custom_map = Map.new(custom)
+
+    conn = struct(ClientConn, known_map)
+    conn = %{conn | connection_handler_settings: Map.merge(conn.connection_handler_settings || %{}, custom_map)}
+    {:ok, conn}
   end
 
   @impl true
-  def handle_connect(conn_info, state) when is_map(conn_info) and is_map(state) do
-    updated_state =
-      state
-      |> Map.put(:connection, conn_info)
-      |> Map.put(:connected_at, System.system_time(:millisecond))
-      |> Map.put(:reconnect_attempts, 0)
+  def handle_connect(conn_info, %ClientConn{} = conn) do
+    updated_conn = %{
+      conn
+      | connection_info: conn_info,
+        reconnect_attempts: 0,
+        extras: Map.put(conn.extras || %{}, :connected_at, System.system_time(:millisecond)),
+        connection_handler_settings: Map.merge(conn.connection_handler_settings || %{}, %{})
+    }
 
-    {:ok, updated_state}
+    {:ok, updated_conn}
   end
 
   @impl true
-  def handle_disconnect({:local, _code, _message} = reason, state) when is_map(state) do
-    # No reconnection for local disconnects (client initiated)
-    {:ok, Map.put(state, :last_disconnect_reason, reason)}
+  def handle_disconnect({:local, _code, _message} = reason, %ClientConn{} = conn) do
+    updated_conn = %{
+      conn
+      | extras: Map.put(conn.extras || %{}, :last_disconnect_reason, reason)
+    }
+
+    {:ok, updated_conn}
   end
 
-  def handle_disconnect(reason, state) when is_map(state) do
-    # For remote or error disconnects, try reconnection
-    current_attempts = Map.get(state, :reconnect_attempts, 0)
-    max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+  def handle_disconnect(reason, %ClientConn{} = conn) do
+    current_attempts = conn.reconnect_attempts || 0
+    max_attempts = Map.get(conn.extras || %{}, :max_reconnect_attempts, @default_max_reconnect_attempts)
 
-    updated_state = Map.put(state, :last_disconnect_reason, reason)
+    updated_conn = %{
+      conn
+      | extras: Map.put(conn.extras || %{}, :last_disconnect_reason, reason)
+    }
 
     if current_attempts < max_attempts do
-      updated_state = Map.put(updated_state, :reconnect_attempts, current_attempts + 1)
-      {:reconnect, updated_state}
+      updated_conn = %{updated_conn | reconnect_attempts: current_attempts + 1}
+      {:reconnect, updated_conn}
     else
-      {:ok, updated_state}
+      {:ok, updated_conn}
     end
   end
 
   @impl true
-  def handle_frame(:ping, frame_data, state) when is_map(state) do
-    # Automatically respond to pings with pongs
-    {:reply, :pong, frame_data, state}
+  def handle_frame(:ping, frame_data, %ClientConn{} = conn) do
+    {:reply, :pong, frame_data, conn}
   end
 
-  def handle_frame(:pong, _frame_data, state) when is_map(state) do
-    # Track pong responses
-    updated_state = Map.put(state, :last_pong_received, System.monotonic_time(:millisecond))
+  def handle_frame(:pong, _frame_data, %ClientConn{} = conn) do
+    updated_conn = %{
+      conn
+      | extras: Map.put(conn.extras || %{}, :last_pong_received, System.monotonic_time(:millisecond))
+    }
 
-    # Delete last_ping_sent if it exists, otherwise leave state unchanged
-    updated_state =
-      if Map.has_key?(updated_state, :last_ping_sent) do
-        Map.delete(updated_state, :last_ping_sent)
-      else
-        updated_state
-      end
+    # Remove last_ping_sent if present in extras
+    updated_conn = %{
+      updated_conn
+      | extras: Map.delete(updated_conn.extras, :last_ping_sent)
+    }
 
-    {:ok, updated_state}
+    {:ok, updated_conn}
   end
 
-  def handle_frame(_frame_type, _frame_data, state) when is_map(state) do
-    # Default implementation for other frame types
-    {:ok, state}
+  def handle_frame(_frame_type, _frame_data, %ClientConn{} = conn) do
+    {:ok, conn}
   end
 
   @impl true
-  def handle_timeout(state) when is_map(state) do
-    current_attempts = Map.get(state, :reconnect_attempts, 0)
-    max_attempts = Map.get(state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+  def handle_timeout(%ClientConn{} = conn) do
+    current_attempts = conn.reconnect_attempts || 0
+    max_attempts = Map.get(conn.extras || %{}, :max_reconnect_attempts, @default_max_reconnect_attempts)
 
     if current_attempts < max_attempts do
-      updated_state = Map.put(state, :reconnect_attempts, current_attempts + 1)
-      {:reconnect, updated_state}
+      updated_conn = %{conn | reconnect_attempts: current_attempts + 1}
+      {:reconnect, updated_conn}
     else
-      {:stop, :max_reconnect_attempts_reached, state}
+      {:stop, :max_reconnect_attempts_reached, conn}
     end
   end
 
   @impl true
-  def ping(_stream_ref, state) when is_map(state) do
-    {:ok, state}
+  def ping(_stream_ref, %ClientConn{} = conn) do
+    {:ok, conn}
   end
 
   @impl true
-  def status(_stream_ref, state) when is_map(state) do
-    {:ok, :ok, state}
+  def status(_stream_ref, %ClientConn{} = conn) do
+    {:ok, :ok, conn}
   end
 
   @impl true
