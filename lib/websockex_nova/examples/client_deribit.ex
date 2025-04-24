@@ -19,7 +19,12 @@ defmodule WebsockexNova.Examples.ClientDeribit do
   User-supplied opts override defaults.
   """
   def connect(opts \\ %{}) when is_map(opts) do
-    merged_opts = Map.merge(@default_opts, opts)
+    # 1. Adapter protocol defaults
+    {:ok, adapter_defaults} = AdapterDeribit.connection_info(%{})
+    # 2. Merge in client/app-level defaults (lowest priority after adapter)
+    merged = Map.merge(adapter_defaults, @default_opts)
+    # 3. Merge in user opts (highest priority)
+    merged_opts = Map.merge(merged, opts)
     Client.connect(AdapterDeribit, merged_opts)
   end
 
