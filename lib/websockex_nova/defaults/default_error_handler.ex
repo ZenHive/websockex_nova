@@ -112,7 +112,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   end
 
   @impl true
-  def log_error(error, context, %WebsockexNova.ClientConn{} = conn) when is_map(context) do
+  def log_error(error, context, %WebsockexNova.ClientConn{} = _conn) when is_map(context) do
     error_type = extract_error_type(error)
     context_str = format_context(context)
 
@@ -208,7 +208,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
       @default_base_delay
   end
 
-  defp extract_max_delay(rc, conn) do
+  defp extract_max_delay(rc, _conn) do
     Map.get(rc, :max_delay) ||
       @default_max_delay
   end

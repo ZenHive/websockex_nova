@@ -33,6 +33,7 @@ defmodule WebsockexNova.ClientConn do
     * `:auth_handler_settings` - State specific to the auth handler
     * `:subscription_handler_settings` - State specific to the subscription handler
     * `:error_handler_settings` - State specific to the error handler
+    * `:message_handler_settings` - State specific to the message handler
     * `:extras` - Extensible/optional state
     * `:auth_expires_at` - Authentication expiration timestamp
     * `:auth_refresh_threshold` - Authentication refresh threshold
@@ -76,6 +77,7 @@ defmodule WebsockexNova.ClientConn do
           auth_handler_settings: map(),
           subscription_handler_settings: map(),
           error_handler_settings: map(),
+          message_handler_settings: map(),
           # Adapter-specific state
           adapter_state: map(),
           # Extensible/optional
@@ -107,6 +109,7 @@ defmodule WebsockexNova.ClientConn do
     auth_handler_settings: %{},
     subscription_handler_settings: %{},
     error_handler_settings: %{},
+    message_handler_settings: %{},
     adapter_state: %{},
     extras: %{}
   ]

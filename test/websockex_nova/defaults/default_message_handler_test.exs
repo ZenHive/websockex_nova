@@ -1,12 +1,13 @@
 defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
   use ExUnit.Case, async: true
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultMessageHandler
 
   describe "DefaultMessageHandler.handle_message/2" do
     test "passes through messages without modification" do
       message = %{"type" => "data", "content" => "test"}
-      state = %{processed_count: 0}
+      state = %ClientConn{message_handler_settings: %{processed_count: 0}}
 
       assert {:ok, new_state} = DefaultMessageHandler.handle_message(message, state)
       assert new_state.processed_count == 1
@@ -15,7 +16,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "handles error responses" do
       message = %{"type" => "error", "code" => 1001, "message" => "Permission denied"}
-      state = %{}
+      state = %ClientConn{}
 
       assert {:error, "Permission denied", new_state} =
                DefaultMessageHandler.handle_message(message, state)
@@ -30,7 +31,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
         "status" => "subscribed"
       }
 
-      state = %{}
+      state = %ClientConn{}
 
       assert {:ok, new_state} = DefaultMessageHandler.handle_message(message, state)
       assert new_state.subscriptions == %{"updates" => :subscribed}
@@ -95,7 +96,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
   describe "DefaultMessageHandler.encode_message/2" do
     test "encodes maps as JSON text frames" do
       message = %{type: "request", id: 123, method: "ping"}
-      state = %{}
+      state = %ClientConn{}
 
       assert {:ok, :text, encoded} = DefaultMessageHandler.encode_message(message, state)
       assert is_binary(encoded)
@@ -104,7 +105,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "passes through binary data unchanged" do
       message = <<1, 2, 3, 4>>
-      state = %{}
+      state = %ClientConn{}
 
       assert {:ok, :text, encoded} = DefaultMessageHandler.encode_message(message, state)
       decoded = Jason.decode!(encoded)
@@ -114,7 +115,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "encodes atom keys in maps" do
       message = %{type: "request", params: %{symbol: "BTC-USD"}}
-      state = %{}
+      state = %ClientConn{}
 
       assert {:ok, :text, encoded} = DefaultMessageHandler.encode_message(message, state)
       decoded = Jason.decode!(encoded)
@@ -124,7 +125,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandlerTest do
 
     test "handles custom message types through protocol" do
       message = :ping
-      state = %{}
+      state = %ClientConn{}
 
       assert {:ok, :text, encoded} = DefaultMessageHandler.encode_message(message, state)
       assert Jason.decode!(encoded) == %{"type" => "ping"}

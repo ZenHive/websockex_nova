@@ -41,14 +41,22 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   @impl true
   def message_init(opts \\ %{}) do
-    # Initialize state with optional processed_count and subscriptions
-    state =
-      opts
-      |> Map.new()
-      |> Map.put_new(:processed_count, 0)
-      |> Map.put_new(:subscriptions, %{})
+    opts_map = Map.new(opts)
+    # Split known fields and custom fields
+    known_keys = MapSet.new(Map.keys(%WebsockexNova.ClientConn{}))
+    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
+    known_map = Map.new(known)
+    custom_map = Map.new(custom)
+    conn = struct(WebsockexNova.ClientConn, known_map)
 
-    {:ok, state}
+    conn = %{
+      conn
+      | message_handler_settings: Map.merge(conn.message_handler_settings || %{}, custom_map),
+        processed_count: Map.get(opts_map, :processed_count, 0),
+        subscriptions: Map.get(opts_map, :subscriptions, %{})
+    }
+
+    {:ok, conn}
   end
 
   @impl true
