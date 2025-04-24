@@ -79,12 +79,18 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @impl true
   def subscription_init(opts \\ %{}) do
     opts_map = Map.new(opts)
-    conn = struct(WebsockexNova.ClientConn, opts_map)
+    # Split known fields and custom fields
+    known_keys = MapSet.new(Map.keys(%WebsockexNova.ClientConn{}))
+    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
+    known_map = Map.new(known)
+    custom_map = Map.new(custom)
+    conn = struct(WebsockexNova.ClientConn, known_map)
 
     conn = %{
       conn
       | subscriptions: Map.get(opts_map, :subscriptions, %{}),
-        subscription_timeout: Map.get(opts_map, :subscription_timeout, @default_subscription_timeout)
+        subscription_timeout: Map.get(opts_map, :subscription_timeout, @default_subscription_timeout),
+        subscription_handler_settings: Map.merge(conn.subscription_handler_settings || %{}, custom_map)
     }
 
     Logger.debug("#{@logger_prefix} Initialized with options: #{inspect(opts)}")

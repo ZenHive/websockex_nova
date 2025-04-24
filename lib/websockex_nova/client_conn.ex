@@ -28,6 +28,10 @@ defmodule WebsockexNova.ClientConn do
     * `:rate_limit` - Rate limit configuration
     * `:logging` - Logging configuration
     * `:metrics` - Metrics configuration
+    * `:connection_handler_settings` - State specific to the connection handler
+    * `:auth_handler_settings` - State specific to the auth handler
+    * `:subscription_handler_settings` - State specific to the subscription handler
+    * `:error_handler_settings` - State specific to the error handler
     * `:extras` - Extensible/optional state
     * `:auth_expires_at` - Authentication expiration timestamp
     * `:auth_refresh_threshold` - Authentication refresh threshold
@@ -66,6 +70,10 @@ defmodule WebsockexNova.ClientConn do
           rate_limit: map(),
           logging: map(),
           metrics: map(),
+          connection_handler_settings: map(),
+          auth_handler_settings: map(),
+          subscription_handler_settings: map(),
+          error_handler_settings: map(),
           # Adapter-specific state
           adapter_state: map(),
           # Extensible/optional
@@ -92,6 +100,10 @@ defmodule WebsockexNova.ClientConn do
     rate_limit: %{},
     logging: %{},
     metrics: %{},
+    connection_handler_settings: %{},
+    auth_handler_settings: %{},
+    subscription_handler_settings: %{},
+    error_handler_settings: %{},
     adapter_state: %{},
     extras: %{}
   ]

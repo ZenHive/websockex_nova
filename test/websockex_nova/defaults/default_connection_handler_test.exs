@@ -1,18 +1,21 @@
 defmodule WebsockexNova.Defaults.DefaultConnectionHandlerTest do
   use ExUnit.Case, async: true
 
+  alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultConnectionHandler
 
   describe "DefaultConnectionHandler.init/1" do
     test "initializes with empty options" do
-      assert {:ok, state} = DefaultConnectionHandler.init([])
-      assert is_map(state)
-      assert map_size(state) == 0
+      assert {:ok, conn} = DefaultConnectionHandler.init([])
+      assert %ClientConn{} = conn
     end
 
     test "keeps provided state intact" do
       initial_state = %{user_data: "test", custom_field: 123}
-      assert {:ok, ^initial_state} = DefaultConnectionHandler.init(initial_state)
+      assert {:ok, conn} = DefaultConnectionHandler.init(initial_state)
+      assert %ClientConn{} = conn
+      assert conn.connection_handler_settings[:user_data] == "test"
+      assert conn.connection_handler_settings[:custom_field] == 123
     end
   end
 
@@ -26,63 +29,65 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandlerTest do
         transport: :tls
       }
 
-      assert {:ok, state} = DefaultConnectionHandler.handle_connect(conn_info, %{})
-      assert state.connection == conn_info
+      conn = %ClientConn{}
+      assert {:ok, updated_conn} = DefaultConnectionHandler.handle_connect(conn_info, conn)
+      assert updated_conn.connection_info == conn_info
+      assert updated_conn.reconnect_attempts == 0
+      assert Map.has_key?(updated_conn.extras, :connected_at)
     end
 
     test "preserves existing state fields" do
       conn_info = %{host: "example.com", port: 443}
-      existing_state = %{user_data: "important", settings: %{timeout: 5000}}
-
-      assert {:ok, state} = DefaultConnectionHandler.handle_connect(conn_info, existing_state)
-      assert state.connection == conn_info
-      assert state.user_data == "important"
-      assert state.settings.timeout == 5000
+      conn = %ClientConn{connection_handler_settings: %{user_data: "important", settings: %{timeout: 5000}}}
+      assert {:ok, updated_conn} = DefaultConnectionHandler.handle_connect(conn_info, conn)
+      assert updated_conn.connection_info == conn_info
+      assert updated_conn.connection_handler_settings[:user_data] == "important"
+      assert updated_conn.connection_handler_settings[:settings][:timeout] == 5000
     end
   end
 
   describe "DefaultConnectionHandler.handle_disconnect/2" do
     test "handles remote disconnection with reconnect" do
       disconnect_reason = {:remote, 1000, "Normal closure"}
-      state = %{reconnect_attempts: 0, max_reconnect_attempts: 3}
+      conn = %ClientConn{reconnect_attempts: 0, extras: %{max_reconnect_attempts: 3}}
 
-      assert {:reconnect, new_state} =
-               DefaultConnectionHandler.handle_disconnect(disconnect_reason, state)
+      assert {:reconnect, new_conn} =
+               DefaultConnectionHandler.handle_disconnect(disconnect_reason, conn)
 
-      assert new_state.reconnect_attempts == 1
-      assert new_state.last_disconnect_reason == disconnect_reason
+      assert new_conn.reconnect_attempts == 1
+      assert new_conn.extras[:last_disconnect_reason] == disconnect_reason
     end
 
     test "handles local disconnection without reconnect" do
       disconnect_reason = {:local, 1000, "Closed by client"}
-      state = %{reconnect_attempts: 0}
+      conn = %ClientConn{reconnect_attempts: 0}
 
-      assert {:ok, new_state} =
-               DefaultConnectionHandler.handle_disconnect(disconnect_reason, state)
+      assert {:ok, new_conn} =
+               DefaultConnectionHandler.handle_disconnect(disconnect_reason, conn)
 
-      assert new_state.last_disconnect_reason == disconnect_reason
+      assert new_conn.extras[:last_disconnect_reason] == disconnect_reason
     end
 
     test "respects max reconnection attempts" do
       disconnect_reason = {:remote, 1000, "Normal closure"}
-      state = %{reconnect_attempts: 3, max_reconnect_attempts: 3}
+      conn = %ClientConn{reconnect_attempts: 3, extras: %{max_reconnect_attempts: 3}}
 
-      assert {:ok, new_state} =
-               DefaultConnectionHandler.handle_disconnect(disconnect_reason, state)
+      assert {:ok, new_conn} =
+               DefaultConnectionHandler.handle_disconnect(disconnect_reason, conn)
 
-      assert new_state.reconnect_attempts == 3
-      assert new_state.last_disconnect_reason == disconnect_reason
+      assert new_conn.reconnect_attempts == 3
+      assert new_conn.extras[:last_disconnect_reason] == disconnect_reason
     end
 
     test "handles error disconnection with reconnect" do
       disconnect_reason = {:error, :timeout}
-      state = %{reconnect_attempts: 0, max_reconnect_attempts: 3}
+      conn = %ClientConn{reconnect_attempts: 0, extras: %{max_reconnect_attempts: 3}}
 
-      assert {:reconnect, new_state} =
-               DefaultConnectionHandler.handle_disconnect(disconnect_reason, state)
+      assert {:reconnect, new_conn} =
+               DefaultConnectionHandler.handle_disconnect(disconnect_reason, conn)
 
-      assert new_state.reconnect_attempts == 1
-      assert new_state.last_disconnect_reason == disconnect_reason
+      assert new_conn.reconnect_attempts == 1
+      assert new_conn.extras[:last_disconnect_reason] == disconnect_reason
     end
   end
 
@@ -90,67 +95,66 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandlerTest do
     test "handles text frames" do
       frame_type = :text
       frame_data = ~s({"type": "message", "content": "hello"})
-      state = %{}
+      conn = %ClientConn{}
 
-      assert {:ok, ^state} =
-               DefaultConnectionHandler.handle_frame(frame_type, frame_data, state)
+      assert {:ok, ^conn} =
+               DefaultConnectionHandler.handle_frame(frame_type, frame_data, conn)
     end
 
     test "handles binary frames" do
       frame_type = :binary
       frame_data = <<1, 2, 3, 4>>
-      state = %{}
+      conn = %ClientConn{}
 
-      assert {:ok, ^state} =
-               DefaultConnectionHandler.handle_frame(frame_type, frame_data, state)
+      assert {:ok, ^conn} =
+               DefaultConnectionHandler.handle_frame(frame_type, frame_data, conn)
     end
 
     test "automatically responds to ping with pong" do
       frame_type = :ping
       frame_data = "ping payload"
-      state = %{}
+      conn = %ClientConn{}
 
-      assert {:reply, :pong, "ping payload", ^state} =
-               DefaultConnectionHandler.handle_frame(frame_type, frame_data, state)
+      assert {:reply, :pong, "ping payload", ^conn} =
+               DefaultConnectionHandler.handle_frame(frame_type, frame_data, conn)
     end
 
     test "handles pong frames" do
       frame_type = :pong
       frame_data = "pong payload"
-      state = %{last_ping_sent: System.monotonic_time(:millisecond)}
+      conn = %ClientConn{extras: %{last_ping_sent: System.monotonic_time(:millisecond)}}
 
-      assert {:ok, new_state} =
-               DefaultConnectionHandler.handle_frame(frame_type, frame_data, state)
+      assert {:ok, new_conn} =
+               DefaultConnectionHandler.handle_frame(frame_type, frame_data, conn)
 
-      assert new_state.last_pong_received
-      assert not Map.has_key?(new_state, :last_ping_sent)
+      assert new_conn.extras[:last_pong_received]
+      refute Map.has_key?(new_conn.extras, :last_ping_sent)
     end
 
     test "handles close frames" do
       frame_type = :close
       frame_data = <<3, 232, "Closed">>
-      state = %{}
+      conn = %ClientConn{}
 
-      assert {:ok, ^state} =
-               DefaultConnectionHandler.handle_frame(frame_type, frame_data, state)
+      assert {:ok, ^conn} =
+               DefaultConnectionHandler.handle_frame(frame_type, frame_data, conn)
     end
   end
 
   describe "DefaultConnectionHandler.handle_timeout/1" do
     test "attempts reconnection on timeout" do
-      state = %{reconnect_attempts: 0, max_reconnect_attempts: 3}
-
-      assert {:reconnect, new_state} = DefaultConnectionHandler.handle_timeout(state)
-      assert new_state.reconnect_attempts == 1
+      conn = %ClientConn{reconnect_attempts: 0, extras: %{max_reconnect_attempts: 3}}
+      assert {:reconnect, new_conn} = DefaultConnectionHandler.handle_timeout(conn)
+      assert new_conn.reconnect_attempts == 1
     end
 
     test "respects max reconnection attempts on timeout" do
-      state = %{reconnect_attempts: 3, max_reconnect_attempts: 3}
+      conn = %ClientConn{reconnect_attempts: 3, extras: %{max_reconnect_attempts: 3}}
 
-      assert {:stop, :max_reconnect_attempts_reached, new_state} =
-               DefaultConnectionHandler.handle_timeout(state)
+      assert {:stop, :max_reconnect_attempts_reached, new_conn} =
+               DefaultConnectionHandler.handle_timeout(conn)
 
-      assert new_state.reconnect_attempts == 3
+      assert new_conn.reconnect_attempts == 3
     end
   end
 end
