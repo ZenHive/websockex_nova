@@ -29,14 +29,14 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   end
 
   @impl true
-  def log_message_event(event, context, %ClientConn{logging: logging} = conn) when is_map(context) and is_map(logging) do
+  def log_message_event(event, context, %ClientConn{logging: logging} = _conn) when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
     log(:message, event_map, context, logging)
     :ok
   end
 
   @impl true
-  def log_error_event(event, context, %ClientConn{logging: logging} = conn) when is_map(context) and is_map(logging) do
+  def log_error_event(event, context, %ClientConn{logging: logging} = _conn) when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
     log(:error, event_map, context, logging)
     :ok

@@ -2,100 +2,194 @@
 
 ## Goal
 
-Make `ClientConn` the single source of truth for all connection state, regardless of transport (Gun, Mint, etc.), and ensure all stateful operations (including handler state) are managed through it. This will enable true transport abstraction and simplify handler/state management.
+Make `ClientConn` the single source of truth for all connection state, regardless of transport (Gun, Mint, etc.), and ensure all stateful operations (including handler state) are managed through it. This enables true transport abstraction, simplifies handler/state management, and improves testability.
 
 ---
 
-## Steps
+## Refactor Steps (with Test Instructions)
 
-### 1. Unify State
+### 1. Core State Structs and Helpers
 
-- [ ] **Migrate all transport-specific state structs to `ClientConn`**
-  - [ ] Map all fields from `Gun.ConnectionState` to `ClientConn`:
-    - [ ] Add `:transport_pid` (was `gun_pid`)
-    - [ ] Add `:stream_ref` (was `ws_stream_ref`)
-    - [ ] Add `:status` (connection status)
-    - [ ] Add `:active_streams` (if needed for all transports)
-    - [ ] Merge `:host`, `:port`, `:path`, `:ws_opts`, `:transport` into `:connection_info` or top-level fields
-    - [ ] Merge `:options` into `:connection_info` or `:extras`
-    - [ ] Add/merge handler modules and states into namespaced handler fields (e.g., `:connection_handler_settings`)
-    - [ ] Add/merge any other relevant fields
-  - [ ] Map all fields from `Connection.State` to `ClientConn`:
-    - [ ] Add/merge `:adapter`, `:adapter_state`
-    - [ ] Add/merge handler modules and states
-    - [ ] Add/merge `:reconnect_attempts`, `:backoff_state` (to `:reconnection` map)
-    - [ ] Add/merge `:config` (to `:connection_info` or `:extras`)
-    - [ ] Add/merge buffers if needed (to `:extras` or keep ephemeral)
-- [ ] **Identify and keep ephemeral/process-local state in GenServer state only**
-  - [ ] `:gun_monitor_ref`, `:wrapper_pid`, timers, and references remain process-local
-- [ ] **Update all code to use `ClientConn` as the canonical state**
-  - [ ] Refactor all modules/functions that create or manipulate `Gun.ConnectionState` or `Connection.State` to use `ClientConn`
-  - [ ] Refactor handler state logic to use namespaced fields in `ClientConn`
-- [ ] **Remove or deprecate legacy state structs and helpers**
-  - [ ] Remove `Gun.ConnectionState` and `Connection.State` modules
-  - [ ] Remove or refactor helpers that expect legacy state structs
-- [ ] **Update tests to use unified state model**
-  - [ ] Refactor or rewrite tests that use legacy state structs
+- [ ] Refactor `lib/websockex_nova/client_conn.ex`:
+  - [ ] Ensure all fields from legacy states are present.
+  - [ ] Add/adjust namespaced handler state fields.
+  - [ ] Update typespecs and documentation.
+- [ ] Refactor `lib/websockex_nova/helpers/state_helpers.ex`:
+  - [ ] Update helpers to operate on `ClientConn`.
+  - [ ] Remove/adapt helpers expecting legacy state structs.
+- [ ] **Test:** Add/adjust unit tests for `ClientConn` and all state helpers. All tests must pass before proceeding.
 
-### 2. Transport API
+### 2. Define and Enforce Shared Behaviors
 
-- Ensure all transport modules (Gun, Mint, etc.) implement the same behaviour and only accept/return `ClientConn`.
-- Remove any direct use of transport-specific state in public APIs.
+- [ ] Ensure WebsockexNova.Transport behavior is up-to-date and complete
+- [ ] Define ConnectionManagerBehaviour (generic connection manager behavior)
+- [ ] Update documentation for both behaviors
+- [ ] Test: add behavior compliance tests/mocks
 
-### 3. Handler State
+### 3. Implement Behaviors in Transports
 
-- All default handler modules (connection, auth, error, logging, metrics, message, rate limit, subscription) are already using `ClientConn` as their canonical state. No changes needed for default handlers.
+- [ ] Refactor Gun modules to implement WebsockexNova.Transport and ConnectionManagerBehaviour
+- [ ] Refactor Mint modules (or add) to implement WebsockexNova.Transport and ConnectionManagerBehaviour
+- [ ] Test: transport and connection manager compliance for Gun and Mint
 
-### 4. Client API
+### 4. Remove/Deprecate Legacy State Modules
 
-- `WebsockexNova.Client` should only ever work with `ClientConn`.
-- All calls to the transport layer should pass the `ClientConn` struct.
+- [ ] Remove or stub out:
+  - [ ] `lib/websockex_nova/gun/connection_state.ex`
+  - [ ] `lib/websockex_nova/connection/state.ex`
+- [ ] **Test:** Remove or rewrite any tests using these legacy structs. All tests must pass before proceeding.
 
-### 5. Manager/Wrapper
+### 5. Refactor Handler Modules
 
-- Refactor or remove `connection_manager`, `connection_wrapper`, etc., so they do not maintain their own state.
-- They should act as pure functions or GenServers that operate on and return `ClientConn`.
+- [ ] Update all handler modules to use namespaced state in `ClientConn`:
+  - [ ] `lib/websockex_nova/defaults/` (e.g., `default_connection_handler.ex`, `default_auth_handler.ex`, etc.)
+  - [ ] Any custom/user-defined handlers
+- [ ] **Test:** Refactor handler tests to use `ClientConn` and test state namespacing. All tests must pass before proceeding.
 
-### 6. Legacy State
+### 6. Refactor Client API
 
-- Remove or migrate any use of `WebsockexNova.Connection.State` and helpers to use `ClientConn`.
+- [ ] Update the main client API to use only `ClientConn` and new transport/handler logic:
+  - [ ] `lib/websockex_nova/client.ex`
+- [ ] **Test:** Refactor all client API and integration/property-based tests. All tests must pass before proceeding.
 
-### 7. Testing/Compatibility
+### 7. Refactor Manager/Wrapper Modules
 
-- Ensure all tests and adapters use the new unified state model.
-- Provide migration helpers if needed.
+- [ ] Refactor or remove any manager/wrapper modules that maintain their own state:
+  - [ ] `lib/websockex_nova/gun/connection_manager.ex`
+  - [ ] `lib/websockex_nova/gun/connection_wrapper.ex` (if not already done)
+  - [ ] Any other wrappers
+- [ ] **Test:** Refactor or remove related tests. All tests must pass before proceeding.
+
+### 8. Refactor Adapters, Examples, and Platform Integrations
+
+- [ ] Update any adapters or example clients to use the new state model:
+  - [ ] `lib/websockex_nova/examples/`
+  - [ ] `lib/websockex_nova/platform/`
+  - [ ] Any custom adapters
+- [ ] **Test:** Refactor or add integration tests for adapters and examples. All tests must pass before proceeding.
+
+### 9. Final Cleanup
+
+- [ ] Remove any remaining references to legacy state.
+- [ ] Update documentation and guides.
+- [ ] **Test:** Run the full test suite and property-based tests. All tests must pass before considering the refactor complete.
 
 ---
 
 ## Machine-Readable Task List
 
-### unify_state
-
-- [ ] migrate_gun_connection_state_fields_to_client_conn
-- [ ] migrate_connection_state_fields_to_client_conn
-- [ ] migrate_handler_state_to_client_conn
-- [ ] keep_ephemeral_state_process_local
-- [ ] refactor_code_to_use_client_conn_everywhere
-- [ ] remove_legacy_state_structs_and_helpers
-- [ ] update_tests_for_unified_state
+- [ ] core_state_structs_and_helpers
+  - [ ] refactor_client_conn
+  - [ ] refactor_state_helpers
+  - [ ] test_client_conn_and_helpers
+- [ ] define_and_enforce_shared_behaviors
+  - [ ] ensure WebsockexNova.Transport behavior is up-to-date and complete
+  - [ ] define ConnectionManagerBehaviour (generic connection manager behavior)
+  - [ ] update documentation for both behaviors
+  - [ ] test: add behavior compliance tests/mocks
+- [ ] implement_behaviors_in_transports
+  - [ ] refactor Gun modules to implement WebsockexNova.Transport and ConnectionManagerBehaviour
+  - [ ] refactor Mint modules (or add) to implement WebsockexNova.Transport and ConnectionManagerBehaviour
+  - [ ] test: transport and connection manager compliance for Gun and Mint
+- [ ] remove_legacy_state_modules
+  - [ ] remove_gun_connection_state
+  - [ ] remove_connection_state
+  - [ ] test_no_legacy_state_usage
+- [ ] refactor_handler_modules
+  - [ ] refactor_default_handlers (ensure transport-agnostic)
+  - [ ] refactor_custom_handlers (ensure transport-agnostic)
+  - [ ] test_handler_modules
+- [ ] refactor_client_api
+  - [ ] refactor_client_ex (use only behaviors and ClientConn)
+  - [ ] test_client_api
+- [ ] refactor_manager_wrapper_modules
+  - [ ] refactor_connection_manager_state_machine
+    - [ ] Ensure only ClientConn is persistent state
+    - [ ] Move all ephemeral/process-local state (monitors, timers, etc.) to GenServer state
+    - [ ] Drive state transitions via ClientConn.status or dedicated state field
+    - [ ] Delegate all handler logic via ClientConn
+    - [ ] Make state machine logic easily testable
+    - [ ] Document responsibilities and best practices inline
+  - [ ] refactor_connection_manager
+  - [ ] refactor_connection_wrapper
+  - [ ] refactor_other_wrappers
+  - [ ] test_manager_wrapper_modules
+- [ ] refactor_adapters_examples_platform
+  - [ ] refactor_examples
+  - [ ] refactor_platform
+  - [ ] refactor_custom_adapters
+  - [ ] test_adapters_examples_platform
+- [ ] final_cleanup
+  - [ ] remove_remaining_legacy_references
+  - [ ] update_docs_and_guides
+  - [ ] test_full_suite
 
 ---
 
-## Modules to Refactor/Touch
+## Summary Table
 
-- `lib/websockex_nova/gun/connection_manager.ex`
-- `lib/websockex_nova/gun/connection_wrapper.ex`
-- `lib/websockex_nova/gun/connection_state.ex`
-- `lib/websockex_nova/client.ex`
-- `lib/websockex_nova/client_conn.ex`
-- `lib/websockex_nova/connection/state.ex`
-- `lib/websockex_nova/helpers/state_helpers.ex`
-- Any other transport or handler modules that manipulate state.
+| Step | Module(s) / Directory                                                | Test Focus                        |
+| ---- | -------------------------------------------------------------------- | --------------------------------- |
+| 1    | `client_conn.ex`, `helpers/state_helpers.ex`                         | Unit tests for state/helpers      |
+| 2    | `gun/connection_state.ex`, `connection/state.ex`                     | Remove/replace legacy state tests |
+| 3    | `gun/connection_wrapper.ex`, `gun/connection_manager.ex`, transports | Transport tests                   |
+| 4    | `defaults/`, handlers                                                | Handler state tests               |
+| 5    | `client.ex`                                                          | Client API/integration tests      |
+| 6    | `gun/connection_manager.ex`, wrappers                                | Manager/wrapper tests             |
+| 7    | `examples/`, `platform/`, adapters                                   | Adapter/integration tests         |
+| 8    | Cleanup, docs, guides                                                | Full test suite                   |
 
 ---
 
-## Notes
+## Instructions
 
-- All state transitions, handler updates, and connection metadata should be reflected in `ClientConn`.
-- Transport modules should be stateless or only keep minimal process state, delegating all connection/session state to `ClientConn`.
-- This refactor will make it easier to add new transports and to reason about connection state across the codebase.
+- Complete each step in order. Do not proceed to the next step until all tests for the current step pass.
+- Refactor both the module and its tests together.
+- Use `ClientConn` as the canonical state everywhere.
+- Remove all legacy state structs and helpers.
+- Ensure all handler and transport modules operate on `ClientConn`.
+- Keep ephemeral/process-local state (monitors, timers, etc.) only in GenServer state, not in `ClientConn`.
+- Update documentation and guides to reflect the new state model.
+- Run the full test suite after each major step.
+- The refactor is complete only when all tests pass and no legacy state remains.
+
+---
+
+## Architectural Placement: Connection Manager as State Machine
+
+The connection manager remains a process-based state machine, but in the new architecture, it is a thin orchestrator whose only persistent state is the canonical `ClientConn` struct. All connection/session state transitions are explicit and testable, and all ephemeral/process-local state (monitors, timers, etc.) is kept out of `ClientConn` and only in the GenServer state.
+
+### Responsibilities
+
+- Orchestrate the connection lifecycle: establish, maintain, close, and reconnect connections
+- Handle reconnection logic, backoff, and error recovery
+- Manage transitions between connection states (e.g., connecting, connected, reconnecting, disconnected, closed)
+- Delegate stateful operations to handler modules, always passing and updating `ClientConn`
+
+### State Ownership
+
+- **Persistent state:** Only `ClientConn` (all connection/session state)
+- **Ephemeral/process-local state:** Monitors, timers, references, etc. (kept in GenServer state, never in `ClientConn`)
+
+### Structure
+
+- Module: `WebsockexNova.Gun.ConnectionManager` (or generic `Transport.ConnectionManager`)
+- State example:
+  ```elixir
+  %{
+    client_conn: %ClientConn{},   # Canonical connection/session state
+    monitor_ref: reference(),     # Ephemeral/process-local
+    timer_ref: reference(),       # Ephemeral/process-local
+    # ... any other process-local fields
+  }
+  ```
+- State machine logic is driven by pattern matching on `ClientConn.status` or a dedicated state field.
+
+### Best Practices
+
+- All connection/session state is in `ClientConn`.
+- No parallel state: connection manager does not maintain any state outside of `ClientConn` except for ephemeral/process-local data.
+- All state transitions result in a new `ClientConn` struct.
+- The state machine logic should be easily testable by passing in and asserting on `ClientConn` transitions.
+
+---

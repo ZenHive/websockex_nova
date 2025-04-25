@@ -7,4 +7,7 @@ export_dir =
     "exports/"
   end
 
-config :websockex_nova, :export_dir, export_dir
+# config :websockex_nova, SlipstreamClient, uri: "ws://test.deribit.com:8080/api/v2/"
+config :websockex_nova, Deribit,
+  client_id: System.fetch_env!("DERIBIT_CLIENT_ID"),
+  client_secret: System.fetch_env!("DERIBIT_CLIENT_SECRET")
