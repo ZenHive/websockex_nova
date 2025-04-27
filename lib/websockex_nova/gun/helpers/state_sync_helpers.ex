@@ -287,23 +287,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
         metrics_collector: Map.get(conn_state.handlers || %{}, :metrics_collector)
       })
 
-    # Add callback_pid to callback_pids if not already there
-    callback_pids =
-      if base_conn.callback_pids do
-        if conn_state.callback_pid do
-          MapSet.put(base_conn.callback_pids, conn_state.callback_pid)
-        else
-          base_conn.callback_pids
-        end
-      else
-        if conn_state.callback_pid do
-          MapSet.new([conn_state.callback_pid])
-        else
-          MapSet.new()
-        end
-      end
+    callback_pids = merge_callback_pids(base_conn.callback_pids, conn_state.callback_pid)
 
-    # Update the client conn with the extracted info
     %{
       base_conn
       | connection_info: connection_info,
@@ -315,6 +300,11 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
   end
 
   # Private helpers
+
+  defp merge_callback_pids(nil, nil), do: MapSet.new()
+  defp merge_callback_pids(nil, pid) when is_pid(pid), do: MapSet.new([pid])
+  defp merge_callback_pids(set, nil), do: set
+  defp merge_callback_pids(set, pid) when is_pid(pid), do: MapSet.put(set, pid)
 
   # Extract the main WebSocket stream reference from ConnectionState
   defp extract_main_stream_ref(%ConnectionState{active_streams: active_streams}) do

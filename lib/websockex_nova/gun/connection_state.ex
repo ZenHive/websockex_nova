@@ -25,7 +25,15 @@ defmodule WebsockexNova.Gun.ConnectionState do
   require Logger
 
   @typedoc "Connection status"
-  @type status :: :initialized | :connecting | :connected | :websocket_connected | :disconnected | :error | :closed
+  @type status ::
+          :initialized
+          | :connecting
+          | :connected
+          | :websocket_connected
+          | :disconnected
+          | :reconnecting
+          | :error
+          | :closed
 
   @typedoc "Connection state structure"
   @type t :: %__MODULE__{
@@ -477,7 +485,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   Updated connection state struct
   """
-  @spec update_connection_handler_state(t(), map()) :: t()
+  @spec update_connection_handler_state(t(), any()) :: t()
   def update_connection_handler_state(state, handler_state) do
     updated_handlers = Map.put(state.handlers, :connection_handler_state, handler_state)
     %{state | handlers: updated_handlers}

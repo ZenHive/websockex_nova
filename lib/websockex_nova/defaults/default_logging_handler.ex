@@ -46,7 +46,7 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   Initializes the DefaultLoggingHandler state in the canonical struct.
   Returns {:ok, conn} where conn is the canonical struct with logging config set.
   """
-  @spec logging_init(map()) :: {:ok, ClientConn.t()}
+  @spec logging_init(map()) :: {:ok, WebsockexNova.ClientConn.t()}
   def logging_init(opts) when is_map(opts), do: {:ok, %ClientConn{logging: opts}}
   def logging_init(_), do: {:ok, %ClientConn{logging: %{}}}
 
