@@ -298,7 +298,7 @@ Tasks follow this format:
 - **Status**: DONE
 - **Code Review Rating** Rating: 4/5,
   The implementation provides solid coverage of the core functionality and demonstrates a well-designed test infrastructure. The mock server is particularly well-implemented, with support for different scenarios and network conditions.
-  However, the integration tests don't fully cover all the acceptance criteria, particularly the "Tests for various network scenarios" which could be more comprehensive. Additionally, the task is still marked as "IN_PROGRESS" which aligns with these missing elements.
+  However, the integration tests don't fully cover all the acceptance criteria, particularly the "Tests for various network scenarios" which could be more comprehensive.
   The code quality and design of the testing infrastructure is excellent, but the scope of tests needs to be expanded to fully satisfy the acceptance criteria.
 
 ### T2.12
@@ -361,7 +361,7 @@ Tasks follow this format:
 - **Status**: DONE
 - **Code Review Rating** Rating: 4.5/5, The only significant missing item appears to be the telemetry integration, which was listed in the acceptance criteria. Otherwise, the refactoring has been completed according to the plan, with all other criteria met.
 
-### T2.X
+### T2.15
 
 - **Name**: Support multiple callback PIDs in connection state and message routing
 - **Description**: Refactor the connection state and message routing logic to support notifying multiple callback PIDs (not just a single callback_pid). This will allow multiple processes (e.g., test processes, LiveView, background jobs) to receive connection events and frames. Update the state struct, registration/unregistration logic, and the notify/2 function to handle a list of callback PIDs. Update all usages accordingly.
@@ -376,7 +376,7 @@ Tasks follow this format:
 - **Dependencies**: T2.4
 - **Status**: TODO
 
-### T2.Y
+### T2.16
 
 - **Name**: Update Client Response Matching and Filtering
 - **Description**: Refactor the client's `wait_for_response/2` to robustly match only relevant user responses, filtering out non-user messages (such as server banners). Optionally, allow a custom matcher/filter function to be passed in for advanced use cases. Update documentation and add tests for these scenarios.
@@ -539,6 +539,20 @@ Tasks follow this format:
   - [x] Telemetry emission integration into core modules (next step)
   - [x] Documentation and guides update
 - **Code Review Rating** Rating: 5/5
+
+### T4.6
+
+- **Name**: Integration of Metrics with Application Monitoring
+- **Description**: Connect the metrics system with external monitoring platforms and ensure proper integration with application monitoring flows
+- **Acceptance Criteria**:
+  - Integration with Prometheus format metrics
+  - Support for StatsD or similar monitoring systems
+  - Documentation for setting up monitoring dashboards
+  - Example configurations for common monitoring setups
+- **Priority**: P2
+- **Effort**: 1
+- **Dependencies**: T4.5
+- **Status**: TODO
 
 ### T4.7
 
@@ -873,7 +887,7 @@ Tasks follow this format:
   - All tests passing
 - **Priority**: P2
 - **Effort**: 1.5
-- **Dependencies**: T5.7
+- **Dependencies**: T6.7
 - **Status**: TODO
 
 ## Phase 7: Testing Infrastructure & Documentation
@@ -970,7 +984,7 @@ Tasks follow this format:
   - Guides and documentation are updated to recommend the client API as the primary interface for users.
 - **Priority**: P1
 - **Effort**: 1
-- **Dependencies**: T6.2.2 (process-based connection wrapper), T4.4 (subscription management), T4.10 (authentication flow)
+- **Dependencies**: T2.14 (ConnectionWrapper), T4.4 (subscription management), T4.10 (authentication flow)
 - **Status**: DONE
 
 ## Phase 8: Advanced Features
@@ -1189,7 +1203,9 @@ Recent review of live state (`iex`), code, and documentation confirms deep dupli
 
 ### High-level Task Breakdown (Refined)
 
-#### T3.1: Document State Layering and Ownership
+> **NOTE:** The following tasks were previously numbered as T3.1, T3.1.1, etc. To avoid confusion with the main project task numbering, they are now uniquely identified as STATE001, STATE002, etc.
+
+#### STATE001: Document State Layering and Ownership
 
 - **Description**: Write a clear doc section (in scratchpad and code) describing what belongs in ClientConn vs. Gun.ConnectionState.
 - **Acceptance Criteria**:
@@ -1199,16 +1215,16 @@ Recent review of live state (`iex`), code, and documentation confirms deep dupli
 - **Dependencies**: None
 - **Status**: DONE
 
-#### T3.1.1: Documentation Maintenance for Field Mapping and Rationale
+#### STATE002: Documentation Maintenance for Field Mapping and Rationale
 
 - **Description**: Keep the field mapping table and rationale up to date as the system evolves, and ensure all new fields are reviewed for canonical ownership.
 - **Acceptance Criteria**:
   - Documentation is updated whenever state struct fields change.
   - All new fields are reviewed for correct placement and rationale.
-- **Dependencies**: T3.1 (continuous)
+- **Dependencies**: STATE001 (continuous)
 - **Status**: TODO
 
-#### T3.2: Refactor State Structs to Remove Duplication
+#### STATE003: Refactor State Structs to Remove Duplication
 
 - **Description**: Refactor both structs so that:
   - ClientConn holds only canonical, adapter-agnostic state.
@@ -1218,71 +1234,71 @@ Recent review of live state (`iex`), code, and documentation confirms deep dupli
   - No duplicated fields.
   - All tests pass.
   - Ownership transfer and reconnection flows synchronize state correctly.
-- **Dependencies**: T3.1
+- **Dependencies**: STATE001
 - **Status**: TODO
 
-#### T3.2.1: Implement State Synchronization Helpers
+#### STATE004: Implement State Synchronization Helpers
 
 - **Description**: Implement and document helper functions for synchronizing state between `ClientConn` and `Gun.ConnectionState` during reconnection, ownership transfer, and handler transitions.
 - **Acceptance Criteria**:
   - Helper functions exist for extracting, merging, and updating state between the two structs.
   - All synchronization logic is centralized and documented.
   - No ad-hoc or duplicated synchronization code.
-- **Dependencies**: T3.2
+- **Dependencies**: STATE003
 - **Status**: TODO
 
-#### T3.3: Update Handler/Adapter APIs for State Passing
+#### STATE005: Update Handler/Adapter APIs for State Passing
 
 - **Description**: Ensure all handler/adapter APIs pass the correct state struct, and document expectations for state mutation and return.
 - **Acceptance Criteria**:
   - All handler callbacks receive the right state struct.
   - Docs updated.
   - Tests for state handoff and mutation.
-- **Dependencies**: T3.2
+- **Dependencies**: STATE003
 - **Status**: TODO
 
-#### T3.3.1: Enforce Typespecs for Handler/Adapter APIs
+#### STATE006: Enforce Typespecs for Handler/Adapter APIs
 
 - **Description**: Add and enforce typespecs for all handler and adapter APIs to ensure the correct state struct is used and returned.
 - **Acceptance Criteria**:
   - All handler/adaptor callbacks have explicit typespecs.
   - Dialyzer passes with no type errors related to state struct usage.
   - Documentation is updated to reflect typespec requirements.
-- **Dependencies**: T3.3
+- **Dependencies**: STATE005
 - **Status**: TODO
 
-#### T3.4: Add Tests for State Consistency Across Layers
+#### STATE007: Add Tests for State Consistency Across Layers
 
 - **Description**: Add tests that simulate reconnection, auth refresh, and error flows, asserting state consistency between ClientConn and Gun.ConnectionState.
 - **Acceptance Criteria**:
   - Tests for all major flows.
   - No state divergence.
-- **Dependencies**: T3.2, T3.3
+- **Dependencies**: STATE003, STATE005
 - **Status**: TODO
 
-#### T3.4.1: Add Property-Based and Integration Tests for State Transitions
+#### STATE008: Add Property-Based and Integration Tests for State Transitions
 
 - **Description**: Add property-based and integration tests for state transitions, especially for reconnection and ownership transfer scenarios.
 - **Acceptance Criteria**:
   - Property-based tests cover state invariants and transitions.
   - Integration tests simulate reconnection, ownership transfer, and handler transitions.
   - All tests pass and catch potential state divergence or synchronization bugs.
-- **Dependencies**: T3.4
+- **Dependencies**: STATE007
 - **Status**: TODO
 
 ---
 
 ## Project Status Board (updated)
 
-- [x] T3.1: Document State Layering and Ownership (DONE, Code Review Rating: 5/5)
-- [ ] T3.1.1: Documentation Maintenance for Field Mapping and Rationale (TODO)
-- [ ] T3.2: Refactor State Structs to Remove Duplication (TODO)
-- [ ] T3.2.1: Implement State Synchronization Helpers (TODO)
-- [ ] T3.3: Update Handler/Adapter APIs for State Passing (TODO)
-- [ ] T3.3.1: Enforce Typespecs for Handler/Adapter APIs (TODO)
-- [ ] T3.4: Add Tests for State Consistency Across Layers (TODO)
-- [ ] T3.4.1: Add Property-Based and Integration Tests for State Transitions (TODO)
+- [x] STATE001: Document State Layering and Ownership (DONE, Code Review Rating: 5/5)
+- [ ] STATE002: Documentation Maintenance for Field Mapping and Rationale (TODO)
+- [ ] STATE003: Refactor State Structs to Remove Duplication (TODO)
+- [ ] STATE004: Implement State Synchronization Helpers (TODO)
+- [ ] STATE005: Update Handler/Adapter APIs for State Passing (TODO)
+- [ ] STATE006: Enforce Typespecs for Handler/Adapter APIs (TODO)
+- [ ] STATE007: Add Tests for State Consistency Across Layers (TODO)
+- [ ] STATE008: Add Property-Based and Integration Tests for State Transitions (TODO)
 
 ## Executor's Feedback or Assistance Requests
 
-- Reviewer has approved the plan and provided actionable suggestions. Ready to proceed to T3.2: Refactor State Structs to Remove Duplication.
+- Reviewer has approved the plan and provided actionable suggestions. Ready to proceed to STATE003: Refactor State Structs to Remove Duplication.
