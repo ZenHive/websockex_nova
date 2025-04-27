@@ -1127,3 +1127,162 @@ Tasks follow this format:
 - **Effort**: 1
 - **Dependencies**: None
 - **Status**: TODO
+
+## State Struct Layering: Canonical Ownership and Duplication Elimination (Planner Update)
+
+### Background and Motivation
+
+Recent review of live state (`iex`), code, and documentation confirms deep duplication and confusion between `WebsockexNova.ClientConn` (user-facing, canonical) and `WebsockexNova.Gun.ConnectionState` (transport-local, process state). This leads to:
+
+- Nested/duplicated handler and adapter state
+- Unclear source of truth for session/auth/subscription state
+- Hard-to-reason-about state transitions and bugs
+
+**Goal:**
+
+- Enforce a single source of truth for each piece of state
+- Make boundaries between client/session and transport/process state explicit
+- Remove deep nesting and duplication
+
+### Key Challenges and Analysis
+
+- Handler state is sometimes deeply nested (e.g., ClientConn inside Gun.ConnectionState.handler_state)
+- Adapter state is mirrored in multiple places
+- Gun process-local state sometimes leaks into user-facing state
+- Synchronization on reconnection/ownership transfer is error-prone
+
+### Canonical State Ownership Rules
+
+- `ClientConn` is the _only_ canonical source for all session, authentication, subscription, and handler state
+- `Gun.ConnectionState` holds only Gun process info, transport-local runtime info, and references to handler modules (not handler state)
+- Handler state is always passed via `ClientConn`, never stored canonically in Gun state
+- Adapter state lives in `ClientConn` and is passed as needed
+- Never nest a full `ClientConn` inside Gun state or handler state
+- Synchronize state explicitly on reconnection, ownership transfer, or handler transition
+
+### Field Mapping Table (Refined)
+
+| Field                        | ClientConn (Canonical) | Gun.ConnectionState (Transport) | Rationale                                                   |
+| ---------------------------- | :--------------------: | :-----------------------------: | ----------------------------------------------------------- |
+| transport, adapter           |           X            |                                 | User-facing, adapter-agnostic                               |
+| transport_pid, stream_ref    |           X            |                                 | Needed for client ops                                       |
+| gun_pid, gun_monitor_ref     |                        |                X                | Gun process-local                                           |
+| host, port, path, ws_opts    |           X            |                X                | ClientConn: config, Gun: runtime                            |
+| status                       |           X            |                X                | ClientConn: user-facing, Gun: process-local                 |
+| callback_pids                |           X            |                                 | User-facing                                                 |
+| connection_info              |           X            |                X                | Canonical in ClientConn, Gun may cache                      |
+| auth_status, access_token    |           X            |                                 | Client-level, not transport                                 |
+| credentials                  |           X            |                                 | Client-level                                                |
+| subscriptions                |           X            |                                 | Client-level                                                |
+| last_error                   |           X            |                X                | Canonical in ClientConn, Gun may cache last transport error |
+| handler states (all types)   |           X            |                                 | Canonical in ClientConn, Gun may hold ephemeral copy only   |
+| rate_limit, logging, metrics |           X            |                                 | Client-level, not transport                                 |
+| reconnection                 |           X            |                                 | Client-level, not transport                                 |
+| extras                       |           X            |                X                | Extensible, but canonical in ClientConn                     |
+| active_streams               |                        |                X                | Gun process-local                                           |
+
+**Rule of Thumb:**
+
+- If it's needed for _user-facing API, session, or cross-transport logic_, it lives in `ClientConn`.
+- If it's _process-local, transport-internal, or Gun-specific_, it lives in `Gun.ConnectionState`.
+- _Handler state_ is canonical in `ClientConn`, but may be mirrored in Gun state for process-local logic (must be synchronized).
+
+### High-level Task Breakdown (Refined)
+
+#### T3.1: Document State Layering and Ownership
+
+- **Description**: Write a clear doc section (in scratchpad and code) describing what belongs in ClientConn vs. Gun.ConnectionState.
+- **Acceptance Criteria**:
+  - Table or list mapping each field to its canonical home.
+  - Rationale for each decision.
+  - Guidance for future adapters.
+- **Dependencies**: None
+- **Status**: DONE
+
+#### T3.1.1: Documentation Maintenance for Field Mapping and Rationale
+
+- **Description**: Keep the field mapping table and rationale up to date as the system evolves, and ensure all new fields are reviewed for canonical ownership.
+- **Acceptance Criteria**:
+  - Documentation is updated whenever state struct fields change.
+  - All new fields are reviewed for correct placement and rationale.
+- **Dependencies**: T3.1 (continuous)
+- **Status**: TODO
+
+#### T3.2: Refactor State Structs to Remove Duplication
+
+- **Description**: Refactor both structs so that:
+  - ClientConn holds only canonical, adapter-agnostic state.
+  - Gun.ConnectionState holds only transport-local, Gun-specific state.
+  - Shared state (e.g., handler state) is _referenced_ or _synchronized_ as needed, not duplicated.
+- **Acceptance Criteria**:
+  - No duplicated fields.
+  - All tests pass.
+  - Ownership transfer and reconnection flows synchronize state correctly.
+- **Dependencies**: T3.1
+- **Status**: TODO
+
+#### T3.2.1: Implement State Synchronization Helpers
+
+- **Description**: Implement and document helper functions for synchronizing state between `ClientConn` and `Gun.ConnectionState` during reconnection, ownership transfer, and handler transitions.
+- **Acceptance Criteria**:
+  - Helper functions exist for extracting, merging, and updating state between the two structs.
+  - All synchronization logic is centralized and documented.
+  - No ad-hoc or duplicated synchronization code.
+- **Dependencies**: T3.2
+- **Status**: TODO
+
+#### T3.3: Update Handler/Adapter APIs for State Passing
+
+- **Description**: Ensure all handler/adapter APIs pass the correct state struct, and document expectations for state mutation and return.
+- **Acceptance Criteria**:
+  - All handler callbacks receive the right state struct.
+  - Docs updated.
+  - Tests for state handoff and mutation.
+- **Dependencies**: T3.2
+- **Status**: TODO
+
+#### T3.3.1: Enforce Typespecs for Handler/Adapter APIs
+
+- **Description**: Add and enforce typespecs for all handler and adapter APIs to ensure the correct state struct is used and returned.
+- **Acceptance Criteria**:
+  - All handler/adaptor callbacks have explicit typespecs.
+  - Dialyzer passes with no type errors related to state struct usage.
+  - Documentation is updated to reflect typespec requirements.
+- **Dependencies**: T3.3
+- **Status**: TODO
+
+#### T3.4: Add Tests for State Consistency Across Layers
+
+- **Description**: Add tests that simulate reconnection, auth refresh, and error flows, asserting state consistency between ClientConn and Gun.ConnectionState.
+- **Acceptance Criteria**:
+  - Tests for all major flows.
+  - No state divergence.
+- **Dependencies**: T3.2, T3.3
+- **Status**: TODO
+
+#### T3.4.1: Add Property-Based and Integration Tests for State Transitions
+
+- **Description**: Add property-based and integration tests for state transitions, especially for reconnection and ownership transfer scenarios.
+- **Acceptance Criteria**:
+  - Property-based tests cover state invariants and transitions.
+  - Integration tests simulate reconnection, ownership transfer, and handler transitions.
+  - All tests pass and catch potential state divergence or synchronization bugs.
+- **Dependencies**: T3.4
+- **Status**: TODO
+
+---
+
+## Project Status Board (updated)
+
+- [x] T3.1: Document State Layering and Ownership (DONE, Code Review Rating: 5/5)
+- [ ] T3.1.1: Documentation Maintenance for Field Mapping and Rationale (TODO)
+- [ ] T3.2: Refactor State Structs to Remove Duplication (TODO)
+- [ ] T3.2.1: Implement State Synchronization Helpers (TODO)
+- [ ] T3.3: Update Handler/Adapter APIs for State Passing (TODO)
+- [ ] T3.3.1: Enforce Typespecs for Handler/Adapter APIs (TODO)
+- [ ] T3.4: Add Tests for State Consistency Across Layers (TODO)
+- [ ] T3.4.1: Add Property-Based and Integration Tests for State Transitions (TODO)
+
+## Executor's Feedback or Assistance Requests
+
+- Reviewer has approved the plan and provided actionable suggestions. Ready to proceed to T3.2: Refactor State Structs to Remove Duplication.
