@@ -185,7 +185,7 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
     * `:status` - (required) Current connection status
     * `:host` - Hostname of connection
     * `:port` - Port of connection
-    * `:options` - Connection options
+    * `:path` - Path for WebSocket endpoint
     * `:active_streams` - Map of active stream references
 
   ## Returns
@@ -207,14 +207,23 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
         "Received Gun connection ownership from another process"
       )
 
+      # Create updated state with gun pid and status
       updated_state =
         state
         |> ConnectionState.update_gun_pid(info.gun_pid)
         |> ConnectionState.update_status(info.status)
 
-      updated_state_with_monitor =
-        update_monitor_if_needed(state, updated_state)
+      # Update host/port/path if provided in info
+      updated_state =
+        updated_state
+        |> maybe_update_field(:host, info)
+        |> maybe_update_field(:port, info)
+        |> maybe_update_field(:path, info)
 
+      # Ensure we have a valid monitor
+      updated_state_with_monitor = update_monitor_if_needed(state, updated_state)
+
+      # Update active streams if provided
       update_active_streams_if_needed(updated_state_with_monitor, info)
     else
       log_event(:error, :invalid_ownership_transfer_info, %{info: info}, state)
@@ -224,6 +233,14 @@ defmodule WebsockexNova.Gun.Helpers.StateHelpers do
 
   defp valid_ownership_info?(info) do
     is_map(info) and Map.has_key?(info, :gun_pid) and Map.has_key?(info, :status)
+  end
+
+  defp maybe_update_field(state, field, info) do
+    if Map.has_key?(info, field) do
+      Map.put(state, field, Map.get(info, field))
+    else
+      state
+    end
   end
 
   defp update_monitor_if_needed(state, updated_state) do

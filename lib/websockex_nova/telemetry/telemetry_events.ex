@@ -45,6 +45,7 @@ defmodule WebsockexNova.Telemetry.TelemetryEvents do
   @message_sent [:websockex_nova, :message, :sent]
   @message_received [:websockex_nova, :message, :received]
   @error_occurred [:websockex_nova, :error, :occurred]
+  @ownership_transfer [:websockex_nova, :connection, :ownership_transfer, :received]
 
   def connection_open, do: @connection_open
   def connection_close, do: @connection_close
@@ -52,4 +53,21 @@ defmodule WebsockexNova.Telemetry.TelemetryEvents do
   def message_sent, do: @message_sent
   def message_received, do: @message_received
   def error_occurred, do: @error_occurred
+
+  @doc """
+  Event emitted when an ownership transfer is received from another process.
+
+  ## Measurements
+
+  Empty map (timing is not relevant for this event)
+
+  ## Metadata
+
+  * `:gun_pid` - The Gun process PID
+  * `:host` - Hostname of the connection
+  * `:port` - Port number of the connection
+  * `:stream_count` - Number of active streams transferred
+  """
+  @spec ownership_transfer_received :: list(atom())
+  def ownership_transfer_received, do: @ownership_transfer
 end

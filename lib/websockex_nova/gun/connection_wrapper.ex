@@ -612,6 +612,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       ErrorHandler.handle_connection_error(:not_connected, state)
     else
       case Map.get(state.active_streams, stream_ref) do
+        %{status: :websocket} ->
+          handle_send_frame_with_rate_limiting(state, stream_ref, frame)
+
+        # Handle both formats for backward compatibility
         :websocket ->
           handle_send_frame_with_rate_limiting(state, stream_ref, frame)
 
@@ -849,9 +853,28 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   def handle_info({:gun_info, info}, state) do
-    # Use StateHelpers to handle the ownership transfer
-    final_state = Helpers.StateHelpers.handle_ownership_transfer(state, info)
-    {:noreply, final_state}
+    # Process gun_info message (sent when receiving ownership transfer)
+    # This contains information about Gun connection from the previous owner
+
+    # Log ownership transfer receipt
+    Logger.debug("Received gun_info message with ownership details: #{inspect(info)}")
+
+    # Use StateHelpers to update our state with the received information
+    updated_state = Helpers.StateHelpers.handle_ownership_transfer(state, info)
+
+    # Emit telemetry for ownership transfer completion
+    :telemetry.execute(
+      TelemetryEvents.ownership_transfer_received(),
+      %{},
+      %{
+        gun_pid: updated_state.gun_pid,
+        host: updated_state.host,
+        port: updated_state.port,
+        stream_count: map_size(updated_state.active_streams)
+      }
+    )
+
+    {:noreply, updated_state}
   end
 
   @impl true
@@ -1141,25 +1164,34 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp perform_ownership_transfer(state, new_owner_pid) do
+    # Clean up existing monitor
     if state.gun_monitor_ref, do: Process.demonitor(state.gun_monitor_ref, [:flush])
+
+    # Create new monitor for the gun process
     gun_monitor_ref = Process.monitor(state.gun_pid)
+
+    # Set the new owner for the gun process
     :gun.set_owner(state.gun_pid, new_owner_pid)
+
     Logger.info("Successfully transferred Gun process ownership to #{inspect(new_owner_pid)}")
+
+    # Update our state with the new monitor reference
     updated_state = ConnectionState.update_gun_monitor_ref(state, gun_monitor_ref)
 
-    send(
-      new_owner_pid,
-      {:gun_info,
-       %{
-         gun_pid: state.gun_pid,
-         host: state.host,
-         port: state.port,
-         status: state.status,
-         options: state.options,
-         active_streams: state.active_streams
-       }}
-    )
+    # Create ownership info map with transport state
+    ownership_info = %{
+      gun_pid: state.gun_pid,
+      host: state.host,
+      port: state.port,
+      path: state.path,
+      status: state.status,
+      active_streams: state.active_streams
+    }
 
+    # Send the ownership info to the new owner
+    send(new_owner_pid, {:gun_info, ownership_info})
+
+    # Return success reply with updated state
     {:reply, :ok, updated_state}
   end
 
@@ -1173,19 +1205,26 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp receive_ownership_and_update_state(state, gun_pid) do
+    # Create a monitor for the gun process
     gun_monitor_ref = Process.monitor(gun_pid)
 
+    # Get information about the Gun connection
     case :gun.info(gun_pid) do
       info when is_map(info) ->
+        # Set this process as the owner of the Gun process
         :gun.set_owner(gun_pid, self())
 
+        # Update our state with gun_pid, monitor, and status
         updated_state =
           state
           |> ConnectionState.update_gun_pid(gun_pid)
           |> ConnectionState.update_gun_monitor_ref(gun_monitor_ref)
           |> ConnectionState.update_status(:connected)
 
+        # Log successful ownership transfer
         Logger.info("Successfully received Gun connection ownership")
+
+        # Return success with updated state
         {:reply, :ok, updated_state}
     end
   end

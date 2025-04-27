@@ -5,58 +5,82 @@ defmodule WebsockexNova.Gun.ConnectionState do
   This module defines the state structure used by the ConnectionWrapper,
   providing better type safety and organization of state data.
 
+  ## IMPORTANT: State Layering
+  This struct should ONLY contain transport-layer, process-local, or Gun-specific data.
+  It should NOT store canonical application-level state like:
+  - Authentication
+  - Subscriptions
+  - User credentials
+  - Application handler state
+
+  The canonical application state lives in `WebsockexNova.ClientConn`.
+  This struct may reference a ClientConn struct for operations, but should
+  never duplicate the canonical state.
+
   ## Reconnection Policy
   - The connection state no longer tracks reconnection attempts or delays.
   - All reconnection policy and tracking is handled by the error handler.
   """
 
-  alias WebsockexNova.Gun.ConnectionWrapper
-
   require Logger
+
+  @typedoc "Connection status"
+  @type status :: :initialized | :connecting | :connected | :websocket_connected | :disconnected | :error | :closed
 
   @typedoc "Connection state structure"
   @type t :: %__MODULE__{
+          # Gun/Transport process state (local to this process)
           gun_pid: pid() | nil,
           gun_monitor_ref: reference() | nil,
+
+          # Connection configuration (duplicated from ClientConn for easy access)
+          # These are read-only once set
           host: String.t(),
           port: non_neg_integer(),
           transport: atom(),
           path: String.t(),
           ws_opts: map(),
-          status: ConnectionWrapper.status(),
+
+          # Local process state
+          status: status(),
           options: map(),
           callback_pid: pid() | nil,
           last_error: term() | nil,
           active_streams: %{reference() => map()},
+
+          # Handler module references - should only store the module names, not the state
           handlers: %{
             optional(:connection_handler) => module(),
-            optional(:connection_handler_state) => term(),
             optional(:message_handler) => module(),
-            optional(:message_handler_state) => term(),
             optional(:error_handler) => module(),
-            optional(:error_handler_state) => term(),
             optional(:logging_handler) => module(),
-            optional(:logging_handler_state) => term(),
             optional(:subscription_handler) => module(),
-            optional(:subscription_handler_state) => term(),
             optional(:auth_handler) => module(),
-            optional(:auth_handler_state) => term()
+            optional(:rate_limit_handler) => module(),
+            optional(:metrics_collector) => module()
           }
         }
 
   defstruct [
+    # Gun/Transport process state
     :gun_pid,
     :gun_monitor_ref,
+
+    # Connection configuration (duplicated from ClientConn for local usage)
     :host,
     :port,
     :transport,
     :path,
     :ws_opts,
+
+    # Local process state
     :status,
     :options,
     :callback_pid,
     :last_error,
     active_streams: %{},
+
+    # Handler module references only, not state
     handlers: %{}
   ]
 
@@ -76,21 +100,44 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec new(String.t(), non_neg_integer(), map()) :: t()
   def new(host, port, options) do
     %__MODULE__{
+      # Gun/transport state
+      gun_pid: nil,
+      gun_monitor_ref: nil,
+
+      # Connection configuration
       host: host,
       port: port,
+      transport: Map.get(options, :transport, :tcp),
+      path: Map.get(options, :path, "/ws"),
+      ws_opts: Map.get(options, :ws_opts, %{}),
+
+      # Local process state
       status: :initialized,
       options: options,
       callback_pid: Map.get(options, :callback_pid),
       active_streams: %{},
-      transport: Map.get(options, :transport, :tcp),
-      path: Map.get(options, :path, "/ws"),
-      ws_opts: Map.get(options, :ws_opts, %{}),
-      gun_pid: nil,
-      gun_monitor_ref: nil,
       last_error: nil,
-      handlers: %{}
+
+      # Handler module references
+      handlers: extract_handler_modules(options)
     }
   end
+
+  # Extract only handler module names from options, not their state
+  defp extract_handler_modules(options) do
+    %{}
+    |> maybe_add_handler(:connection_handler, Map.get(options, :connection_handler))
+    |> maybe_add_handler(:message_handler, Map.get(options, :message_handler))
+    |> maybe_add_handler(:error_handler, Map.get(options, :error_handler))
+    |> maybe_add_handler(:logging_handler, Map.get(options, :logging_handler))
+    |> maybe_add_handler(:subscription_handler, Map.get(options, :subscription_handler))
+    |> maybe_add_handler(:auth_handler, Map.get(options, :auth_handler))
+    |> maybe_add_handler(:rate_limit_handler, Map.get(options, :rate_limit_handler))
+    |> maybe_add_handler(:metrics_collector, Map.get(options, :metrics_collector))
+  end
+
+  defp maybe_add_handler(map, _key, nil), do: map
+  defp maybe_add_handler(map, key, module), do: Map.put(map, key, module)
 
   @doc """
   Updates the connection status in the state.
@@ -104,9 +151,176 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   Updated connection state struct
   """
-  @spec update_status(t(), ConnectionWrapper.status()) :: t()
+  @spec update_status(t(), status()) :: t()
   def update_status(state, status) do
     %{state | status: status}
+  end
+
+  @doc """
+  Sets up the connection handler module and stores it in the handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `connection_handler` - Connection handler module
+  * `options` - Handler options (not stored in ConnectionState)
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec setup_connection_handler(t(), module(), map()) :: t()
+  def setup_connection_handler(state, connection_handler, _options) do
+    update_handler(state, :connection_handler, connection_handler)
+  end
+
+  @doc """
+  Sets up the message handler module and stores it in the handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `message_handler` - Message handler module
+  * `options` - Handler options (not stored in ConnectionState)
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec setup_message_handler(t(), module(), map()) :: t()
+  def setup_message_handler(state, message_handler, _options) do
+    update_handler(state, :message_handler, message_handler)
+  end
+
+  @doc """
+  Sets up the error handler module and stores it in the handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `error_handler` - Error handler module
+  * `options` - Handler options (not stored in ConnectionState)
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec setup_error_handler(t(), module(), map()) :: t()
+  def setup_error_handler(state, error_handler, _options) do
+    update_handler(state, :error_handler, error_handler)
+  end
+
+  @doc """
+  Sets up the subscription handler module and stores it in the handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `subscription_handler` - Subscription handler module
+  * `options` - Handler options (not stored in ConnectionState)
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec setup_subscription_handler(t(), module(), map()) :: t()
+  def setup_subscription_handler(state, subscription_handler, _options) do
+    update_handler(state, :subscription_handler, subscription_handler)
+  end
+
+  @doc """
+  Sets up the auth handler module and stores it in the handlers map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `auth_handler` - Auth handler module
+  * `options` - Handler options (not stored in ConnectionState)
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec setup_auth_handler(t(), module(), map()) :: t()
+  def setup_auth_handler(state, auth_handler, _options) do
+    update_handler(state, :auth_handler, auth_handler)
+  end
+
+  @doc """
+  Adds an active stream to the state with the given status and data.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `stream_ref` - Stream reference to add
+  * `stream_data` - Data for the stream, can be either an atom status or a map with data
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec add_active_stream(t(), reference(), atom() | map()) :: t()
+  def add_active_stream(state, stream_ref, stream_data) do
+    updated_streams = Map.put(state.active_streams, stream_ref, stream_data)
+    %{state | active_streams: updated_streams}
+  end
+
+  @doc """
+  Removes multiple streams from the active streams map.
+
+  ## Parameters
+
+  * `state` - Current connection state
+  * `stream_refs` - List of stream references to remove
+
+  ## Returns
+
+  Updated connection state struct
+  """
+  @spec remove_streams(t(), list(reference())) :: t()
+  def remove_streams(state, stream_refs) when is_list(stream_refs) do
+    updated_streams =
+      Enum.reduce(stream_refs, state.active_streams, fn ref, acc ->
+        Map.delete(acc, ref)
+      end)
+
+    %{state | active_streams: updated_streams}
+  end
+
+  @doc """
+  Clears all active streams from the state.
+
+  ## Parameters
+
+  * `state` - Current connection state
+
+  ## Returns
+
+  Updated connection state struct with empty active_streams
+  """
+  @spec clear_all_streams(t()) :: t()
+  def clear_all_streams(state) do
+    %{state | active_streams: %{}}
+  end
+
+  @doc """
+  Prepares the state for process termination by clearing references and resources.
+
+  ## Parameters
+
+  * `state` - Current connection state
+
+  ## Returns
+
+  Updated connection state ready for termination
+  """
+  @spec prepare_for_termination(t()) :: t()
+  def prepare_for_termination(state) do
+    state
+    |> clear_all_streams()
+    |> update_gun_pid(nil)
+    |> update_gun_monitor_ref(nil)
+    |> update_status(:closed)
   end
 
   @doc """
@@ -175,7 +389,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec update_stream(t(), reference(), atom()) :: t()
   def update_stream(state, stream_ref, status) do
-    %{state | active_streams: Map.put(state.active_streams, stream_ref, status)}
+    updated_streams = Map.put(state.active_streams, stream_ref, status)
+    %{state | active_streams: updated_streams}
   end
 
   @doc """
@@ -192,196 +407,53 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec remove_stream(t(), reference()) :: t()
   def remove_stream(state, stream_ref) do
-    %{state | active_streams: Map.delete(state.active_streams, stream_ref)}
+    updated_streams = Map.delete(state.active_streams, stream_ref)
+    %{state | active_streams: updated_streams}
   end
 
   @doc """
-  Removes multiple streams from the active streams map.
+  Updates the active streams map.
 
   ## Parameters
 
   * `state` - Current connection state
-  * `stream_refs` - List of stream references to remove
+  * `active_streams` - Map of stream references to stream data
 
   ## Returns
 
   Updated connection state struct
   """
-  @spec remove_streams(t(), [reference()]) :: t()
-  def remove_streams(state, stream_refs) when is_list(stream_refs) do
-    active_streams =
-      Enum.reduce(stream_refs, state.active_streams, fn ref, streams ->
-        Map.delete(streams, ref)
-      end)
-
-    %{state | active_streams: active_streams}
-  end
-
-  @doc """
-  Clears all active streams.
-
-  ## Parameters
-
-  * `state` - Current connection state
-
-  ## Returns
-
-  Updated connection state struct with empty active_streams
-  """
-  @spec clear_all_streams(t()) :: t()
-  def clear_all_streams(state) do
-    %{state | active_streams: %{}}
-  end
-
-  @doc """
-  Updates the entire active_streams map.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `active_streams` - New active streams map to replace the existing one
-
-  ## Returns
-
-  Updated connection state struct
-  """
-  @spec update_active_streams(t(), %{reference() => atom()}) :: t()
+  @spec update_active_streams(t(), map()) :: t()
   def update_active_streams(state, active_streams) when is_map(active_streams) do
     %{state | active_streams: active_streams}
   end
 
   @doc """
-  Prepares state for cleanup before termination.
-  Clears all active streams and references.
+  Updates a handler module reference.
 
   ## Parameters
 
   * `state` - Current connection state
-
-  ## Returns
-
-  Cleaned up state struct
-  """
-  @spec prepare_for_termination(t()) :: t()
-  def prepare_for_termination(state) do
-    state
-    |> clear_all_streams()
-    |> Map.put(:gun_pid, nil)
-  end
-
-  @doc """
-  Sets up the connection handler and initializes its state.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handler_module` - The connection handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
-
-  ## Returns
-
-  Updated connection state struct with the handler and its state
-  """
-  @spec setup_connection_handler(t(), module(), map()) :: t()
-  def setup_connection_handler(state, handler_module, handler_options) do
-    Logger.debug("[setup_connection_handler] module: #{inspect(handler_module)}, options: #{inspect(handler_options)}")
-    setup_handler(state, handler_module, :connection_handler, handler_options)
-  end
-
-  @doc """
-  Updates the connection handler state.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handler_state` - New handler state
+  * `handler_key` - Key for the handler (:connection_handler, :message_handler, etc.)
+  * `module` - Handler module
 
   ## Returns
 
   Updated connection state struct
   """
-  @spec update_connection_handler_state(t(), term()) :: t()
-  def update_connection_handler_state(state, handler_state) do
-    %{state | handlers: Map.put(state.handlers, :connection_handler_state, handler_state)}
+  @spec update_handler(t(), atom(), module()) :: t()
+  def update_handler(state, handler_key, module) do
+    updated_handlers = Map.put(state.handlers, handler_key, module)
+    %{state | handlers: updated_handlers}
   end
 
   @doc """
-  Sets up the message handler and initializes its state.
+  Updates multiple handlers at once in the handlers map.
 
   ## Parameters
 
   * `state` - Current connection state
-  * `handler_module` - The message handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
-
-  ## Returns
-
-  Updated connection state struct with the handler and its state
-  """
-  @spec setup_message_handler(t(), module(), map()) :: t()
-  def setup_message_handler(state, handler_module, handler_options) do
-    setup_handler(state, handler_module, :message_handler, handler_options)
-  end
-
-  @doc """
-  Updates the message handler state.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handler_state` - New handler state
-
-  ## Returns
-
-  Updated connection state struct
-  """
-  @spec update_message_handler_state(t(), term()) :: t()
-  def update_message_handler_state(state, handler_state) do
-    %{state | handlers: Map.put(state.handlers, :message_handler_state, handler_state)}
-  end
-
-  @doc """
-  Sets up the error handler and initializes its state.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handler_module` - The error handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
-
-  ## Returns
-
-  Updated connection state struct with the handler and its state
-  """
-  @spec setup_error_handler(t(), module(), map()) :: t()
-  def setup_error_handler(state, handler_module, handler_options) do
-    setup_handler(state, handler_module, :error_handler, handler_options)
-  end
-
-  @doc """
-  Updates the error handler state.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handler_state` - New handler state
-
-  ## Returns
-
-  Updated connection state struct
-  """
-  @spec update_error_handler_state(t(), term()) :: t()
-  def update_error_handler_state(state, handler_state) do
-    %{state | handlers: Map.put(state.handlers, :error_handler_state, handler_state)}
-  end
-
-  @doc """
-  Updates the entire handlers map.
-
-  ## Parameters
-
-  * `state` - Current connection state
-  * `handlers` - New handlers map to replace or merge with the existing one
+  * `handlers` - Map of handler keys to handler modules or state
 
   ## Returns
 
@@ -389,137 +461,77 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec update_handlers(t(), map()) :: t()
   def update_handlers(state, handlers) when is_map(handlers) do
-    %{state | handlers: handlers}
+    updated_handlers = Map.merge(state.handlers || %{}, handlers)
+    %{state | handlers: updated_handlers}
   end
 
   @doc """
-  Adds a stream to the active streams map with metadata.
+  Updates the connection handler state within the handlers map.
 
   ## Parameters
 
   * `state` - Current connection state
-  * `stream_ref` - Stream reference
-  * `metadata` - Map of metadata about the stream
+  * `handler_state` - New handler state to store
 
   ## Returns
 
   Updated connection state struct
   """
-  @spec add_active_stream(t(), reference(), map()) :: t()
-  def add_active_stream(state, stream_ref, metadata) when is_map(metadata) do
-    %{state | active_streams: Map.put(state.active_streams, stream_ref, metadata)}
+  @spec update_connection_handler_state(t(), map()) :: t()
+  def update_connection_handler_state(state, handler_state) do
+    updated_handlers = Map.put(state.handlers, :connection_handler_state, handler_state)
+    %{state | handlers: updated_handlers}
   end
 
   @doc """
-  Sets up the logging handler and initializes its state.
+  Setup the logging handler module.
 
   ## Parameters
 
   * `state` - Current connection state
-  * `handler_module` - The logging handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
+  * `logging_handler` - Logging handler module
+  * `_options` - Logging handler options (not stored in ConnectionState)
 
   ## Returns
 
-  Updated connection state struct with the handler and its state
+  Updated connection state struct
   """
   @spec setup_logging_handler(t(), module(), map()) :: t()
-  def setup_logging_handler(state, handler_module, handler_options) do
-    setup_handler(state, handler_module, :logging_handler, handler_options)
+  def setup_logging_handler(state, logging_handler, _options) do
+    # Note: handler state/options are stored in ClientConn, not here
+    update_handler(state, :logging_handler, logging_handler)
   end
 
   @doc """
-  Sets up the subscription handler and initializes its state.
+  Gets the callback PID from the state.
 
   ## Parameters
+
   * `state` - Current connection state
-  * `handler_module` - The subscription handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
 
   ## Returns
-  Updated connection state struct with the handler and its state
+
+  The callback PID, or nil if none exists
   """
-  @spec setup_subscription_handler(t(), module(), map()) :: t()
-  def setup_subscription_handler(state, handler_module, handler_options) do
-    setup_handler(state, handler_module, :subscription_handler, handler_options)
+  @spec get_callback_pid(t()) :: pid() | nil
+  def get_callback_pid(state) do
+    state.callback_pid
   end
 
   @doc """
-  Sets up the auth handler and initializes its state.
+  Updates the callback PID in the state.
 
   ## Parameters
+
   * `state` - Current connection state
-  * `handler_module` - The auth handler module to use
-  * `handler_options` - Options to pass to the handler's init/1 function
+  * `pid` - New callback PID
 
   ## Returns
-  Updated connection state struct with the handler and its state
+
+  Updated connection state struct
   """
-  @spec setup_auth_handler(t(), module(), map()) :: t()
-  def setup_auth_handler(state, handler_module, handler_options) do
-    setup_handler(state, handler_module, :auth_handler, handler_options)
-  end
-
-  # Generic handler setup function
-  defp setup_handler(state, handler_module, handler_type, handler_options) when is_atom(handler_module) do
-    Logger.debug(
-      "[setup_handler] type: #{inspect(handler_type)}, module: #{inspect(handler_module)}, options: #{inspect(handler_options)}"
-    )
-
-    init_fun = handler_init_fun(handler_type)
-    handler_state = call_handler_init(handler_module, init_fun, handler_options)
-    update_handler_state(state, handler_type, handler_module, handler_state)
-  end
-
-  defp handler_init_fun(:connection_handler), do: :init
-  defp handler_init_fun(:subscription_handler), do: :subscription_init
-  defp handler_init_fun(:auth_handler), do: :auth_init
-  defp handler_init_fun(:message_handler), do: :message_handler_init
-  defp handler_init_fun(:error_handler), do: :error_handler_init
-  defp handler_init_fun(:logging_handler), do: :logging_handler_init
-  # defp handler_init_fun(handler_type), do: String.to_atom("#{handler_type}_init")
-
-  defp call_handler_init(handler_module, init_fun, handler_options) do
-    if function_exported?(handler_module, init_fun, 1) do
-      case apply(handler_module, init_fun, [handler_options]) do
-        {:ok, handler_state} -> handler_state
-        _error -> nil
-      end
-    end
-  end
-
-  defp update_handler_state(state, :connection_handler, handler_module, handler_state) do
-    put_handler(state, :connection_handler, :connection_handler_state, handler_module, handler_state)
-  end
-
-  defp update_handler_state(state, :subscription_handler, handler_module, handler_state) do
-    put_handler(state, :subscription_handler, :subscription_handler_state, handler_module, handler_state)
-  end
-
-  defp update_handler_state(state, :auth_handler, handler_module, handler_state) do
-    put_handler(state, :auth_handler, :auth_handler_state, handler_module, handler_state)
-  end
-
-  defp update_handler_state(state, :message_handler, handler_module, handler_state) do
-    put_handler(state, :message_handler, :message_handler_state, handler_module, handler_state)
-  end
-
-  defp update_handler_state(state, :error_handler, handler_module, handler_state) do
-    put_handler(state, :error_handler, :error_handler_state, handler_module, handler_state)
-  end
-
-  defp update_handler_state(state, :logging_handler, handler_module, handler_state) do
-    put_handler(state, :logging_handler, :logging_handler_state, handler_module, handler_state)
-  end
-
-  defp put_handler(state, handler_type, handler_state_key, handler_module, handler_state) do
-    %{
-      state
-      | handlers:
-          Map.merge(state.handlers, %{
-            handler_type => handler_module,
-            handler_state_key => handler_state
-          })
-    }
+  @spec update_callback_pid(t(), pid() | nil) :: t()
+  def update_callback_pid(state, pid) do
+    %{state | callback_pid: pid}
   end
 end
