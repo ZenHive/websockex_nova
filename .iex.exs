@@ -1,5 +1,6 @@
 alias WebsockexNova.Client
 alias WebsockexNova.Examples.ClientDeribit
+alias WebsockexNova.Examples.ClientDeribitMacro
 
 # .iex.exs -- WebsockexNova debugging helpers
 

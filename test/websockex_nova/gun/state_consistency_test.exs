@@ -42,7 +42,7 @@ defmodule WebsockexNova.Gun.StateConsistencyTest do
     refute Map.has_key?(options, :subscriptions), "subscriptions should not be in ConnectionState.options"
 
     # 4. Assert: All session/auth/subscription state is canonical in ClientConn
-    assert is_nil(conn.auth_status) or conn.auth_status in [:unauthenticated, :authenticated]
+    assert is_nil(conn.adapter_state.auth_status) or conn.adapter_state.auth_status in [:unauthenticated, :authenticated]
     assert is_map(conn.adapter_state)
 
     # 5. Authenticate (call authenticate/3 and use updated conn)
