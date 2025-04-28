@@ -1161,8 +1161,8 @@ Tasks follow this format:
 ### High-level Task Breakdown
 
 - **ID:** CW1
-- **Name:** Investigate and Fix Unhandled Gun Lifecycle Messages & Reconnection
-- **Description:** Ensure that all `:gun_up` and `:gun_down` messages are handled appropriately in the `ConnectionWrapper`, preventing log spam and ensuring correct reconnection logic.
+- **Name:** Fix Unhandled Gun Lifecycle Messages & Reconnection
+- **Description:** Ensure that all Gun lifecycle messages are handled appropriately in the ConnectionWrapper, preventing log spam and ensuring correct reconnection logic.
 - **Acceptance Criteria:**
   - No repeated "Unhandled message in ConnectionWrapper" warnings for `:gun_up` or `:gun_down`.
   - All Gun lifecycle messages are handled gracefully, even if they are late or from stale PIDs.
@@ -1176,12 +1176,10 @@ Tasks follow this format:
 #### Subtasks Checklist
 
 - [ ] Review all `handle_info` and Gun message handling code in `ConnectionWrapper`.
-- [ ] Add pattern matches to ignore or gracefully handle messages from stale Gun PIDs.
+- [ ] Add pattern matches to ignore or gracefully handle messages from stale Gun PIDs (log at debug level, do not warn).
 - [ ] Audit reconnection logic and error handler configuration.
-- [ ] Add tests for late/duplicate Gun lifecycle messages and reconnection.
+- [ ] Add/expand tests for late/duplicate Gun lifecycle messages and reconnection.
 - [ ] Ensure no log spam and correct connection state transitions.
-
----
 
 ## STATE Task Status Update (Planner Review, 2024-06-09)
 
@@ -1326,67 +1324,6 @@ Audit and fix all test failures and warnings resulting from the STATE refactor, 
 
 ---
 
-## Project Status Board
-
-- [x] Fix state_tracer_test.exs export directory bug (DONE)
-- [ ] Fix handler delegation test failures (TODO)
-- [x] Fix rate limiting test (RL1) (DONE)
-- [ ] Resolve warnings about missing behavior callbacks (TODO)
-- [ ] Audit all usages of ConnectionState.options (TODO)
-- [ ] Update and expand tests (TODO)
-
----
-
-## Lessons
-
-- Always set required Application config keys (like :export_dir) in config files for tests that depend on them. Missing config can cause nil errors and failing tests.
-- When passing per-connection or test-specific options (like :rate_limiter) to a process, ensure they are not filtered out by option sanitization functions. Only whitelisting transport options can break dynamic/testable behaviors. Fixing this for :rate_limiter resolved a subtle test bug.
-
----
-
-## Rate Limiter Test Failure Investigation (2024-06-09)
-
-### Background and Motivation
-
-A test in `test/websockex_nova/gun/connection_wrapper_test.exs` (line 623) is failing. The test expects the rate limiter to reject a frame when the handler is set to `:always_reject` mode, returning `{:error, :test_rejection}`. However, the actual result is `:ok`, indicating the frame was sent instead of being rejected. This suggests a disconnect between the rate limiter handler's configuration and the result returned to the caller.
-
-The rate limiting system consists of two main parts:
-
-- The `RateLimiting` GenServer, which manages state, timers, and delegates logic to a handler.
-- The handler module (e.g., `DefaultRateLimitHandler`, `TestHandler`), which implements the actual rate limiting logic and is pluggable for different behaviors.
-
-### Key Challenges and Analysis
-
-- Ensuring the correct handler and mode are used in the test context.
-- Verifying that the handler's return value (especially `:always_reject`) is correctly propagated through the GenServer and back to the caller.
-- Tracing the flow from `ConnectionWrapper.send_frame/3` through the rate limiter to the handler, confirming that the handler's result is respected.
-- Ensuring the test is not bypassing the rate limiter or using a default handler unintentionally.
-
-### High-level Task Breakdown
-
-- **ID**: RL1
-- **Name**: Investigate and Fix Rate Limiter Test Failure
-- **Description**: Ensure that when the rate limiter handler is set to `:always_reject`, sending a frame results in `{:error, :test_rejection}` as expected by the test.
-- **Acceptance Criteria**:
-  - The test at `connection_wrapper_test.exs:623` passes, returning `{:error, :test_rejection}` when the handler is in `:always_reject` mode.
-  - The correct handler and mode are used in the test setup.
-  - The handler's result is correctly propagated through all layers.
-  - No regression in other rate limiting tests.
-- **Priority**: P0
-- **Effort**: 1
-- **Dependencies**: STATE003, STATE004 (structural refactor and helpers)
-- **Status**: TODO
-
-#### Subtasks Checklist
-
-- [ ] Confirm the handler and mode in the test setup.
-- [ ] Trace the call flow from `send_frame/3` to the handler and back.
-- [ ] Add or review a test for the expected rejection behavior.
-- [ ] Fix the implementation if the handler's result is not being propagated.
-- [ ] Ensure all rate limiting tests pass.
-
----
-
 ## Project Status Board (updated)
 
 - [x] Fix state_tracer_test.exs export directory bug (DONE)
@@ -1395,5 +1332,31 @@ The rate limiting system consists of two main parts:
 - [ ] Resolve warnings about missing behavior callbacks (TODO)
 - [ ] Audit all usages of ConnectionState.options (TODO)
 - [ ] Update and expand tests (TODO)
+- [ ] T3.1 Refactor handler APIs to use references to canonical state (Option A) (IN PROGRESS)
 
----
+## Executor's Feedback or Assistance Requests (2024-06-09, updated)
+
+- Decision: Proceed with Option A (refactor all handler APIs to use references to canonical state, eliminating duplication and the need for synchronization).
+- This will require:
+  - Refactoring handler APIs to accept canonical state (or a reference to it) instead of a local copy.
+  - Removing all code that copies or stores application-level state in `ConnectionState`.
+  - Updating all handler calls in `ConnectionWrapper` and related modules to pass the canonical state.
+  - Updating tests and documentation to reflect the new pattern.
+- This is a larger but more robust and maintainable change.
+
+## T3.1 Option A Subtask Breakdown
+
+1. **Audit all handler APIs and usages**
+   - Identify all places where handler state is passed, stored, or accessed.
+   - Document which handlers require canonical state.
+2. **Refactor handler APIs**
+   - Update handler behaviors and implementations to accept canonical state (or a reference to it).
+   - Remove handler state fields from `ConnectionState` for application-level state.
+3. **Update handler invocations**
+   - Update all calls to handlers in `ConnectionWrapper` and related modules to pass the canonical state.
+4. **Update tests and documentation**
+   - Update all tests to use the new pattern.
+   - Update documentation to clarify state boundaries and handler API changes.
+5. **Test and validate**
+   - Re-run the T3.1 state consistency test and all other tests.
+   - Ensure no duplicated or stale state remains.

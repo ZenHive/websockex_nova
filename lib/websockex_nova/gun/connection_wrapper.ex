@@ -749,90 +749,121 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   @impl true
-  def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid} = state) do
-    # Use MessageHandlers to ensure consistent callback notification format
-    # Simply delegate to handler, no need for manual extraction of return value
-    new_state = gun_pid |> MessageHandlers.handle_connection_up(protocol, state) |> elem(1)
-    # If we just reconnected, re-upgrade to websocket
-    prev_status = state.status
+  def handle_info({:gun_up, gun_pid, protocol}, state) do
+    if gun_pid == state.gun_pid do
+      # Existing logic
+      new_state = gun_pid |> MessageHandlers.handle_connection_up(protocol, state) |> elem(1)
+      prev_status = state.status
 
-    if prev_status in [:disconnected, :reconnecting] and is_binary(state.path) do
-      headers = Map.get(state.options, :headers, [])
-      ws_opts = Map.get(state.options, :ws_opts, %{})
-      stream_ref = :gun.ws_upgrade(gun_pid, state.path, headers_to_gun_format(headers), ws_opts)
+      if prev_status in [:disconnected, :reconnecting] and is_binary(state.path) do
+        headers = Map.get(state.options, :headers, [])
+        ws_opts = Map.get(state.options, :ws_opts, %{})
+        stream_ref = :gun.ws_upgrade(gun_pid, state.path, headers_to_gun_format(headers), ws_opts)
 
-      Logger.debug(
-        "[ConnectionWrapper] Re-upgrading to websocket after reconnect: path=#{inspect(state.path)}, headers=#{inspect(headers)}, stream_ref=#{inspect(stream_ref)}"
-      )
+        Logger.debug(
+          "[ConnectionWrapper] Re-upgrading to websocket after reconnect: path=#{inspect(state.path)}, headers=#{inspect(headers)}, stream_ref=#{inspect(stream_ref)}"
+        )
 
-      updated_state = ConnectionState.update_stream(new_state, stream_ref, :upgrading)
-      {:noreply, updated_state}
+        updated_state = ConnectionState.update_stream(new_state, stream_ref, :upgrading)
+        {:noreply, updated_state}
+      else
+        {:noreply, new_state}
+      end
     else
-      {:noreply, new_state}
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
     end
   end
 
   @impl true
-  def handle_info(
-        {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
-        %{gun_pid: gun_pid, callback_pid: callback_pid} = state
-      ) do
-    Logger.debug(
-      "[ConnectionWrapper] 6-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
-    )
+  def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams}, state) do
+    if gun_pid == state.gun_pid do
+      callback_pid = state.callback_pid
 
-    result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
-    if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
-    result
-  end
+      Logger.debug(
+        "[ConnectionWrapper] 6-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
+      )
 
-  def handle_info(
-        {:gun_down, gun_pid, protocol, reason, killed_streams},
-        %{gun_pid: gun_pid, callback_pid: callback_pid} = state
-      ) do
-    Logger.debug(
-      "[ConnectionWrapper] 5-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
-    )
-
-    result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, [])
-    if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
-    result
-  end
-
-  def handle_info({:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers}, %{gun_pid: gun_pid} = state) do
-    case ConnectionManager.transition_to(state, :websocket_connected) do
-      {:ok, new_state} ->
-        # Directly delegate to MessageHandlers
-        MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
-
-      {:error, reason} ->
-        Logger.error("Failed to transition state: #{inspect(reason)}")
-        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
+      result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
+      if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
+      result
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
     end
   end
 
-  def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid} = state) do
-    # Directly delegate to MessageHandlers
-    MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
+  def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams}, state) do
+    if gun_pid == state.gun_pid do
+      callback_pid = state.callback_pid
+
+      Logger.debug(
+        "[ConnectionWrapper] 5-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
+      )
+
+      result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, [])
+      if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
+      result
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
   end
 
-  def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid, callback_pid: callback_pid} = state) do
-    # First clean up the stream with the error
-    state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
-    # Then delegate to MessageHandlers with the cleaned state
-    result = MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
-    if callback_pid, do: send(callback_pid, {:connection_error, reason})
-    result
+  def handle_info({:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers}, state) do
+    if gun_pid == state.gun_pid do
+      case ConnectionManager.transition_to(state, :websocket_connected) do
+        {:ok, new_state} ->
+          MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
+
+        {:error, reason} ->
+          Logger.error("Failed to transition state: #{inspect(reason)}")
+          ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
+      end
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
   end
 
-  def handle_info({:gun_response, gun_pid, stream_ref, is_fin, status, headers}, %{gun_pid: gun_pid} = state) do
-    # Directly delegate to MessageHandlers
-    MessageHandlers.handle_http_response(gun_pid, stream_ref, is_fin, status, headers, state)
+  def handle_info({:gun_ws, gun_pid, stream_ref, frame}, state) do
+    if gun_pid == state.gun_pid do
+      MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
   end
 
-  def handle_info({:gun_data, gun_pid, stream_ref, is_fin, data}, %{gun_pid: gun_pid} = state) do
-    # Directly delegate to MessageHandlers
-    MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
+  def handle_info({:gun_error, gun_pid, stream_ref, reason}, state) do
+    if gun_pid == state.gun_pid do
+      callback_pid = state.callback_pid
+      state_with_cleanup = ConnectionState.remove_stream(state, stream_ref)
+      result = MessageHandlers.handle_error(gun_pid, stream_ref, reason, state_with_cleanup)
+      if callback_pid, do: send(callback_pid, {:connection_error, reason})
+      result
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({:gun_response, gun_pid, stream_ref, is_fin, status, headers}, state) do
+    if gun_pid == state.gun_pid do
+      MessageHandlers.handle_http_response(gun_pid, stream_ref, is_fin, status, headers, state)
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({:gun_data, gun_pid, stream_ref, is_fin, data}, state) do
+    if gun_pid == state.gun_pid do
+      MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
+    else
+      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      {:noreply, state}
+    end
   end
 
   def handle_info({:reconnect, attempt_source}, state) do
@@ -880,14 +911,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   @impl true
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     if state.gun_monitor_ref == ref and state.gun_pid == pid do
+      Logger.debug(
+        "[ConnectionWrapper] Gun process DOWN detected: pid=#{inspect(pid)}, reason=#{inspect(reason)}. Forcing state to :disconnected before reconnection. State: #{inspect(state)}"
+      )
+
+      # Force state to :disconnected before reconnection
+      state = ConnectionState.update_status(state, :disconnected)
       handle_gun_process_down(state, reason)
     else
+      Logger.debug(
+        "[ConnectionWrapper] Ignoring unrelated :DOWN message for ref=#{inspect(ref)}, pid=#{inspect(pid)}, reason=#{inspect(reason)}. State: #{inspect(state)}"
+      )
+
       {:noreply, state}
     end
   end
 
+  @impl true
   def handle_info(other, state) do
-    Logger.warning("Unhandled message in ConnectionWrapper: #{inspect(other)}")
+    Logger.debug("Unhandled message in ConnectionWrapper: #{inspect(other)}")
     {:noreply, state}
   end
 
@@ -1241,7 +1283,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp handle_gun_process_down(state, reason) do
-    Logger.error("Gun process terminated: #{inspect(reason)}")
+    Logger.error("[ConnectionWrapper] Gun process terminated: #{inspect(reason)}. State: #{inspect(state)}")
 
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
@@ -1255,13 +1297,38 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           MessageHandlers.notify(new_state.callback_pid, {:connection_down, :http, reason})
         end
 
-        if reason in [:crash, :killed, :shutdown] do
-          {:stop, :gun_terminated, new_state}
-        else
-          {:noreply, new_state}
+        # Only terminate if a true terminal error is detected
+        # Otherwise, always attempt to recover and keep the process alive
+        case reason do
+          :shutdown ->
+            Logger.debug("[ConnectionWrapper] Terminating due to explicit :shutdown reason. State: #{inspect(new_state)}")
+            {:stop, :gun_terminated, new_state}
+
+          {:shutdown, _} ->
+            Logger.debug(
+              "[ConnectionWrapper] Terminating due to explicit {:shutdown, _} reason. State: #{inspect(new_state)}"
+            )
+
+            {:stop, :gun_terminated, new_state}
+
+          {:error, :terminal_error} ->
+            Logger.debug("[ConnectionWrapper] Terminating due to terminal error. State: #{inspect(new_state)}")
+            {:stop, :gun_terminated, new_state}
+
+          # :gun_terminated and all other reasons are recoverable
+          _ ->
+            Logger.debug(
+              "[ConnectionWrapper] Will stay alive and attempt reconnection after Gun process termination: #{inspect(reason)}. State: #{inspect(new_state)}"
+            )
+
+            {:noreply, new_state}
         end
 
       {:error, transition_reason} ->
+        Logger.error(
+          "[ConnectionWrapper] Transition to :disconnected failed: #{inspect(transition_reason)}. State: #{inspect(state)}"
+        )
+
         ErrorHandler.handle_transition_error(state.status, :disconnected, transition_reason, state)
         {:stop, :gun_terminated, state}
     end
