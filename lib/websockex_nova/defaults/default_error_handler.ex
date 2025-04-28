@@ -39,7 +39,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   ## Reconnection Attempt Tracking
 
-  This handler tracks the reconnection attempt count in its state under the `:reconnect_attempts` key.
+  This handler tracks the reconnection attempt count in the adapter_state under the `:reconnect_attempts` key.
   Use `increment_reconnect_attempts/1` and `reset_reconnect_attempts/1` to update this count.
   """
 
@@ -62,19 +62,27 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     custom_map = Map.new(custom)
     conn = struct(WebsockexNova.ClientConn, known_map)
     conn = %{conn | error_handler_settings: Map.merge(conn.error_handler_settings || %{}, custom_map)}
+    # Initialize adapter_state with reconnect_attempts = 1
+    adapter_state = Map.get(conn, :adapter_state, %{})
+    adapter_state = Map.put_new(adapter_state, :reconnect_attempts, 1)
+    conn = %{conn | adapter_state: adapter_state}
     {:ok, conn}
   end
 
   @impl true
   def handle_error(error, context, %WebsockexNova.ClientConn{} = conn) when is_map(context) do
-    # Track the error in the state
-    updated_conn =
-      conn
+    # Track the error in the adapter_state
+    adapter_state = conn.adapter_state || %{}
+
+    updated_adapter_state =
+      adapter_state
       |> Map.put(:last_error, error)
       |> Map.put(:error_context, context)
 
-    # Use the attempt count from state, defaulting to 1
-    attempt = Map.get(updated_conn, :reconnect_attempts, 1)
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
+
+    # Use the attempt count from adapter_state, defaulting to 1
+    attempt = get_reconnect_attempts(updated_conn)
 
     # Handle based on error classification
     case classify_error(error, context) do
@@ -99,8 +107,8 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
   @impl true
   def should_reconnect?(error, _attempt, %WebsockexNova.ClientConn{} = conn) do
-    # Always use the attempt count from state
-    attempt = Map.get(conn, :reconnect_attempts, 1)
+    # Always use the attempt count from adapter_state
+    attempt = get_reconnect_attempts(conn)
     {max_attempts, base_delay, max_delay} = extract_reconnection_opts(conn)
 
     if attempt <= max_attempts && reconnectable_error?(error) do
@@ -138,19 +146,30 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   def classify_error(_, _), do: :transient
 
   @doc """
-  Increment the reconnection attempt count in the handler state.
+  Get the reconnection attempt count from the adapter_state.
   """
-  @impl true
-  def increment_reconnect_attempts(%WebsockexNova.ClientConn{} = conn) do
-    %{conn | reconnect_attempts: (conn.reconnect_attempts || 1) + 1}
+  def get_reconnect_attempts(%WebsockexNova.ClientConn{adapter_state: adapter_state}) do
+    # Default to 1 if not present
+    Map.get(adapter_state || %{}, :reconnect_attempts, 1)
   end
 
   @doc """
-  Reset the reconnection attempt count in the handler state.
+  Increment the reconnection attempt count in the adapter_state.
   """
   @impl true
-  def reset_reconnect_attempts(%WebsockexNova.ClientConn{} = conn) do
-    %{conn | reconnect_attempts: 1}
+  def increment_reconnect_attempts(%WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    current_attempts = Map.get(adapter_state || %{}, :reconnect_attempts, 0)
+    updated_adapter_state = Map.put(adapter_state || %{}, :reconnect_attempts, current_attempts + 1)
+    %{conn | adapter_state: updated_adapter_state}
+  end
+
+  @doc """
+  Reset the reconnection attempt count in the adapter_state.
+  """
+  @impl true
+  def reset_reconnect_attempts(%WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    updated_adapter_state = Map.put(adapter_state || %{}, :reconnect_attempts, 1)
+    %{conn | adapter_state: updated_adapter_state}
   end
 
   # Helper functions

@@ -10,42 +10,50 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
     test "handles connection errors and uses attempt from state" do
       error = {:connection_error, :timeout}
       context = %{}
-      state = %ClientConn{reconnection: %{max_reconnect_attempts: 5}, reconnect_attempts: 3}
+
+      state = %ClientConn{
+        reconnection: %{max_reconnect_attempts: 5},
+        adapter_state: %{reconnect_attempts: 3}
+      }
 
       assert {:retry, delay, new_state} = DefaultErrorHandler.handle_error(error, context, state)
       assert is_integer(delay)
       assert delay > 0
-      assert new_state.last_error == error
-      assert new_state.error_context == context
+      assert new_state.adapter_state.last_error == error
+      assert new_state.adapter_state.error_context == context
     end
 
     test "handles message processing errors" do
       error = {:message_error, :invalid_format}
       context = %{message: %{"broken" => true}}
-      state = %ClientConn{}
+      state = %ClientConn{adapter_state: %{}}
 
       assert {:ok, new_state} = DefaultErrorHandler.handle_error(error, context, state)
-      assert new_state.last_error == error
-      assert new_state.error_context == context
+      assert new_state.adapter_state.last_error == error
+      assert new_state.adapter_state.error_context == context
     end
 
     test "handles critical errors" do
       error = {:critical_error, :connection_refused}
       context = %{host: "example.com", port: 443}
-      state = %ClientConn{}
+      state = %ClientConn{adapter_state: %{}}
 
       assert {:stop, :critical_error, new_state} =
                DefaultErrorHandler.handle_error(error, context, state)
 
-      assert new_state.last_error == error
-      assert new_state.error_context == context
+      assert new_state.adapter_state.last_error == error
+      assert new_state.adapter_state.error_context == context
     end
   end
 
   describe "DefaultErrorHandler.should_reconnect?/3" do
     test "allows reconnection for transient errors using attempt from state" do
       error = {:connection_error, :timeout}
-      state = %ClientConn{reconnection: %{max_reconnect_attempts: 5}, reconnect_attempts: 2}
+
+      state = %ClientConn{
+        reconnection: %{max_reconnect_attempts: 5},
+        adapter_state: %{reconnect_attempts: 2}
+      }
 
       assert {true, delay} = DefaultErrorHandler.should_reconnect?(error, 999, state)
       assert is_integer(delay)
@@ -54,25 +62,41 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
 
     test "respects max reconnection attempts from state" do
       error = {:connection_error, :timeout}
-      state = %ClientConn{reconnection: %{max_reconnect_attempts: 5}, reconnect_attempts: 6}
+
+      state = %ClientConn{
+        reconnection: %{max_reconnect_attempts: 5},
+        adapter_state: %{reconnect_attempts: 6}
+      }
 
       assert {false, _} = DefaultErrorHandler.should_reconnect?(error, 1, state)
     end
 
     test "doesn't reconnect for authentication errors" do
       error = {:auth_error, :invalid_credentials}
-      state = %ClientConn{reconnection: %{max_reconnect_attempts: 5}, reconnect_attempts: 1}
+
+      state = %ClientConn{
+        reconnection: %{max_reconnect_attempts: 5},
+        adapter_state: %{reconnect_attempts: 1}
+      }
 
       assert {false, _} = DefaultErrorHandler.should_reconnect?(error, 1, state)
     end
 
     test "uses exponential backoff for reconnection delays" do
       error = {:connection_error, :timeout}
-      state = %ClientConn{reconnection: %{max_reconnect_attempts: 10}, reconnect_attempts: 1}
 
-      {true, delay1} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 1})
-      {true, delay2} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 2})
-      {true, delay3} = DefaultErrorHandler.should_reconnect?(error, 0, %{state | reconnect_attempts: 3})
+      base_state = %ClientConn{
+        reconnection: %{max_reconnect_attempts: 10},
+        adapter_state: %{}
+      }
+
+      state1 = %{base_state | adapter_state: %{reconnect_attempts: 1}}
+      state2 = %{base_state | adapter_state: %{reconnect_attempts: 2}}
+      state3 = %{base_state | adapter_state: %{reconnect_attempts: 3}}
+
+      {true, delay1} = DefaultErrorHandler.should_reconnect?(error, 0, state1)
+      {true, delay2} = DefaultErrorHandler.should_reconnect?(error, 0, state2)
+      {true, delay3} = DefaultErrorHandler.should_reconnect?(error, 0, state3)
 
       assert delay2 > delay1
       assert delay3 > delay2
@@ -80,22 +104,22 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
   end
 
   describe "DefaultErrorHandler.increment_reconnect_attempts/1 and reset_reconnect_attempts/1" do
-    test "increments the attempt count in state" do
-      state = %ClientConn{reconnect_attempts: 2}
+    test "increments the attempt count in adapter_state" do
+      state = %ClientConn{adapter_state: %{reconnect_attempts: 2}}
       new_state = DefaultErrorHandler.increment_reconnect_attempts(state)
-      assert new_state.reconnect_attempts == 3
+      assert new_state.adapter_state.reconnect_attempts == 3
     end
 
     test "increments from default if not present" do
-      state = %ClientConn{}
+      state = %ClientConn{adapter_state: %{}}
       new_state = DefaultErrorHandler.increment_reconnect_attempts(state)
-      assert new_state.reconnect_attempts == 1
+      assert new_state.adapter_state.reconnect_attempts == 1
     end
 
-    test "resets the attempt count in state" do
-      state = %ClientConn{reconnect_attempts: 5}
+    test "resets the attempt count in adapter_state" do
+      state = %ClientConn{adapter_state: %{reconnect_attempts: 5}}
       new_state = DefaultErrorHandler.reset_reconnect_attempts(state)
-      assert new_state.reconnect_attempts == 1
+      assert new_state.adapter_state.reconnect_attempts == 1
     end
   end
 
@@ -106,7 +130,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
     test "logs errors with context" do
       error = {:connection_error, :timeout}
       context = %{host: "example.com", port: 443}
-      state = %ClientConn{}
+      state = %ClientConn{adapter_state: %{}}
 
       log =
         capture_log(fn ->
@@ -123,7 +147,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
     test "logs critical errors with warning level" do
       error = {:critical_error, :connection_refused}
       context = %{host: "example.com", port: 443}
-      state = %ClientConn{}
+      state = %ClientConn{adapter_state: %{}}
 
       log =
         capture_log(fn ->
