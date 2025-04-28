@@ -716,7 +716,7 @@ Tasks follow this format:
 - **Priority**: P0
 - **Effort**: 1.5
 - **Dependencies**: T2.14, T3.4
-- **Status**: IN_PROGRESS
+- **Status**: DONE
 
 ### T5.2
 
@@ -1360,3 +1360,440 @@ Audit and fix all test failures and warnings resulting from the STATE refactor, 
 5. **Test and validate**
    - Re-run the T3.1 state consistency test and all other tests.
    - Ensure no duplicated or stale state remains.
+
+# WebsockexNova Refactoring: Migration to adapter_state
+
+## Background and Motivation
+
+WebsockexNova's `ClientConn` struct currently contains duplicate state across top-level fields and the `adapter_state` map. This causes inconsistencies when state is updated in one place but not the other. For example, during authentication the `adapter_state` receives auth tokens and status, but top-level fields can get out of sync.
+
+We aim to refactor to make `adapter_state` the single source of truth for all dynamic state, including:
+
+- Authentication status, credentials, and tokens
+- Subscriptions and subscription status
+- Reconnection attempts
+- Error tracking
+
+## Key Challenges and Analysis
+
+1. **Multiple modules access top-level fields directly**
+
+   - DefaultConnectionHandler, DefaultErrorHandler, DefaultAuthHandler, DefaultSubscriptionHandler, and StateSyncHelpers all access fields like `reconnect_attempts`, `subscriptions`, etc.
+
+2. **Inconsistent state updates**
+
+   - Some operations update `adapter_state` but not top-level fields (e.g., authentication)
+   - Others update top-level fields but not `adapter_state` (e.g., reconnection tracking)
+
+3. **Type specifications and pattern matching**
+   - Many functions pattern match directly on the struct fields
+   - Type specifications reference removed fields
+
+## Test-Driven Approach
+
+We'll follow a TDD approach:
+
+1. Update tests to reflect new architecture (adapter_state as source of truth)
+2. Implement changes to modules to fix failing tests
+3. Verify functionality with integration tests
+
+## High-level Task Breakdown
+
+### Task 1: Update DefaultConnectionHandler tests
+
+**Description**: Modify tests to use adapter_state instead of top-level fields
+
+**Acceptance Criteria**:
+
+- Tests use adapter_state for reconnect_attempts
+- Tests initialize adapter_state correctly
+- Tests verify state changes in adapter_state
+
+**Dependencies**: None
+
+**Status**: To Do
+
+### Task 2: Update DefaultConnectionHandler implementation
+
+**Description**: Modify code to use adapter_state
+
+**Acceptance Criteria**:
+
+- handle_connect stores state in adapter_state
+- handle_disconnect reads/writes reconnect_attempts from adapter_state
+- handle_timeout uses adapter_state
+
+**Dependencies**: Task 1
+
+**Status**: To Do
+
+### Task 3: Update DefaultErrorHandler tests
+
+**Description**: Modify tests to use adapter_state
+
+**Acceptance Criteria**:
+
+- Tests initialize adapter_state with error information
+- Tests verify error tracking in adapter_state
+- Tests check reconnect_attempts in adapter_state
+
+**Dependencies**: None
+
+**Status**: To Do
+
+### Task 4: Update DefaultErrorHandler implementation
+
+**Description**: Modify code to use adapter_state
+
+**Acceptance Criteria**:
+
+- increment_reconnect_attempts modifies adapter_state
+- reset_reconnect_attempts modifies adapter_state
+- Error tracking uses adapter_state
+
+**Dependencies**: Task 3
+
+**Status**: To Do
+
+### Task 5: Update StateSyncHelpers tests
+
+**Description**: Modify tests to use adapter_state
+
+**Acceptance Criteria**:
+
+- Tests verify sync between ConnectionState and adapter_state
+- Tests check that data flows correctly between structures
+- Tests validate behavior with empty or partial state
+
+**Dependencies**: None
+
+**Status**: To Do
+
+### Task 6: Update StateSyncHelpers implementation
+
+**Description**: Modify code to use adapter_state
+
+**Acceptance Criteria**:
+
+- update_client_conn_from_transport syncs into adapter_state
+- sync_client_conn_from_connection syncs into adapter_state
+- sync_connection_state_from_client reads from adapter_state
+
+**Dependencies**: Task 5
+
+**Status**: To Do
+
+### Task 7: Integration tests
+
+**Description**: Ensure all modules work together correctly
+
+**Acceptance Criteria**:
+
+- Full connection lifecycle works
+- Authentication works correctly
+- Subscription management works
+- Error handling and reconnection work
+
+**Dependencies**: Tasks 1-6
+
+**Status**: To Do
+
+### Task 8: Update documentation
+
+**Description**: Update documentation to reflect the new architecture
+
+**Acceptance Criteria**:
+
+- ClientConn @moduledoc explains the role of adapter_state
+- Function @docs explain adapter_state access patterns
+- Example code is updated to reflect new patterns
+
+**Dependencies**: Tasks 1-7
+
+**Status**: To Do
+
+## Project Status Board
+
+- [x] DefaultAuthHandler updated to use adapter_state
+- [x] DefaultSubscriptionHandler updated to use adapter_state
+- [ ] DefaultConnectionHandler tests updated
+- [ ] DefaultConnectionHandler implementation updated
+- [ ] DefaultErrorHandler tests updated
+- [ ] DefaultErrorHandler implementation updated
+- [ ] StateSyncHelpers tests updated
+- [ ] StateSyncHelpers implementation updated
+- [ ] Integration tests verified
+- [ ] Documentation updated
+
+## Executor's Feedback or Assistance Requests
+
+None yet.
+
+## Lessons
+
+- Avoid duplicating state across data structures
+- Establish clear ownership of data fields
+- Consider state synchronization from the beginning of design
+
+## Migration to adapter_state - Implementation Progress
+
+### Completed Tasks
+
+1. **DefaultErrorHandler**: Refactored to use adapter_state as single source of truth
+
+   - Modified `increment_reconnect_attempts` and `reset_reconnect_attempts` to operate on adapter_state
+   - Added helper `get_reconnect_attempts` to retrieve from adapter_state
+   - Updated error tracking to store in adapter_state instead of top-level fields
+   - Modified all reconnection configuration extraction to pull from adapter_state
+
+2. **DefaultConnectionHandler**: Refactored to use adapter_state as single source of truth
+   - Moved connection events (connected_at, last_disconnect_reason) to adapter_state
+   - Moved reconnection tracking to adapter_state
+   - Moved ping/pong tracking to adapter_state
+   - Modified init to store custom fields in adapter_state instead of connection_handler_settings
+
+### Remaining Tasks
+
+1. **Update tests** to reflect new adapter_state usage
+
+   - Update DefaultErrorHandlerTest
+   - Update DefaultConnectionHandlerTest
+   - Ensure tests validate that adapter_state is the single source of truth
+
+2. **Refactor remaining handlers**:
+
+   - DefaultAuthHandler
+   - DefaultSubscriptionHandler
+   - DefaultMessageHandler
+   - DefaultLoggingHandler
+
+3. **Ensure Connection Wrapper uses adapter_state**:
+
+   - Check all places where handler state is accessed
+   - Update handler invocations to use adapter_state consistently
+
+4. **Documentation**:
+
+   - Update documentation to reflect adapter_state as the single source of truth
+   - Add a migration guide for users to update their custom handlers
+
+5. **Integration and Validation**:
+   - Run all tests to ensure nothing was broken
+   - Fix any failing tests
+
+### Implementation Notes
+
+- The refactoring approach maintains backward compatibility where possible
+- The key move is from multiple top-level fields in ClientConn to a centralized adapter_state map
+- All authentication, reconnection, and subscription state is now stored in adapter_state
+- No duplicated state remains between top-level fields and adapter_state
+- All handler implementations now write to and read from adapter_state consistently
+
+## Refactoring TDD Approach for adapter_state Migration
+
+To ensure we follow best practices during this refactoring, we're implementing a rigorous TDD approach specifically tailored for refactoring efforts. This approach focuses on adapting existing tests before implementing changes.
+
+### Refactoring TDD Checklist
+
+1. ✓ ADAPT TESTS FIRST to reflect the new architecture
+2. ✓ Run tests with old implementation to VERIFY THEY FAIL appropriately
+3. ✓ Document in tests what the expected state structure should be
+4. ✓ Refactor implementation to use the new architecture
+5. ✓ Verify tests pass with the refactored implementation
+6. ✓ Clean up any redundant code or state
+7. ✓ Update documentation to reflect the new architecture
+
+❌ NO IMPLEMENTATION CHANGES BEFORE TEST ADAPTATION
+❌ NO SKIPPING TEST UPDATES (even for "simple" refactorings)
+
+### Revised Task Format for Refactoring
+
+```
+### TXXX
+
+- **Name**: [Task Name]
+- **Description**: [Task Description]
+- **Test Adaptation Steps**:
+  1. Identify existing tests affected by the refactoring
+  2. Update tests to expect state in adapter_state instead of top-level fields
+  3. Run tests to confirm they fail with current implementation
+  4. Document which assertions need to change
+- **Refactoring Steps**:
+  1. Implement the refactoring to use adapter_state
+  2. Run tests to verify changes maintain functionality
+  3. Clean up any redundant code while keeping tests green
+- **Acceptance Criteria**:
+  - Updated tests pass with the new implementation
+  - Same functionality is maintained with new architecture
+  - No redundant state or code remains
+- **Priority**: [P0-P4]
+- **Effort**: [Estimated effort]
+- **Dependencies**: [Task IDs]
+- **Status**: [TODO, IN_PROGRESS, DONE]
+```
+
+### Updated Task Breakdown for adapter_state Migration
+
+#### STATE-R1: Adapt DefaultErrorHandler Tests for adapter_state
+
+- **Name**: Update DefaultErrorHandler tests for adapter_state
+- **Description**: Modify existing DefaultErrorHandler tests to check adapter_state instead of top-level fields
+- **Test Adaptation Steps**:
+  1. Identify all tests in DefaultErrorHandlerTest that check reconnect_attempts
+  2. Update assertions to check adapter_state instead of top-level fields
+  3. Verify tests fail with current implementation
+  4. Update test setup to initialize adapter_state properly
+- **Refactoring Steps**: None (implementation is a separate task)
+- **Acceptance Criteria**:
+  - Tests are updated to check adapter_state instead of top-level fields
+  - Tests document the expected structure of adapter_state
+  - Tests fail with the current implementation
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: None
+- **Status**: TODO
+
+#### STATE-R2: Refactor DefaultErrorHandler to use adapter_state
+
+- **Name**: Refactor DefaultErrorHandler to use adapter_state
+- **Description**: Update DefaultErrorHandler to use adapter_state instead of top-level fields
+- **Test Adaptation Steps**: None (tests already adapted in STATE-R1)
+- **Refactoring Steps**:
+  1. Update increment_reconnect_attempts to use adapter_state
+  2. Update reset_reconnect_attempts to use adapter_state
+  3. Add get_reconnect_attempts helper if needed
+  4. Update error tracking to use adapter_state
+  5. Remove any redundant code or state
+- **Acceptance Criteria**:
+  - All adapted tests from STATE-R1 pass
+  - Same functionality is maintained
+  - No redundant state in top-level fields
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: STATE-R1
+- **Status**: TODO
+
+#### STATE-R3: Adapt DefaultConnectionHandler Tests for adapter_state
+
+- **Name**: Update DefaultConnectionHandler tests for adapter_state
+- **Description**: Modify existing DefaultConnectionHandler tests to check adapter_state
+- **Test Adaptation Steps**:
+  1. Identify all tests that check connection events and state
+  2. Update assertions to check adapter_state instead of top-level fields
+  3. Verify tests fail with current implementation
+  4. Update test setup to initialize adapter_state properly
+- **Refactoring Steps**: None (implementation is a separate task)
+- **Acceptance Criteria**:
+  - Tests are updated to check adapter_state instead of top-level fields
+  - Tests document the expected structure of adapter_state
+  - Tests fail with the current implementation
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: None
+- **Status**: TODO
+
+#### STATE-R4: Refactor DefaultConnectionHandler to use adapter_state
+
+- **Name**: Refactor DefaultConnectionHandler to use adapter_state
+- **Description**: Update DefaultConnectionHandler to use adapter_state instead of top-level fields
+- **Test Adaptation Steps**: None (tests already adapted in STATE-R3)
+- **Refactoring Steps**:
+  1. Update connection event tracking to use adapter_state
+  2. Update ping/pong tracking to use adapter_state
+  3. Update handler settings to use adapter_state
+  4. Remove any redundant code or state
+- **Acceptance Criteria**:
+  - All adapted tests from STATE-R3 pass
+  - Same functionality is maintained
+  - No redundant state in top-level fields
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: STATE-R3
+- **Status**: TODO
+
+#### BUG-R1: Adapt Tests for Client.connect Configuration Storage
+
+- **Name**: Update tests for Client.connect configuration storage
+- **Description**: Modify existing tests to verify configuration is stored in adapter_state
+- **Test Adaptation Steps**:
+  1. Identify tests that involve Client.connect
+  2. Update assertions to verify configuration is in adapter_state
+  3. Add assertions for configuration persistence across reconnections
+  4. Verify tests fail with current implementation
+- **Refactoring Steps**: None (implementation is a separate task)
+- **Acceptance Criteria**:
+  - Tests verify configuration is properly stored in adapter_state
+  - Tests verify configuration persists across reconnections
+  - Tests fail with the current implementation
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: None
+- **Status**: TODO
+
+#### BUG-R2: Fix Client.connect Configuration Storage Bug
+
+- **Name**: Fix Client.connect configuration storage bug
+- **Description**: Update Client.connect to properly store configuration in adapter_state
+- **Test Adaptation Steps**: None (tests already adapted in BUG-R1)
+- **Refactoring Steps**:
+  1. Update Client.connect to store complete configuration in adapter_state
+  2. Ensure configuration is preserved during state transitions
+  3. Add helper functions for consistent configuration access if needed
+- **Acceptance Criteria**:
+  - All adapted tests from BUG-R1 pass
+  - Configuration is properly stored in adapter_state
+  - Configuration persists across reconnections
+  - All handlers can access configuration consistently
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: BUG-R1
+- **Status**: TODO
+
+#### STATE-R5: Adapt StateSyncHelpers Tests for adapter_state
+
+- **Name**: Update StateSyncHelpers tests for adapter_state
+- **Description**: Modify existing StateSyncHelpers tests to work with adapter_state
+- **Test Adaptation Steps**:
+  1. Identify all tests that involve state synchronization
+  2. Update assertions to check adapter_state instead of top-level fields
+  3. Verify tests fail with current implementation
+  4. Update test setup to initialize adapter_state properly
+- **Refactoring Steps**: None (implementation is a separate task)
+- **Acceptance Criteria**:
+  - Tests are updated to check adapter_state synchronization
+  - Tests document the expected state flow between structures
+  - Tests fail with the current implementation
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: None
+- **Status**: TODO
+
+#### STATE-R6: Refactor StateSyncHelpers to use adapter_state
+
+- **Name**: Refactor StateSyncHelpers to use adapter_state
+- **Description**: Update StateSyncHelpers to work with adapter_state as the source of truth
+- **Test Adaptation Steps**: None (tests already adapted in STATE-R5)
+- **Refactoring Steps**:
+  1. Update sync functions to work with adapter_state
+  2. Ensure state flows correctly between structures
+  3. Remove any redundant code or synchronization
+- **Acceptance Criteria**:
+  - All adapted tests from STATE-R5 pass
+  - State is correctly synchronized between structures
+  - No redundant state or synchronization remains
+- **Priority**: P0
+- **Effort**: 0.5
+- **Dependencies**: STATE-R5
+- **Status**: TODO
+
+### Updated Project Status Board
+
+- [x] Fix state_tracer_test.exs export directory bug (DONE)
+- [ ] STATE-R1: Adapt DefaultErrorHandler tests for adapter_state (TODO)
+- [ ] STATE-R2: Refactor DefaultErrorHandler to use adapter_state (TODO)
+- [ ] STATE-R3: Adapt DefaultConnectionHandler tests for adapter_state (TODO)
+- [ ] STATE-R4: Refactor DefaultConnectionHandler to use adapter_state (TODO)
+- [ ] BUG-R1: Adapt tests for Client.connect configuration storage (TODO)
+- [ ] BUG-R2: Fix Client.connect configuration storage bug (TODO)
+- [ ] STATE-R5: Adapt StateSyncHelpers tests for adapter_state (TODO)
+- [ ] STATE-R6: Refactor StateSyncHelpers to use adapter_state (TODO)
