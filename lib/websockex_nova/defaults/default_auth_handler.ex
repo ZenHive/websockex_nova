@@ -43,37 +43,6 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   @default_auth_refresh_threshold 60
   @default_auth_timeout 3600
 
-  @doc """
-  Initializes the auth handler state.
-  Returns {:ok, %WebsockexNova.ClientConn{}} or {:error, reason, %WebsockexNova.ClientConn{}}
-  Any unknown fields are placed in auth_handler_settings.
-  """
-  @spec auth_init(map() | keyword()) ::
-          {:ok, WebsockexNova.ClientConn.t()} | {:error, atom() | String.t(), WebsockexNova.ClientConn.t()}
-  def auth_init(options) when is_map(options) or is_list(options) do
-    opts_map = if is_list(options), do: Map.new(options), else: options
-    # Split known fields and custom fields
-    known_keys = MapSet.new(Map.keys(%WebsockexNova.ClientConn{}))
-    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
-    known_map = Map.new(known)
-    custom_map = Map.new(custom)
-    # Build struct with defaults and provided options
-    conn = struct(WebsockexNova.ClientConn, known_map)
-
-    conn = %{
-      conn
-      | auth_status: Map.get(opts_map, :auth_status, :unauthenticated),
-        auth_refresh_threshold: Map.get(opts_map, :auth_refresh_threshold, 60),
-        auth_handler_settings: Map.merge(conn.auth_handler_settings || %{}, custom_map)
-    }
-
-    if has_valid_credentials?(conn) do
-      {:ok, conn}
-    else
-      {:error, :invalid_credentials, conn}
-    end
-  end
-
   @impl true
   def generate_auth_data(%WebsockexNova.ClientConn{} = conn) do
     with true <- has_valid_credentials?(conn),

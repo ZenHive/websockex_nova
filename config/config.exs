@@ -11,3 +11,5 @@ export_dir =
 config :websockex_nova, Deribit,
   client_id: System.fetch_env!("DERIBIT_CLIENT_ID"),
   client_secret: System.fetch_env!("DERIBIT_CLIENT_SECRET")
+
+config :websockex_nova, export_dir: export_dir

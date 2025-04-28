@@ -102,8 +102,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     def active_subscriptions(_state), do: []
     def find_subscription_by_channel(_channel, _state), do: nil
     def handle_subscription_response(_resp, state), do: {:ok, state}
-
-    def auth_init(opts), do: {:ok, opts}
   end
 
   defmodule TestSubscriptionHandler do
@@ -128,14 +126,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
   defmodule TestAuthHandler do
     @moduledoc false
     @behaviour AuthHandler
-
-    def auth_init(opts) do
-      if test_pid = Map.get(opts, :test_pid) do
-        send(test_pid, {:handler_init, opts})
-      end
-
-      {:ok, %{}}
-    end
 
     def generate_auth_data(state), do: {:ok, %{token: "t"}, state || %{}}
     def handle_auth_response(_resp, state), do: {:ok, state || %{}}

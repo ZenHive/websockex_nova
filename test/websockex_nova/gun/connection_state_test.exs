@@ -100,4 +100,44 @@ defmodule WebsockexNova.Gun.ConnectionStateTest do
       assert updated_state.active_streams == %{}
     end
   end
+
+  describe "state duplication and divergence (post-refactor)" do
+    test "options map does NOT contain session/auth/subscription state" do
+      options = %{
+        transport: :tls,
+        auth_status: :authenticated,
+        access_token: "token",
+        subscriptions: %{topic: "foo"},
+        adapter_state: %{foo: :bar}
+      }
+
+      state = ConnectionState.new("example.com", 443, options)
+      # These should NOT be present in options after refactor
+      refute Map.has_key?(state.options, :auth_status)
+      refute Map.has_key?(state.options, :access_token)
+      refute Map.has_key?(state.options, :subscriptions)
+      refute Map.has_key?(state.options, :adapter_state)
+      # Only transport config keys should be present
+      assert Map.has_key?(state.options, :transport)
+    end
+
+    test "session/auth state cannot diverge between ClientConn and ConnectionState.options" do
+      options = %{
+        transport: :tls,
+        auth_status: :unauthenticated,
+        access_token: nil
+      }
+
+      state = ConnectionState.new("example.com", 443, options)
+
+      _client_conn = %WebsockexNova.ClientConn{
+        auth_status: :authenticated,
+        access_token: "token"
+      }
+
+      # There is no session/auth state in options, so no divergence is possible
+      refute Map.has_key?(state.options, :auth_status)
+      refute Map.has_key?(state.options, :access_token)
+    end
+  end
 end

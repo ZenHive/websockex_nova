@@ -99,7 +99,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
   * `host` - The hostname to connect to
   * `port` - The port to connect to
-  * `options` - Connection options
+  * `options` - Connection options (only transport configuration is stored)
 
   ## Returns
 
@@ -107,6 +107,8 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec new(String.t(), non_neg_integer(), map()) :: t()
   def new(host, port, options) do
+    transport_options = filter_transport_options(options)
+
     %__MODULE__{
       # Gun/transport state
       gun_pid: nil,
@@ -115,20 +117,40 @@ defmodule WebsockexNova.Gun.ConnectionState do
       # Connection configuration
       host: host,
       port: port,
-      transport: Map.get(options, :transport, :tcp),
-      path: Map.get(options, :path, "/ws"),
-      ws_opts: Map.get(options, :ws_opts, %{}),
+      transport: Map.get(transport_options, :transport, :tcp),
+      path: Map.get(transport_options, :path, "/ws"),
+      ws_opts: Map.get(transport_options, :ws_opts, %{}),
 
       # Local process state
       status: :initialized,
-      options: options,
-      callback_pid: Map.get(options, :callback_pid),
+      options: transport_options,
+      callback_pid: Map.get(transport_options, :callback_pid),
       active_streams: %{},
       last_error: nil,
 
       # Handler module references
-      handlers: extract_handler_modules(options)
+      handlers: extract_handler_modules(transport_options)
     }
+  end
+
+  # Only allow transport config keys in options
+  @transport_option_keys [
+    :host,
+    :port,
+    :transport,
+    :path,
+    :ws_opts,
+    :protocols,
+    :transport_opts,
+    :retry,
+    :backoff_type,
+    :base_backoff,
+    :callback_pid,
+    :headers,
+    :rate_limiter
+  ]
+  defp filter_transport_options(options) do
+    Map.take(options, @transport_option_keys)
   end
 
   # Extract only handler module names from options, not their state
@@ -178,8 +200,16 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct
   """
   @spec setup_connection_handler(t(), module(), map()) :: t()
-  def setup_connection_handler(state, connection_handler, _options) do
-    update_handler(state, :connection_handler, connection_handler)
+  def setup_connection_handler(state, connection_handler, options) do
+    {_, handler_state} =
+      case connection_handler.init(options) do
+        {:ok, handler_state} -> {:ok, handler_state}
+        other -> {other, %{}}
+      end
+
+    state
+    |> update_handler(:connection_handler, connection_handler)
+    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :connection_handler_state, handler_state)} end)
   end
 
   @doc """
@@ -232,8 +262,16 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct
   """
   @spec setup_subscription_handler(t(), module(), map()) :: t()
-  def setup_subscription_handler(state, subscription_handler, _options) do
-    update_handler(state, :subscription_handler, subscription_handler)
+  def setup_subscription_handler(state, subscription_handler, options) do
+    {_, handler_state} =
+      case subscription_handler.subscription_init(options) do
+        {:ok, handler_state} -> {:ok, handler_state}
+        other -> {other, %{}}
+      end
+
+    state
+    |> update_handler(:subscription_handler, subscription_handler)
+    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :subscription_handler_state, handler_state)} end)
   end
 
   @doc """
@@ -251,7 +289,11 @@ defmodule WebsockexNova.Gun.ConnectionState do
   """
   @spec setup_auth_handler(t(), module(), map()) :: t()
   def setup_auth_handler(state, auth_handler, _options) do
-    update_handler(state, :auth_handler, auth_handler)
+    handler_state = %{}
+
+    state
+    |> update_handler(:auth_handler, auth_handler)
+    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :auth_handler_state, handler_state)} end)
   end
 
   @doc """

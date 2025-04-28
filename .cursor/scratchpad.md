@@ -1142,6 +1142,47 @@ Tasks follow this format:
 - **Dependencies**: None
 - **Status**: TODO
 
+## Deribit Reconnection Bug & Unhandled Gun Messages (2024-06-09)
+
+### Background and Motivation
+
+- During an IEx session connected to Deribit, the connection was dropped (likely network/server event).
+- Reconnection did not work as expected.
+- Repeated warnings appeared: `[warning] Unhandled message in ConnectionWrapper: {:gun_down, ...}` and `{:gun_up, ...}`.
+- This indicates that old Gun processes (from previous connections) are still sending events, and the ConnectionWrapper is not handling them gracefully.
+
+### Key Challenges and Analysis
+
+- The ConnectionWrapper only handles Gun messages from the current `gun_pid`. Messages from stale Gun PIDs are logged as unhandled.
+- After a disconnect, a new Gun connection is started, but old Gun processes may still emit events.
+- If the state machine or error handler does not properly transition to `:reconnecting` and then to `:connected`, reconnection may not occur.
+- If the error handler's `should_reconnect?/3` returns `{false, _}`, reconnection will not be attempted.
+
+### High-level Task Breakdown
+
+- **ID:** CW1
+- **Name:** Investigate and Fix Unhandled Gun Lifecycle Messages & Reconnection
+- **Description:** Ensure that all `:gun_up` and `:gun_down` messages are handled appropriately in the `ConnectionWrapper`, preventing log spam and ensuring correct reconnection logic.
+- **Acceptance Criteria:**
+  - No repeated "Unhandled message in ConnectionWrapper" warnings for `:gun_up` or `:gun_down`.
+  - All Gun lifecycle messages are handled gracefully, even if they are late or from stale PIDs.
+  - Reconnection works reliably after a dropped connection.
+  - No negative impact on connection state logic.
+- **Priority:** P1
+- **Effort:** 1
+- **Dependencies:** None
+- **Status:** TODO
+
+#### Subtasks Checklist
+
+- [ ] Review all `handle_info` and Gun message handling code in `ConnectionWrapper`.
+- [ ] Add pattern matches to ignore or gracefully handle messages from stale Gun PIDs.
+- [ ] Audit reconnection logic and error handler configuration.
+- [ ] Add tests for late/duplicate Gun lifecycle messages and reconnection.
+- [ ] Ensure no log spam and correct connection state transitions.
+
+---
+
 ## STATE Task Status Update (Planner Review, 2024-06-09)
 
 ### Summary Table
@@ -1240,5 +1281,119 @@ This update reflects the current codebase status as of 2024-06-09, based on a Pl
 > - Write or update tests before implementing or refactoring code.
 > - Acceptance criteria must be testable and covered by automated tests.
 > - For refactors, add failing tests that demonstrate the current problem, then implement the fix, and finally ensure all tests pass.
+
+---
+
+## STATE Task: Fix Test Failures After STATE Refactor (2024-06-09)
+
+### Description
+
+Audit and fix all test failures and warnings resulting from the STATE refactor, ensuring that all state boundaries and invariants are enforced and that all tests pass.
+
+### Acceptance Criteria
+
+- All tests in `test/websockex_nova/gun/` pass.
+- No session/auth/subscription state is present in `ConnectionState.options`.
+- All handler modules and state are correctly initialized and invoked.
+- All warnings about missing behavior callbacks are resolved.
+- All error handling and state transitions are correct and covered by tests.
+
+### Dependencies
+
+- STATE003, STATE004 (structural refactor and helpers)
+- STATE007 (tests for state consistency)
+
+### Subtasks Checklist
+
+- [x] **Fix `state_tracer_test.exs` export directory bug** _(DONE)_
+  - Ensure the export directory is set and not `nil` before calling `File.mkdir_p!`.
+  - Add a test for missing/misconfigured export directory.
+- [ ] **Fix handler delegation test failures**
+  - Investigate why `assert_receive {:handler_init, _opts}` is not receiving messages.
+  - Ensure handler modules are correctly initialized and invoked after the state refactor.
+  - Update test setup if necessary to match new state boundaries.
+- [ ] **Fix rate limiting test**
+  - Investigate why `:ok` is returned instead of `{:error, :test_rejection}`.
+  - Ensure rate limiter is correctly integrated with the new state structure.
+- [ ] **Resolve warnings about missing behavior callbacks**
+  - Implement required callbacks in test modules or use `@behaviour` stubs.
+- [ ] **Audit all usages of `ConnectionState.options`**
+  - Ensure only transport config is present.
+  - Update any code/tests that expect session/auth/subscription state in `options`.
+- [ ] **Update and expand tests**
+  - Ensure all state invariants are tested.
+  - Add/expand tests for state transitions, handler initialization, and error handling.
+
+---
+
+## Project Status Board
+
+- [x] Fix state_tracer_test.exs export directory bug (DONE)
+- [ ] Fix handler delegation test failures (TODO)
+- [x] Fix rate limiting test (RL1) (DONE)
+- [ ] Resolve warnings about missing behavior callbacks (TODO)
+- [ ] Audit all usages of ConnectionState.options (TODO)
+- [ ] Update and expand tests (TODO)
+
+---
+
+## Lessons
+
+- Always set required Application config keys (like :export_dir) in config files for tests that depend on them. Missing config can cause nil errors and failing tests.
+- When passing per-connection or test-specific options (like :rate_limiter) to a process, ensure they are not filtered out by option sanitization functions. Only whitelisting transport options can break dynamic/testable behaviors. Fixing this for :rate_limiter resolved a subtle test bug.
+
+---
+
+## Rate Limiter Test Failure Investigation (2024-06-09)
+
+### Background and Motivation
+
+A test in `test/websockex_nova/gun/connection_wrapper_test.exs` (line 623) is failing. The test expects the rate limiter to reject a frame when the handler is set to `:always_reject` mode, returning `{:error, :test_rejection}`. However, the actual result is `:ok`, indicating the frame was sent instead of being rejected. This suggests a disconnect between the rate limiter handler's configuration and the result returned to the caller.
+
+The rate limiting system consists of two main parts:
+
+- The `RateLimiting` GenServer, which manages state, timers, and delegates logic to a handler.
+- The handler module (e.g., `DefaultRateLimitHandler`, `TestHandler`), which implements the actual rate limiting logic and is pluggable for different behaviors.
+
+### Key Challenges and Analysis
+
+- Ensuring the correct handler and mode are used in the test context.
+- Verifying that the handler's return value (especially `:always_reject`) is correctly propagated through the GenServer and back to the caller.
+- Tracing the flow from `ConnectionWrapper.send_frame/3` through the rate limiter to the handler, confirming that the handler's result is respected.
+- Ensuring the test is not bypassing the rate limiter or using a default handler unintentionally.
+
+### High-level Task Breakdown
+
+- **ID**: RL1
+- **Name**: Investigate and Fix Rate Limiter Test Failure
+- **Description**: Ensure that when the rate limiter handler is set to `:always_reject`, sending a frame results in `{:error, :test_rejection}` as expected by the test.
+- **Acceptance Criteria**:
+  - The test at `connection_wrapper_test.exs:623` passes, returning `{:error, :test_rejection}` when the handler is in `:always_reject` mode.
+  - The correct handler and mode are used in the test setup.
+  - The handler's result is correctly propagated through all layers.
+  - No regression in other rate limiting tests.
+- **Priority**: P0
+- **Effort**: 1
+- **Dependencies**: STATE003, STATE004 (structural refactor and helpers)
+- **Status**: TODO
+
+#### Subtasks Checklist
+
+- [ ] Confirm the handler and mode in the test setup.
+- [ ] Trace the call flow from `send_frame/3` to the handler and back.
+- [ ] Add or review a test for the expected rejection behavior.
+- [ ] Fix the implementation if the handler's result is not being propagated.
+- [ ] Ensure all rate limiting tests pass.
+
+---
+
+## Project Status Board (updated)
+
+- [x] Fix state_tracer_test.exs export directory bug (DONE)
+- [ ] Fix handler delegation test failures (TODO)
+- [x] Fix rate limiting test (RL1) (DONE)
+- [ ] Resolve warnings about missing behavior callbacks (TODO)
+- [ ] Audit all usages of ConnectionState.options (TODO)
+- [ ] Update and expand tests (TODO)
 
 ---

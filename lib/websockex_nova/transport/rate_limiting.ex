@@ -190,6 +190,14 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
   @impl true
   def init(opts) do
+    # Normalize opts to keyword list for consistent merging
+    opts =
+      cond do
+        is_map(opts) -> Map.to_list(opts)
+        is_list(opts) -> opts
+        true -> []
+      end
+
     # Extract options with defaults
     handler_module = get_handler_module(opts)
     handler_opts = get_handler_opts(opts)
@@ -328,6 +336,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
         Keyword.merge(handler_opts, opts_to_pass)
       end
 
+    Logger.debug("[RateLimiting] Final handler_opts passed to handler: #{inspect(handler_opts)}")
     handler_opts
   end
 

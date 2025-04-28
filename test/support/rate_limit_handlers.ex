@@ -6,6 +6,8 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
 
   alias WebsockexNova.Behaviors.RateLimitHandler
 
+  require Logger
+
   defmodule TestHandler do
     @moduledoc false
     @behaviour RateLimitHandler
@@ -28,6 +30,10 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
 
     @impl true
     def check_rate_limit(request, state) do
+      Logger.debug(
+        "[TestHandler] check_rate_limit called with mode: #{inspect(state.mode)} and request: #{inspect(request)}"
+      )
+
       case state.mode do
         :always_allow ->
           {:allow, state}

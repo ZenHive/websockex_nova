@@ -430,7 +430,6 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
 
       def init(opts), do: {:ok, opts}
       def subscription_init(opts), do: {:ok, opts}
-      def auth_init(opts), do: {:ok, opts}
     end
 
     test "invokes custom callback handler", %{port: port} do

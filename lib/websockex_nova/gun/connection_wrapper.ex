@@ -1008,28 +1008,39 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   # Private helper functions
 
+  # Only allow transport config keys in handler options
+  @transport_option_keys [
+    :host,
+    :port,
+    :transport,
+    :path,
+    :ws_opts,
+    :protocols,
+    :transport_opts,
+    :retry,
+    :backoff_type,
+    :base_backoff,
+    :callback_pid,
+    :headers
+  ]
+  defp filter_transport_options(options) do
+    Map.take(options, @transport_option_keys)
+  end
+
   defp initialize_connection_handler(state, options) do
     case Map.get(options, :callback_handler) do
       nil ->
         state
 
       handler_module when is_atom(handler_module) ->
-        # Always include :test_pid if present in options
         handler_options =
           options
-          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+          |> filter_transport_options()
           |> Map.put(:connection_wrapper_pid, self())
           |> maybe_put_test_pid(options)
 
         Logger.debug("[init_conn_handler] handler_options: #{inspect(handler_options)}")
         ConnectionState.setup_connection_handler(state, handler_module, handler_options)
-    end
-  end
-
-  defp maybe_put_test_pid(opts, original_opts) do
-    case Map.get(original_opts, :test_pid) do
-      nil -> opts
-      test_pid -> Map.put(opts, :test_pid, test_pid)
     end
   end
 
@@ -1039,7 +1050,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if handler_module do
       handler_options =
         options
-        |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+        |> filter_transport_options()
         |> Map.put(:connection_wrapper_pid, self())
 
       ConnectionState.setup_subscription_handler(state, handler_module, handler_options)
@@ -1054,7 +1065,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if handler_module do
       handler_options =
         options
-        |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+        |> filter_transport_options()
         |> Map.put(:connection_wrapper_pid, self())
 
       ConnectionState.setup_auth_handler(state, handler_module, handler_options)
@@ -1071,7 +1082,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       handler_module when is_atom(handler_module) ->
         handler_options =
           options
-          |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+          |> filter_transport_options()
           |> Map.put(:connection_wrapper_pid, self())
 
         ConnectionState.setup_message_handler(state, handler_module, handler_options)
@@ -1087,7 +1098,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
     handler_options =
       options
-      |> Map.drop([:transport, :transport_opts, :protocols, :retry, :ws_opts])
+      |> filter_transport_options()
       |> Map.put(:connection_wrapper_pid, self())
 
     ConnectionState.setup_error_handler(state, handler_module, handler_options)
@@ -1447,6 +1458,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       _other ->
         GenServer.stop(pid)
         {:error, :connection_failed}
+    end
+  end
+
+  defp maybe_put_test_pid(opts, original_opts) do
+    case Map.get(original_opts, :test_pid) do
+      nil -> opts
+      test_pid -> Map.put(opts, :test_pid, test_pid)
     end
   end
 end

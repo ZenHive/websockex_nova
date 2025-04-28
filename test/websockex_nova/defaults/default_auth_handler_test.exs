@@ -4,68 +4,6 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandlerTest do
   alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultAuthHandler
 
-  describe "DefaultAuthHandler.auth_init/1" do
-    test "initializes with valid credentials" do
-      options = %{
-        credentials: %{
-          api_key: "test_key",
-          secret: "test_secret"
-        }
-      }
-
-      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
-      assert state.auth_status == :unauthenticated
-      assert state.auth_refresh_threshold == 60
-    end
-
-    test "initializes with valid token credentials" do
-      options = %{
-        credentials: %{
-          token: "valid_token"
-        }
-      }
-
-      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
-      assert state.auth_status == :unauthenticated
-    end
-
-    test "fails initialization with invalid credentials" do
-      options = %{
-        credentials: %{
-          # Missing secret
-          api_key: "test_key"
-        }
-      }
-
-      assert {:error, :invalid_credentials, state} = DefaultAuthHandler.auth_init(options)
-      assert state.auth_status == :unauthenticated
-    end
-
-    test "fails initialization with empty credentials" do
-      options = %{
-        credentials: %{
-          api_key: "",
-          secret: ""
-        }
-      }
-
-      assert {:error, :invalid_credentials, state} = DefaultAuthHandler.auth_init(options)
-      assert state.auth_status == :unauthenticated
-    end
-
-    test "accepts list options" do
-      options = [
-        credentials: %{
-          api_key: "test_key",
-          secret: "test_secret"
-        }
-      ]
-
-      assert {:ok, state} = DefaultAuthHandler.auth_init(options)
-      assert state.auth_status == :unauthenticated
-    end
-  end
-
   describe "DefaultAuthHandler.generate_auth_data/1" do
     test "generates auth data with API key and secret" do
       state = %ClientConn{
