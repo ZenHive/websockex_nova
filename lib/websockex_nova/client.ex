@@ -254,7 +254,20 @@ defmodule WebsockexNova.Client do
       # Ensure callback_pid is set so we get connection notifications
       transport_opts = Map.put(transport_opts, :callback_pid, self())
       transport_opts = Map.put(transport_opts, :adapter, adapter)
-      transport_opts = Map.put(transport_opts, :adapter_state, adapter_state)
+
+      # Initialize adapter_state with important values from connection_info
+      enhanced_adapter_state =
+        adapter_state
+        |> Map.put(:auth_status, Map.get(connection_info, :auth_status, :unauthenticated))
+        |> Map.put(:credentials, Map.get(connection_info, :credentials))
+        |> Map.put(:subscriptions, Map.get(connection_info, :subscriptions, %{}))
+        |> Map.put(:reconnect_attempts, Map.get(connection_info, :reconnect_attempts, 0))
+        |> Map.put(:subscription_timeout, Map.get(connection_info, :subscription_timeout))
+        |> Map.put(:auth_refresh_threshold, Map.get(connection_info, :auth_refresh_threshold))
+        |> Map.put(:auth_expires_at, Map.get(connection_info, :auth_expires_at))
+        |> Map.put(:last_error, Map.get(connection_info, :last_error))
+
+      transport_opts = Map.put(transport_opts, :adapter_state, enhanced_adapter_state)
 
       # Merge all connection_info (adapter + user) with transport_opts (handlers etc)
       full_opts = Map.merge(connection_info, transport_opts)
@@ -269,8 +282,43 @@ defmodule WebsockexNova.Client do
 
       case transport().open(host, port, path, full_opts) do
         {:ok, conn} ->
-          Logger.debug("[Client.connect] Connection established: #{inspect(conn)}")
-          {:ok, conn}
+          # Handle callback_pids correctly - could be a list, MapSet, or nil
+          callback_pids =
+            case conn.callback_pids do
+              nil -> MapSet.new([self()])
+              pids when is_list(pids) -> MapSet.new(pids ++ [self()])
+              %MapSet{} = pids -> MapSet.put(pids, self())
+              _ -> MapSet.new([self()])
+            end
+
+          # Prepare configuration maps from connection_info
+          rate_limit = Map.get(connection_info, :rate_limit_opts, %{})
+
+          logging = %{
+            level: Map.get(connection_info, :log_level, :info),
+            format: Map.get(connection_info, :log_format, :plain)
+          }
+
+          reconnection = %{
+            max_reconnect_attempts: Map.get(connection_info, :max_reconnect_attempts, 5),
+            retry: Map.get(connection_info, :retry, 0),
+            backoff_type: Map.get(connection_info, :backoff_type, :linear),
+            base_backoff: Map.get(connection_info, :base_backoff, 1000)
+          }
+
+          enriched_conn = %{
+            conn
+            | connection_info: connection_info,
+              adapter: adapter,
+              adapter_state: enhanced_adapter_state,
+              callback_pids: callback_pids,
+              rate_limit: rate_limit,
+              logging: logging,
+              reconnection: reconnection
+          }
+
+          Logger.debug("[Client.connect] Connection established: #{inspect(enriched_conn)}")
+          {:ok, enriched_conn}
 
         {:error, reason} ->
           Logger.error("WebSocket connection failed: #{inspect(reason)}")
@@ -568,16 +616,36 @@ defmodule WebsockexNova.Client do
   """
   @spec register_callback(ClientConn.t(), pid()) :: {:ok, ClientConn.t()}
   def register_callback(%ClientConn{} = conn, pid) when is_pid(pid) do
-    if pid in conn.callback_pids do
-      {:ok, conn}
-    else
-      new_conn = %{conn | callback_pids: [pid | conn.callback_pids]}
+    new_callback_pids =
+      if is_nil(conn.callback_pids) do
+        MapSet.new([pid])
+      else
+        case conn.callback_pids do
+          %MapSet{} = pids ->
+            if MapSet.member?(pids, pid) do
+              pids
+            else
+              MapSet.put(pids, pid)
+            end
 
-      # Notify the transport to monitor this process
-      GenServer.cast(conn.transport_pid, {:register_callback, pid})
+          pids when is_list(pids) ->
+            if pid in pids do
+              MapSet.new(pids)
+            else
+              MapSet.new([pid | pids])
+            end
 
-      {:ok, new_conn}
-    end
+          _ ->
+            MapSet.new([pid])
+        end
+      end
+
+    new_conn = %{conn | callback_pids: new_callback_pids}
+
+    # Notify the transport to monitor this process
+    GenServer.cast(conn.transport_pid, {:register_callback, pid})
+
+    {:ok, new_conn}
   end
 
   @doc """
@@ -594,16 +662,32 @@ defmodule WebsockexNova.Client do
   """
   @spec unregister_callback(ClientConn.t(), pid()) :: {:ok, ClientConn.t()}
   def unregister_callback(%ClientConn{} = conn, pid) when is_pid(pid) do
-    if pid in conn.callback_pids do
-      new_conn = %{conn | callback_pids: List.delete(conn.callback_pids, pid)}
+    new_callback_pids =
+      case conn.callback_pids do
+        %MapSet{} = pids ->
+          if MapSet.member?(pids, pid) do
+            MapSet.delete(pids, pid)
+          else
+            pids
+          end
 
-      # Notify the transport to stop monitoring this process
-      GenServer.cast(conn.transport_pid, {:unregister_callback, pid})
+        pids when is_list(pids) ->
+          if pid in pids do
+            MapSet.new(List.delete(pids, pid))
+          else
+            MapSet.new(pids)
+          end
 
-      {:ok, new_conn}
-    else
-      {:ok, conn}
-    end
+        _ ->
+          MapSet.new()
+      end
+
+    new_conn = %{conn | callback_pids: new_callback_pids}
+
+    # Notify the transport to stop monitoring this process
+    GenServer.cast(conn.transport_pid, {:unregister_callback, pid})
+
+    {:ok, new_conn}
   end
 
   # Private helpers

@@ -2,81 +2,73 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @moduledoc """
   Default implementation of the SubscriptionHandler behavior.
 
-  This module provides a standard implementation of subscription management
-  with reasonable defaults. It supports:
+  This module provides sensible default implementations for all SubscriptionHandler
+  callbacks, enabling applications to subscribe to data streams via WebSocket.
 
-  * Simple subscription tracking with status management
-  * Channel-based subscription lookup
-  * Standard handling of subscription responses
-  * Automatic confirmation management
-  * Subscription timeout detection and cleanup
-  * Detailed status tracking
+  ## Features
+
+  * Subscription management with unique IDs
+  * Automatic subscription status tracking
+  * Automatic timeout detection for pending subscriptions
+  * Methods to find and filter active subscriptions
 
   ## Usage
 
-  You can use this module directly:
+  You can use this module directly or as a starting point for your own implementation:
 
-  ```elixir
-  alias WebsockexNova.Message.SubscriptionManager
-  alias WebsockexNova.Defaults.DefaultSubscriptionHandler
+      defmodule MyApp.CustomSubscriptionHandler do
+        use WebsockexNova.Defaults.DefaultSubscriptionHandler
 
-  {:ok, manager} = SubscriptionManager.new(DefaultSubscriptionHandler)
-  ```
-
-  Or extend it with your own implementations:
-
-  ```elixir
-  defmodule MyApp.CustomSubscriptionHandler do
-    @behaviour WebsockexNova.Behaviors.SubscriptionHandler
-
-    # Use the default implementation for most callbacks
-    defdelegate subscribe(channel, params, state), to: WebsockexNova.Defaults.DefaultSubscriptionHandler
-    defdelegate unsubscribe(subscription_id, state), to: WebsockexNova.Defaults.DefaultSubscriptionHandler
-    defdelegate active_subscriptions(state), to: WebsockexNova.Defaults.DefaultSubscriptionHandler
-    defdelegate find_subscription_by_channel(channel, state), to: WebsockexNova.Defaults.DefaultSubscriptionHandler
-
-    # Customize just the response handling to match your platform's message format
-    def handle_subscription_response(%{"type" => "subscription_update", "status" => "active", "subscription_id" => id}, state) do
-      # Custom handling for your platform's subscription confirmation format
-      updated_state = update_in(state, [:subscriptions, id], fn sub ->
-        if sub, do: Map.put(sub, :status, :confirmed), else: sub
-      end)
-
-      {:ok, updated_state}
-    end
-
-    def handle_subscription_response(response, state) do
-      # Fall back to default for other types of messages
-      WebsockexNova.Defaults.DefaultSubscriptionHandler.handle_subscription_response(response, state)
-    end
-  end
+        # Override specific callbacks as needed
+        def subscribe(channel, params, conn) do
+          # Custom subscription logic
+          # ...
+        end
+      end
   """
 
   @behaviour WebsockexNova.Behaviors.SubscriptionHandler
 
-  alias WebsockexNova.Behaviors.SubscriptionHandler
-
   require Logger
 
-  # Type aliases for improved readability
-  @type subscription_id :: SubscriptionHandler.subscription_id()
-  @type channel :: SubscriptionHandler.channel()
-  @type params :: SubscriptionHandler.params()
-  @type state :: SubscriptionHandler.state()
-  @type subscription_response :: SubscriptionHandler.subscription_response()
+  @logger_prefix "[DefaultSubscriptionHandler]"
 
-  # Subscription status values
+  @default_subscription_timeout 30
+
+  # Subscription status constants
   @subscription_status_pending :pending
   @subscription_status_confirmed :confirmed
   @subscription_status_failed :failed
-  @subscription_status_timeout :timeout
   @subscription_status_unsubscribed :unsubscribed
+  @subscription_status_expired :expired
 
-  # Default subscription timeout in seconds
-  @default_subscription_timeout 30
-  @logger_prefix "[SubscriptionHandler]"
+  @typedoc "A unique identifier for a subscription"
+  @type subscription_id :: String.t()
 
-  @impl true
+  @typedoc "A channel or topic to subscribe to"
+  @type channel :: String.t()
+
+  @typedoc "Parameters for the subscription"
+  @type params :: map()
+
+  @typedoc "Response from a subscription request"
+  @type subscription_response :: map()
+
+  @typedoc "State - either a ClientConn struct or any map with subscription-related fields"
+  @type state :: WebsockexNova.ClientConn.t() | map()
+
+  @doc """
+  Initializes a subscription handler.
+
+  ## Parameters
+
+  * `opts` - Options for initializing the subscription handler (optional)
+
+  ## Returns
+
+  * `{:ok, conn}` - Initial state with subscription handler settings
+  """
+  @spec subscription_init(map() | Keyword.t()) :: {:ok, WebsockexNova.ClientConn.t()}
   def subscription_init(opts \\ %{}) do
     opts_map = Map.new(opts)
     # Split known fields and custom fields
@@ -86,10 +78,17 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
     custom_map = Map.new(custom)
     conn = struct(WebsockexNova.ClientConn, known_map)
 
+    # Initialize adapter_state with subscriptions
+    adapter_state = Map.get(conn, :adapter_state, %{})
+
+    updated_adapter_state =
+      adapter_state
+      |> Map.put(:subscriptions, Map.get(opts_map, :subscriptions, %{}))
+      |> Map.put(:subscription_timeout, Map.get(opts_map, :subscription_timeout, @default_subscription_timeout))
+
     conn = %{
       conn
-      | subscriptions: Map.get(opts_map, :subscriptions, %{}),
-        subscription_timeout: Map.get(opts_map, :subscription_timeout, @default_subscription_timeout),
+      | adapter_state: updated_adapter_state,
         subscription_handler_settings: Map.merge(conn.subscription_handler_settings || %{}, custom_map)
     }
 
@@ -101,7 +100,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @spec subscribe(channel(), params(), WebsockexNova.ClientConn.t()) ::
           {:ok, subscription_id(), WebsockexNova.ClientConn.t()}
           | {:error, term(), WebsockexNova.ClientConn.t()}
-  def subscribe(channel, params, %WebsockexNova.ClientConn{} = conn) do
+  def subscribe(channel, params, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     subscription_id = "sub_#{System.unique_integer([:positive, :monotonic])}"
     Logger.debug("#{@logger_prefix} Subscribing to channel: #{inspect(channel)} with ID: #{subscription_id}")
 
@@ -115,8 +114,12 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
       history: [{@subscription_status_pending, System.system_time(:second)}]
     }
 
-    updated_subscriptions = Map.put(conn.subscriptions, subscription_id, subscription)
-    updated_conn = %{conn | subscriptions: updated_subscriptions}
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
+    updated_subscriptions = Map.put(subscriptions, subscription_id, subscription)
+
+    updated_adapter_state = Map.put(adapter_state, :subscriptions, updated_subscriptions)
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
+
     clean_conn = check_subscription_timeouts(updated_conn)
     {:ok, subscription_id, clean_conn}
   end
@@ -125,8 +128,8 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   @spec unsubscribe(subscription_id(), WebsockexNova.ClientConn.t()) ::
           {:ok, WebsockexNova.ClientConn.t()}
           | {:error, term(), WebsockexNova.ClientConn.t()}
-  def unsubscribe(subscription_id, %WebsockexNova.ClientConn{} = conn) do
-    subscriptions = conn.subscriptions
+  def unsubscribe(subscription_id, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
 
     if Map.has_key?(subscriptions, subscription_id) do
       Logger.debug("#{@logger_prefix} Unsubscribing from: #{subscription_id}")
@@ -141,7 +144,9 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
         end)
 
       updated_subscriptions = Map.put(subscriptions, subscription_id, updated_subscription)
-      updated_conn = %{conn | subscriptions: updated_subscriptions}
+      updated_adapter_state = Map.put(adapter_state, :subscriptions, updated_subscriptions)
+      updated_conn = %{conn | adapter_state: updated_adapter_state}
+
       {:ok, updated_conn}
     else
       Logger.warning("#{@logger_prefix} Subscription not found for unsubscribe: #{subscription_id}")
@@ -180,16 +185,20 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
 
   @impl true
   @spec active_subscriptions(WebsockexNova.ClientConn.t()) :: %{subscription_id() => term()}
-  def active_subscriptions(%WebsockexNova.ClientConn{} = conn) do
-    conn.subscriptions
+  def active_subscriptions(%WebsockexNova.ClientConn{adapter_state: adapter_state}) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
+
+    subscriptions
     |> Enum.filter(fn {_id, sub} -> Map.get(sub, :status) == @subscription_status_confirmed end)
     |> Map.new()
   end
 
   @impl true
   @spec find_subscription_by_channel(channel(), WebsockexNova.ClientConn.t()) :: subscription_id() | nil
-  def find_subscription_by_channel(channel, %WebsockexNova.ClientConn{} = conn) do
-    Enum.find_value(conn.subscriptions, nil, fn {id, sub} ->
+  def find_subscription_by_channel(channel, %WebsockexNova.ClientConn{adapter_state: adapter_state}) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
+
+    Enum.find_value(subscriptions, nil, fn {id, sub} ->
       if sub.channel == channel and sub.status == @subscription_status_confirmed, do: id
     end)
   end
@@ -200,7 +209,15 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   Find all subscriptions with a specific status.
   """
   @spec find_subscriptions_by_status(atom(), state()) :: %{subscription_id() => term()}
-  def find_subscriptions_by_status(status, state) do
+  def find_subscriptions_by_status(status, %WebsockexNova.ClientConn{adapter_state: adapter_state}) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
+
+    subscriptions
+    |> Enum.filter(fn {_id, sub} -> Map.get(sub, :status) == status end)
+    |> Map.new()
+  end
+
+  def find_subscriptions_by_status(status, state) when is_map(state) do
     subscriptions = Map.get(state, :subscriptions, %{})
 
     subscriptions
@@ -219,8 +236,8 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   # Private helper functions
 
   @spec handle_subscription_confirmation(subscription_id(), state()) :: {:ok, state()}
-  defp handle_subscription_confirmation(subscription_id, %WebsockexNova.ClientConn{} = conn) do
-    subscriptions = conn.subscriptions
+  defp handle_subscription_confirmation(subscription_id, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
 
     if Map.has_key?(subscriptions, subscription_id) do
       subscription = subscriptions[subscription_id]
@@ -234,7 +251,9 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
         end)
 
       updated_subscriptions = Map.put(subscriptions, subscription_id, updated_subscription)
-      updated_conn = %{conn | subscriptions: updated_subscriptions}
+      updated_adapter_state = Map.put(adapter_state, :subscriptions, updated_subscriptions)
+      updated_conn = %{conn | adapter_state: updated_adapter_state}
+
       Logger.info("#{@logger_prefix} Subscription confirmed: #{subscription_id} for channel: #{subscription.channel}")
       {:ok, updated_conn}
     else
@@ -244,8 +263,8 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   end
 
   @spec handle_subscription_error(subscription_id(), term(), state()) :: {:error, term(), state()}
-  defp handle_subscription_error(subscription_id, error, %WebsockexNova.ClientConn{} = conn) do
-    subscriptions = conn.subscriptions
+  defp handle_subscription_error(subscription_id, error, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
 
     if Map.has_key?(subscriptions, subscription_id) do
       subscription = subscriptions[subscription_id]
@@ -260,7 +279,8 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
         end)
 
       updated_subscriptions = Map.put(subscriptions, subscription_id, updated_subscription)
-      updated_conn = %{conn | subscriptions: updated_subscriptions}
+      updated_adapter_state = Map.put(adapter_state, :subscriptions, updated_subscriptions)
+      updated_conn = %{conn | adapter_state: updated_adapter_state}
 
       Logger.error(
         "#{@logger_prefix} Subscription failed: #{subscription_id} for channel: #{subscription.channel}, error: #{inspect(error)}"
@@ -277,31 +297,80 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   end
 
   @spec check_subscription_timeouts(WebsockexNova.ClientConn.t()) :: WebsockexNova.ClientConn.t()
-  defp check_subscription_timeouts(%WebsockexNova.ClientConn{} = conn) do
-    subscriptions = conn.subscriptions || %{}
-    timeout = conn.subscription_timeout || @default_subscription_timeout
+  defp check_subscription_timeouts(%WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    subscriptions = Map.get(adapter_state, :subscriptions, %{})
+    timeout = Map.get(adapter_state, :subscription_timeout, @default_subscription_timeout)
     now = System.system_time(:second)
 
-    {updated_subscriptions, has_timeouts} =
-      Enum.reduce(subscriptions, {%{}, false}, fn {id, sub}, {acc_subs, has_timeouts} ->
-        if sub.status == @subscription_status_pending and now - sub.timestamp > timeout do
-          updated_sub =
-            sub
-            |> Map.put(:status, @subscription_status_timeout)
-            |> Map.put(:last_updated, now)
-            |> Map.update(:history, [], fn history -> [{@subscription_status_timeout, now} | history] end)
+    updated_subscriptions =
+      Enum.reduce(subscriptions, %{}, fn {id, subscription}, acc ->
+        cond do
+          # Skip if not pending
+          subscription.status != @subscription_status_pending ->
+            Map.put(acc, id, subscription)
 
-          Logger.warning("#{@logger_prefix} Subscription timed out: #{id} for channel: #{sub.channel}")
-          {Map.put(acc_subs, id, updated_sub), true}
-        else
-          {Map.put(acc_subs, id, sub), has_timeouts}
+          # Mark as expired if timeout elapsed
+          now - subscription.timestamp > timeout ->
+            updated =
+              subscription
+              |> Map.put(:status, @subscription_status_expired)
+              |> Map.put(:last_updated, now)
+              |> Map.update(:history, [], fn history ->
+                [{@subscription_status_expired, now} | history]
+              end)
+
+            Logger.warning(
+              "#{@logger_prefix} Subscription expired: #{id} for channel: #{subscription.channel}, age: #{now - subscription.timestamp}s"
+            )
+
+            Map.put(acc, id, updated)
+
+          # Keep as is
+          true ->
+            Map.put(acc, id, subscription)
         end
       end)
 
-    if has_timeouts do
-      %{conn | subscriptions: updated_subscriptions}
-    else
-      conn
-    end
+    updated_adapter_state = Map.put(adapter_state, :subscriptions, updated_subscriptions)
+    %{conn | adapter_state: updated_adapter_state}
   end
+
+  # For plain map state (used in tests)
+  defp check_subscription_timeouts(%{subscriptions: subscriptions} = state) do
+    timeout = Map.get(state, :subscription_timeout, @default_subscription_timeout)
+    now = System.system_time(:second)
+
+    updated_subscriptions =
+      Enum.reduce(subscriptions, %{}, fn {id, subscription}, acc ->
+        cond do
+          # Skip if not pending
+          subscription.status != @subscription_status_pending ->
+            Map.put(acc, id, subscription)
+
+          # Mark as expired if timeout elapsed
+          now - subscription.timestamp > timeout ->
+            updated =
+              subscription
+              |> Map.put(:status, @subscription_status_expired)
+              |> Map.put(:last_updated, now)
+              |> Map.update(:history, [], fn history ->
+                [{@subscription_status_expired, now} | history]
+              end)
+
+            Logger.warning(
+              "#{@logger_prefix} Subscription expired: #{id} for channel: #{subscription.channel}, age: #{now - subscription.timestamp}s"
+            )
+
+            Map.put(acc, id, updated)
+
+          # Keep as is
+          true ->
+            Map.put(acc, id, subscription)
+        end
+      end)
+
+    %{state | subscriptions: updated_subscriptions}
+  end
+
+  defp check_subscription_timeouts(state), do: state
 end

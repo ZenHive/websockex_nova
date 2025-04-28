@@ -15,16 +15,9 @@ defmodule WebsockexNova.ClientConn do
     * `:transport_pid` - PID of the transport process
     * `:stream_ref` - WebSocket stream reference
     * `:adapter` - Adapter module implementing various behaviors
-    * `:adapter_state` - State maintained by the adapter
+    * `:adapter_state` - State maintained by the adapter (stores auth status, auth tokens, credentials, subscriptions, etc.)
     * `:callback_pids` - List of PIDs registered to receive event notifications
-    * `:connection_info` - Connection information
-    * `:auth_status` - Authentication status
-    * `:access_token` - Access token for authentication
-    * `:credentials` - Credentials for authentication
-    * `:subscriptions` - Set of subscribed topics
-    * `:subscription_timeout` - Subscription timeout
-    * `:reconnect_attempts` - Number of reconnection attempts
-    * `:last_error` - Last error encountered
+    * `:connection_info` - Connection information and initial configuration
     * `:rate_limit` - Rate limit configuration
     * `:logging` - Logging configuration
     * `:metrics` - Metrics configuration
@@ -35,9 +28,6 @@ defmodule WebsockexNova.ClientConn do
     * `:error_handler_settings` - State specific to the error handler
     * `:message_handler_settings` - State specific to the message handler
     * `:extras` - Extensible/optional state
-    * `:auth_expires_at` - Authentication expiration timestamp
-    * `:auth_refresh_threshold` - Authentication refresh threshold
-    * `:auth_error` - Authentication error
   """
 
   @typedoc "WebSocket transport module"
@@ -58,16 +48,6 @@ defmodule WebsockexNova.ClientConn do
           adapter: adapter(),
           callback_pids: MapSet.t(pid()),
           connection_info: map(),
-          auth_status: atom(),
-          access_token: String.t() | nil,
-          credentials: map() | nil,
-          subscriptions: map(),
-          subscription_timeout: integer() | nil,
-          reconnect_attempts: non_neg_integer(),
-          last_error: any(),
-          auth_expires_at: integer() | nil,
-          auth_refresh_threshold: integer() | nil,
-          auth_error: any() | nil,
           # Handler/feature-specific state
           rate_limit: map(),
           logging: map(),
@@ -91,16 +71,6 @@ defmodule WebsockexNova.ClientConn do
     :adapter,
     callback_pids: MapSet.new(),
     connection_info: %{},
-    auth_status: :unauthenticated,
-    access_token: nil,
-    credentials: nil,
-    subscriptions: %{},
-    subscription_timeout: nil,
-    reconnect_attempts: 0,
-    last_error: nil,
-    auth_expires_at: nil,
-    auth_refresh_threshold: nil,
-    auth_error: nil,
     rate_limit: %{},
     logging: %{},
     metrics: %{},

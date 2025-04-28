@@ -26,7 +26,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
 
   ## Configuration
 
-  The default handler expects the following configuration in the state:
+  The default handler expects the following configuration in adapter_state:
 
   * `:credentials` - Map containing authentication credentials (required)
       * `:api_key` - API key or client ID
@@ -44,12 +44,13 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   @default_auth_timeout 3600
 
   @impl true
-  def generate_auth_data(%WebsockexNova.ClientConn{} = conn) do
-    with true <- has_valid_credentials?(conn),
-         %{credentials: credentials} <- conn do
-      auth_data = build_auth_data(credentials, conn)
-      {:ok, auth_data, conn}
-    else
+  def generate_auth_data(%WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    case has_valid_credentials?(adapter_state) do
+      true ->
+        credentials = Map.get(adapter_state, :credentials)
+        auth_data = build_auth_data(credentials, conn)
+        {:ok, auth_data, conn}
+
       false ->
         {:error, :missing_credentials, conn}
 
@@ -59,7 +60,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def handle_auth_response(response, %WebsockexNova.ClientConn{} = conn) do
+  def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     case response do
       %{"type" => "auth_success"} = resp ->
         handle_auth_success(resp, conn)
@@ -77,27 +78,31 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def needs_reauthentication?(%WebsockexNova.ClientConn{} = conn) do
-    threshold = conn.auth_refresh_threshold || @default_auth_refresh_threshold
+  def needs_reauthentication?(%WebsockexNova.ClientConn{adapter_state: adapter_state}) do
+    auth_status = Map.get(adapter_state, :auth_status, :unauthenticated)
+    auth_expires_at = Map.get(adapter_state, :auth_expires_at)
+    threshold = Map.get(adapter_state, :auth_refresh_threshold, @default_auth_refresh_threshold)
 
     cond do
-      conn.auth_status == :failed -> true
-      conn.auth_status != :authenticated -> false
-      is_nil(conn.auth_expires_at) -> false
-      conn.auth_expires_at < System.system_time(:second) + threshold -> true
+      auth_status == :failed -> true
+      auth_status != :authenticated -> false
+      is_nil(auth_expires_at) -> false
+      auth_expires_at < System.system_time(:second) + threshold -> true
       true -> false
     end
   end
 
   @impl true
-  def authenticate(_stream_ref, credentials, %WebsockexNova.ClientConn{} = conn) when is_map(credentials) do
-    updated_conn = %{conn | credentials: credentials}
+  def authenticate(_stream_ref, credentials, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn)
+      when is_map(credentials) do
+    updated_adapter_state = Map.put(adapter_state, :credentials, credentials)
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
     {:ok, updated_conn}
   end
 
   # Private helper functions
 
-  defp handle_auth_success(response, %WebsockexNova.ClientConn{} = conn) do
+  defp handle_auth_success(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     expires_at =
       case response do
         %{"expires_at" => expires_at} when is_integer(expires_at) -> expires_at
@@ -107,37 +112,43 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
 
     token = Map.get(response, "token")
 
-    updated_conn =
-      conn
+    updated_adapter_state =
+      adapter_state
       |> Map.put(:auth_status, :authenticated)
       |> Map.put(:auth_expires_at, expires_at)
       |> maybe_put_token(token)
 
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
+
     {:ok, updated_conn}
   end
 
-  defp handle_auth_error(reason, %WebsockexNova.ClientConn{} = conn) do
+  defp handle_auth_error(reason, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     Logger.warning("Authentication error: #{reason}")
 
-    updated_conn =
-      conn
+    updated_adapter_state =
+      adapter_state
       |> Map.put(:auth_status, :failed)
       |> Map.put(:auth_error, reason)
+
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
 
     {:error, reason, updated_conn}
   end
 
-  defp has_valid_credentials?(%WebsockexNova.ClientConn{credentials: %{api_key: api_key, secret: secret}})
-       when is_binary(api_key) and is_binary(secret) and api_key != "" and secret != "" do
-    true
-  end
+  defp has_valid_credentials?(adapter_state) do
+    case Map.get(adapter_state, :credentials) do
+      %{api_key: api_key, secret: secret}
+      when is_binary(api_key) and is_binary(secret) and api_key != "" and secret != "" ->
+        true
 
-  defp has_valid_credentials?(%WebsockexNova.ClientConn{credentials: %{token: token}})
-       when is_binary(token) and token != "" do
-    true
-  end
+      %{token: token} when is_binary(token) and token != "" ->
+        true
 
-  defp has_valid_credentials?(_), do: false
+      _ ->
+        false
+    end
+  end
 
   defp build_auth_data(credentials, _conn) do
     timestamp = System.system_time(:second)
@@ -167,10 +178,11 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
     |> Base.encode16(case: :lower)
   end
 
-  defp maybe_put_token(conn, nil), do: conn
+  defp maybe_put_token(adapter_state, nil), do: adapter_state
 
-  defp maybe_put_token(%WebsockexNova.ClientConn{credentials: creds} = conn, token) do
-    new_creds = Map.put(creds || %{}, :token, token)
-    %{conn | credentials: new_creds}
+  defp maybe_put_token(adapter_state, token) do
+    creds = Map.get(adapter_state, :credentials, %{})
+    updated_creds = Map.put(creds, :token, token)
+    Map.put(adapter_state, :credentials, updated_creds)
   end
 end
