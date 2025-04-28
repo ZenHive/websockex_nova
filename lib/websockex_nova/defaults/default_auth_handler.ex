@@ -60,7 +60,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+  def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: _adapter_state} = conn) do
     case response do
       %{"type" => "auth_success"} = resp ->
         handle_auth_success(resp, conn)

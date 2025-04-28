@@ -131,8 +131,10 @@ defmodule WebsockexNova.Gun.ConnectionStateTest do
       state = ConnectionState.new("example.com", 443, options)
 
       _client_conn = %WebsockexNova.ClientConn{
-        auth_status: :authenticated,
-        access_token: "token"
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "token"
+        }
       }
 
       # There is no session/auth state in options, so no divergence is possible

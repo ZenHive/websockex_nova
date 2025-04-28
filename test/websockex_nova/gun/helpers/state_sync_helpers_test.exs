@@ -23,11 +23,13 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
           connection_handler: DefaultConnectionHandler,
           auth_handler: DefaultAuthHandler
         },
-        # Session state that should not be copied
-        auth_status: :authenticated,
-        access_token: "secret-token",
-        credentials: %{api_key: "key", secret: "secret"},
-        subscriptions: %{"topic1" => %{id: "sub1"}}
+        # Session state should now be in adapter_state instead of top-level fields
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "secret-token",
+          credentials: %{api_key: "key", secret: "secret"},
+          subscriptions: %{"topic1" => %{id: "sub1"}}
+        }
       }
 
       # Extract transport state
@@ -45,6 +47,7 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       assert transport_state.handlers.auth_handler == DefaultAuthHandler
 
       # Verify session state was NOT extracted
+      refute Map.has_key?(transport_state, :adapter_state)
       refute Map.has_key?(transport_state, :auth_status)
       refute Map.has_key?(transport_state, :access_token)
       refute Map.has_key?(transport_state, :credentials)
@@ -74,8 +77,10 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       client_conn = %ClientConn{
         transport: ConnectionWrapper,
         connection_info: %{},
-        auth_status: :authenticated,
-        access_token: "token"
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "token"
+        }
       }
 
       conn_state = %ConnectionState{
@@ -90,13 +95,13 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
 
       # Verify transport fields were updated
       assert updated_client_conn.transport_pid == self()
-      assert updated_client_conn.last_error == {:error, :test}
+      assert updated_client_conn.connection_info.last_error == {:error, :test}
       assert updated_client_conn.connection_info.status == :connected
       assert is_reference(updated_client_conn.stream_ref)
 
       # Verify session state was preserved
-      assert updated_client_conn.auth_status == :authenticated
-      assert updated_client_conn.access_token == "token"
+      assert updated_client_conn.adapter_state.auth_status == :authenticated
+      assert updated_client_conn.adapter_state.access_token == "token"
     end
   end
 
@@ -110,8 +115,10 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
           path: "/ws",
           connection_handler: DefaultConnectionHandler
         },
-        auth_status: :authenticated,
-        access_token: "token"
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "token"
+        }
       }
 
       conn_state = %ConnectionState{
@@ -135,6 +142,7 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       assert updated_conn_state.status == :connected
 
       # Verify session state was NOT copied
+      refute Map.has_key?(updated_conn_state, :adapter_state)
       refute Map.has_key?(updated_conn_state, :auth_status)
       refute Map.has_key?(updated_conn_state, :access_token)
     end
@@ -145,8 +153,10 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       # Create test state
       client_conn = %ClientConn{
         connection_info: %{old_key: "value"},
-        auth_status: :authenticated,
-        access_token: "token"
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "token"
+        }
       }
 
       conn_state = %ConnectionState{
@@ -164,7 +174,7 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
 
       # Verify transport state was updated
       assert updated_client_conn.transport_pid == self()
-      assert updated_client_conn.last_error == {:error, :test}
+      assert updated_client_conn.connection_info.last_error == {:error, :test}
       assert updated_client_conn.connection_info.host == "example.com"
       assert updated_client_conn.connection_info.port == 443
       assert updated_client_conn.connection_info.path == "/ws"
@@ -173,8 +183,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
 
       # Verify existing fields were preserved
       assert updated_client_conn.connection_info.old_key == "value"
-      assert updated_client_conn.auth_status == :authenticated
-      assert updated_client_conn.access_token == "token"
+      assert updated_client_conn.adapter_state.auth_status == :authenticated
+      assert updated_client_conn.adapter_state.access_token == "token"
     end
   end
 
@@ -259,6 +269,7 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
         path: "/ws",
         status: :connected,
         callback_pid: self(),
+        last_error: {:error, :test_error},
         handlers: %{
           connection_handler: DefaultConnectionHandler
         }
@@ -273,14 +284,17 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       assert client_conn.connection_info.host == "example.com"
       assert client_conn.connection_info.port == 443
       assert client_conn.connection_info.connection_handler == DefaultConnectionHandler
+      assert client_conn.connection_info.last_error == {:error, :test_error}
       assert MapSet.member?(client_conn.callback_pids, self())
     end
 
     test "updates existing ClientConn with ConnectionState when client_conn is provided" do
       # Create test state
       existing_conn = %ClientConn{
-        auth_status: :authenticated,
-        access_token: "token",
+        adapter_state: %{
+          auth_status: :authenticated,
+          access_token: "token"
+        },
         connection_info: %{old_setting: true}
       }
 
@@ -288,7 +302,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
         gun_pid: self(),
         host: "example.com",
         port: 443,
-        status: :connected
+        status: :connected,
+        last_error: {:error, :connection_error}
       }
 
       # Update existing client_conn
@@ -299,10 +314,11 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       assert updated_conn.connection_info.host == "example.com"
       assert updated_conn.connection_info.port == 443
       assert updated_conn.connection_info.status == :connected
+      assert updated_conn.connection_info.last_error == {:error, :connection_error}
 
       # Verify session state was preserved
-      assert updated_conn.auth_status == :authenticated
-      assert updated_conn.access_token == "token"
+      assert updated_conn.adapter_state.auth_status == :authenticated
+      assert updated_conn.adapter_state.access_token == "token"
       assert updated_conn.connection_info.old_setting == true
     end
   end

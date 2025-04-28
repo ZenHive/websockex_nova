@@ -82,18 +82,19 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
   """
   @spec update_client_conn_from_transport(ClientConn.t(), ConnectionState.t()) :: ClientConn.t()
   def update_client_conn_from_transport(%ClientConn{} = client_conn, %ConnectionState{} = conn_state) do
-    # Create updated connection_info with new status
-    connection_info = Map.put(client_conn.connection_info || %{}, :status, conn_state.status)
+    # Create updated connection_info with new status and error if present
+    connection_info = client_conn.connection_info || %{}
+    connection_info = Map.put(connection_info, :status, conn_state.status)
 
     # Only update last_error if there is a new error in the connection state
-    client_conn =
+    connection_info =
       if conn_state.last_error do
-        %{client_conn | last_error: conn_state.last_error}
+        Map.put(connection_info, :last_error, conn_state.last_error)
       else
-        client_conn
+        connection_info
       end
 
-    # Update the client conn with transport-specific info
+    # Update the client conn with transport-specific info while preserving adapter_state
     %{
       client_conn
       | connection_info: connection_info,
@@ -160,13 +161,20 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
         status: conn_state.status
       })
 
-    # Update the client conn with transport-specific info
+    # Add last_error to connection_info if present in conn_state
+    connection_info =
+      if conn_state.last_error do
+        Map.put(connection_info, :last_error, conn_state.last_error)
+      else
+        connection_info
+      end
+
+    # Update the client conn with transport-specific info while preserving adapter_state
     %{
       client_conn
       | connection_info: connection_info,
         transport_pid: conn_state.gun_pid,
-        stream_ref: extract_main_stream_ref(conn_state),
-        last_error: conn_state.last_error || client_conn.last_error
+        stream_ref: extract_main_stream_ref(conn_state)
     }
   end
 
@@ -196,7 +204,7 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
         if module, do: Map.put(acc, key, module), else: acc
       end)
 
-    # Return updated client_conn
+    # Return updated client_conn with preserved adapter_state
     %{client_conn | connection_info: connection_info}
   end
 
@@ -287,15 +295,23 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
         metrics_collector: Map.get(conn_state.handlers || %{}, :metrics_collector)
       })
 
+    # Add last_error to connection_info if present in conn_state
+    connection_info =
+      if conn_state.last_error do
+        Map.put(connection_info, :last_error, conn_state.last_error)
+      else
+        connection_info
+      end
+
     callback_pids = merge_callback_pids(base_conn.callback_pids, conn_state.callback_pid)
 
+    # Make sure to preserve the adapter_state from the base connection
     %{
       base_conn
       | connection_info: connection_info,
         transport_pid: conn_state.gun_pid,
         callback_pids: callback_pids,
-        stream_ref: extract_main_stream_ref(conn_state),
-        last_error: conn_state.last_error || base_conn.last_error
+        stream_ref: extract_main_stream_ref(conn_state)
     }
   end
 

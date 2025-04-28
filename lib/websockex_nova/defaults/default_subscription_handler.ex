@@ -69,6 +69,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
   * `{:ok, conn}` - Initial state with subscription handler settings
   """
   @spec subscription_init(map() | Keyword.t()) :: {:ok, WebsockexNova.ClientConn.t()}
+  @impl true
   def subscription_init(opts \\ %{}) do
     opts_map = Map.new(opts)
     # Split known fields and custom fields
