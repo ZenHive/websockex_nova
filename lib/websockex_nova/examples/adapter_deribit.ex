@@ -25,6 +25,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
     host = Map.get(opts, :host) || System.get_env("DERIBIT_HOST") || default_host()
 
     defaults = %{
+      # Connection/Transport
       host: host,
       port: @port,
       path: @path,
@@ -37,8 +38,12 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
       backoff_type: :exponential,
       base_backoff: 2_000,
       ws_opts: %{},
+      callback_pid: nil,
+
+      # Rate Limiting
       rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
       rate_limit_opts: %{
+        mode: :normal,
         capacity: 120,
         refill_rate: 10,
         refill_interval: 1_000,
@@ -50,8 +55,35 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
           order: 10
         }
       },
+
+      # Logging
+      logging_handler: WebsockexNova.Defaults.DefaultLoggingHandler,
       log_level: :info,
-      log_format: :plain
+      log_format: :plain,
+
+      # Metrics
+      metrics_collector: nil,
+
+      # Authentication
+      auth_handler: WebsockexNova.Defaults.DefaultAuthHandler,
+      credentials: %{
+        api_key: "your_api_key",
+        secret: "your_secret"
+      },
+      auth_refresh_threshold: 60,
+
+      # Subscription
+      subscription_handler: WebsockexNova.Defaults.DefaultSubscriptionHandler,
+      subscription_timeout: 30,
+
+      # Message
+      message_handler: WebsockexNova.Defaults.DefaultMessageHandler,
+
+      # Error Handling
+      error_handler: WebsockexNova.Defaults.DefaultErrorHandler,
+      max_reconnect_attempts: 5,
+      reconnect_attempts: 0,
+      ping_interval: 30_000
     }
 
     {:ok, Map.merge(defaults, opts)}
