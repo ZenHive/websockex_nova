@@ -26,7 +26,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   ## Configuration
 
-  The default handler supports the following configuration in the state:
+  The default handler supports the following configuration in the adapter_state:
 
   * `:max_reconnect_attempts` - Maximum number of reconnection attempts (default: 5)
   * `:reconnect_attempts` - Current number of reconnection attempts (default: 0)
@@ -42,7 +42,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   @impl true
   @doc """
   Initializes the handler state as a ClientConn struct.
-  Any unknown fields are placed in connection_handler_settings.
+  Any unknown fields are placed in adapter_state.
   """
   def init(opts) do
     opts_map =
@@ -59,18 +59,32 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
     custom_map = Map.new(custom)
 
     conn = struct(ClientConn, known_map)
-    conn = %{conn | connection_handler_settings: Map.merge(conn.connection_handler_settings || %{}, custom_map)}
+
+    # Store custom fields in adapter_state instead of connection_handler_settings
+    adapter_state = Map.merge(conn.adapter_state || %{}, custom_map)
+
+    # Initialize with reconnect_attempts = 0 if not present
+    adapter_state = Map.put_new(adapter_state, :reconnect_attempts, 0)
+
+    conn = %{conn | adapter_state: adapter_state}
     {:ok, conn}
   end
 
   @impl true
   def handle_connect(conn_info, %ClientConn{} = conn) do
+    # Get current adapter_state or initialize empty map
+    adapter_state = conn.adapter_state || %{}
+
+    # Store in adapter_state instead of top-level fields
+    updated_adapter_state =
+      adapter_state
+      |> Map.put(:reconnect_attempts, 0)
+      |> Map.put(:connected_at, System.system_time(:millisecond))
+
     updated_conn = %{
       conn
       | connection_info: conn_info,
-        reconnect_attempts: 0,
-        extras: Map.put(conn.extras || %{}, :connected_at, System.system_time(:millisecond)),
-        connection_handler_settings: Map.merge(conn.connection_handler_settings || %{}, %{})
+        adapter_state: updated_adapter_state
     }
 
     {:ok, updated_conn}
@@ -78,25 +92,32 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   @impl true
   def handle_disconnect({:local, _code, _message} = reason, %ClientConn{} = conn) do
-    updated_conn = %{
-      conn
-      | extras: Map.put(conn.extras || %{}, :last_disconnect_reason, reason)
-    }
+    # Get current adapter_state or initialize empty map
+    adapter_state = conn.adapter_state || %{}
+
+    # Store last_disconnect_reason in adapter_state
+    updated_adapter_state = Map.put(adapter_state, :last_disconnect_reason, reason)
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
 
     {:ok, updated_conn}
   end
 
   def handle_disconnect(reason, %ClientConn{} = conn) do
-    current_attempts = conn.reconnect_attempts || 0
-    max_attempts = Map.get(conn.extras || %{}, :max_reconnect_attempts, @default_max_reconnect_attempts)
+    # Get current adapter_state or initialize empty map
+    adapter_state = conn.adapter_state || %{}
 
-    updated_conn = %{
-      conn
-      | extras: Map.put(conn.extras || %{}, :last_disconnect_reason, reason)
-    }
+    # Get current attempts and max attempts from adapter_state
+    current_attempts = Map.get(adapter_state, :reconnect_attempts, 0)
+    max_attempts = Map.get(adapter_state, :max_reconnect_attempts, @default_max_reconnect_attempts)
+
+    # Store last_disconnect_reason in adapter_state
+    updated_adapter_state = Map.put(adapter_state, :last_disconnect_reason, reason)
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
 
     if current_attempts < max_attempts do
-      updated_conn = %{updated_conn | reconnect_attempts: current_attempts + 1}
+      # Increment reconnect_attempts in adapter_state
+      updated_adapter_state = Map.put(updated_adapter_state, :reconnect_attempts, current_attempts + 1)
+      updated_conn = %{updated_conn | adapter_state: updated_adapter_state}
       {:reconnect, updated_conn}
     else
       {:ok, updated_conn}
@@ -109,16 +130,16 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   end
 
   def handle_frame(:pong, _frame_data, %ClientConn{} = conn) do
-    updated_conn = %{
-      conn
-      | extras: Map.put(conn.extras || %{}, :last_pong_received, System.monotonic_time(:millisecond))
-    }
+    # Get current adapter_state or initialize empty map
+    adapter_state = conn.adapter_state || %{}
 
-    # Remove last_ping_sent if present in extras
-    updated_conn = %{
-      updated_conn
-      | extras: Map.delete(updated_conn.extras, :last_ping_sent)
-    }
+    # Store last_pong_received in adapter_state, remove last_ping_sent
+    updated_adapter_state =
+      adapter_state
+      |> Map.put(:last_pong_received, System.monotonic_time(:millisecond))
+      |> Map.delete(:last_ping_sent)
+
+    updated_conn = %{conn | adapter_state: updated_adapter_state}
 
     {:ok, updated_conn}
   end
@@ -129,11 +150,17 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
   @impl true
   def handle_timeout(%ClientConn{} = conn) do
-    current_attempts = conn.reconnect_attempts || 0
-    max_attempts = Map.get(conn.extras || %{}, :max_reconnect_attempts, @default_max_reconnect_attempts)
+    # Get current adapter_state or initialize empty map
+    adapter_state = conn.adapter_state || %{}
+
+    # Get current attempts and max attempts from adapter_state
+    current_attempts = Map.get(adapter_state, :reconnect_attempts, 0)
+    max_attempts = Map.get(adapter_state, :max_reconnect_attempts, @default_max_reconnect_attempts)
 
     if current_attempts < max_attempts do
-      updated_conn = %{conn | reconnect_attempts: current_attempts + 1}
+      # Increment reconnect_attempts in adapter_state
+      updated_adapter_state = Map.put(adapter_state, :reconnect_attempts, current_attempts + 1)
+      updated_conn = %{conn | adapter_state: updated_adapter_state}
       {:reconnect, updated_conn}
     else
       {:stop, :max_reconnect_attempts_reached, conn}

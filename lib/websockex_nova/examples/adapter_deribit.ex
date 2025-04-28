@@ -67,8 +67,8 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
       # Authentication
       auth_handler: WebsockexNova.Defaults.DefaultAuthHandler,
       credentials: %{
-        api_key: "your_api_key",
-        secret: "your_secret"
+        api_key: System.get_env("DERIBIT_CLIENT_ID"),
+        secret: System.get_env("DERIBIT_CLIENT_SECRET")
       },
       auth_refresh_threshold: 60,
 

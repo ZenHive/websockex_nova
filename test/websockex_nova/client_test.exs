@@ -8,6 +8,7 @@ defmodule WebsockexNova.ClientTest do
   alias WebsockexNova.Behaviors.SubscriptionHandler
   alias WebsockexNova.Client
   alias WebsockexNova.ClientConn
+  alias WebsockexNova.Defaults.DefaultRateLimitHandler
 
   # Mock transport for testing without real connections
   defmodule MockTransport do
@@ -235,6 +236,84 @@ defmodule WebsockexNova.ClientTest do
       assert is_reference(conn.stream_ref)
     end
 
+    test "connect/2 stores configuration in adapter_state" do
+      defaults = %{
+        # Connection/Transport
+        host: "example.com",
+        port: 443,
+        path: "/ws",
+        headers: [],
+        timeout: 10_000,
+        transport: :tls,
+        transport_opts: %{},
+        protocols: [:http],
+        retry: 10,
+        backoff_type: :exponential,
+        base_backoff: 2_000,
+        ws_opts: %{},
+        callback_pid: nil,
+
+        # Rate Limiting
+        rate_limit_handler: DefaultRateLimitHandler,
+        rate_limit_opts: %{
+          mode: :normal,
+          capacity: 120,
+          refill_rate: 10,
+          refill_interval: 1_000,
+          queue_limit: 200,
+          cost_map: %{
+            subscription: 5,
+            auth: 10,
+            query: 1,
+            order: 10
+          }
+        },
+
+        # Logging
+        logging_handler: WebsockexNova.Defaults.DefaultLoggingHandler,
+        log_level: :info,
+        log_format: :plain,
+
+        # Metrics
+        metrics_collector: nil,
+
+        # Authentication
+        auth_handler: WebsockexNova.Defaults.DefaultAuthHandler,
+        credentials: %{
+          api_key: "test",
+          secret: "secret"
+        },
+        auth_refresh_threshold: 60,
+
+        # Subscription
+        subscription_handler: WebsockexNova.Defaults.DefaultSubscriptionHandler,
+        subscription_timeout: 30,
+
+        # Message
+        message_handler: WebsockexNova.Defaults.DefaultMessageHandler,
+
+        # Error Handling
+        error_handler: WebsockexNova.Defaults.DefaultErrorHandler,
+        max_reconnect_attempts: 5,
+        reconnect_attempts: 0,
+        ping_interval: 30_000
+      }
+
+      {:ok, conn} =
+        Client.connect(MockAdapter, defaults)
+
+      # Configuration should be in adapter_state
+      assert conn.adapter_state.auth_status == :unauthenticated
+      assert conn.adapter_state.reconnect_attempts == 0
+      assert conn.adapter_state.credentials == %{api_key: "test", secret: "secret"}
+      assert conn.adapter_state.auth_refresh_threshold == 60
+      assert conn.adapter_state.subscription_timeout == 30
+      assert Map.has_key?(conn.adapter_state, :subscriptions)
+
+      # Verify that configuration persists across updates
+      assert conn.reconnection.max_reconnect_attempts == 5
+    end
+
     test "send_text/3 sends a text message" do
       {:ok, conn} =
         Client.connect(MockAdapter, %{
@@ -329,7 +408,7 @@ defmodule WebsockexNova.ClientTest do
         })
 
       {:ok, new_conn} = Client.register_callback(conn, self())
-      assert new_conn.callback_pids == [self()]
+      assert MapSet.member?(new_conn.callback_pids, self())
     end
 
     test "unregister_callback/2 removes a callback process" do
@@ -342,7 +421,7 @@ defmodule WebsockexNova.ClientTest do
 
       {:ok, conn_with_callback} = Client.register_callback(conn, self())
       {:ok, conn_without_callback} = Client.unregister_callback(conn_with_callback, self())
-      assert conn_without_callback.callback_pids == []
+      assert MapSet.size(conn_without_callback.callback_pids) == 0
     end
 
     test "authenticate/3 updates auth_status to :authenticated" do
