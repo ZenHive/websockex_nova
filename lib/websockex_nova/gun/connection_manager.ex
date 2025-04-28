@@ -132,12 +132,28 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         callback.(delay, attempt)
         new_error_handler_state = increment_reconnect_attempts(error_handler, error_handler_state)
         new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
-        ConnectionState.update_status(new_state, :reconnecting)
+
+        case transition_to(new_state, :reconnecting) do
+          {:ok, reconnecting_state} -> reconnecting_state
+          {:error, _} -> ConnectionState.update_status(new_state, :reconnecting)
+        end
 
       {false, _} ->
         new_error_handler_state = reset_reconnect_attempts(error_handler, error_handler_state)
+
+        new_error_handler_state =
+          if is_map(new_error_handler_state) do
+            Map.put(new_error_handler_state, :reconnect_attempts, 1)
+          else
+            %{reconnect_attempts: 1}
+          end
+
         new_state = put_in(state.handlers[:error_handler_state], new_error_handler_state)
-        ConnectionState.update_status(new_state, :error)
+
+        case transition_to(new_state, :error) do
+          {:ok, error_state} -> error_state
+          {:error, _} -> ConnectionState.update_status(new_state, :error)
+        end
     end
   end
 
