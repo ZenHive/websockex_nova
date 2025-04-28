@@ -4,6 +4,31 @@
 
 > **Note:** This document provides a high-level architectural overview of WebsockexNova. For implementation details and comprehensive examples, please refer to the API documentation and guides in the `docs/guides/` directory.
 
+## Macro Support for Rapid Development
+
+WebsockexNova provides two key macros that support rapid development of adapters and clients:
+
+### Adapter Macro
+
+The `WebsockexNova.Adapter` macro streamlines adapter implementation by:
+
+1. Declaring all required behavior implementations
+2. Providing sensible default implementations by delegating to `WebsockexNova.Defaults.*`
+3. Allowing selective overriding of specific callbacks
+
+This approach enables developers to create custom adapters with minimal boilerplate code, focusing only on the functionality that needs customization for specific platforms or protocols.
+
+### Client Macro
+
+The `WebsockexNova.ClientMacro` complements the Adapter macro by:
+
+1. Defining a standard client API that wraps `WebsockexNova.Client` functionality
+2. Automatically binding clients to their corresponding adapters
+3. Applying default configuration from the adapter
+4. Enabling domain-specific method additions for service-specific clients
+
+This approach allows rapid creation of platform-specific clients that provide a developer-friendly, domain-oriented API while leveraging all the underlying WebsockexNova infrastructure.
+
 ## Transport Layer: Gun Integration
 
 WebsockexNova uses [Gun](https://github.com/ninenines/gun) as its underlying WebSocket transport layer. Gun is a mature HTTP/WebSocket client for Erlang/OTP maintained by the Cowboy team, offering:

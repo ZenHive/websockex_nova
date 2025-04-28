@@ -112,6 +112,8 @@ defmodule WebsockexNova.Client do
   - `{:ok, value}` to match and return the value
   - `:skip` to ignore and continue waiting
   """
+  @behaviour WebsockexNova.Behaviors.ClientBehavior
+
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.MessageHandler
   alias WebsockexNova.Behaviors.SubscriptionHandler
