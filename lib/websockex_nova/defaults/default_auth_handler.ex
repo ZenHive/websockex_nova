@@ -36,7 +36,7 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   * `:auth_refresh_threshold` - Seconds before expiry to trigger reauthentication (default: 60)
   """
 
-  @behaviour WebsockexNova.Behaviors.AuthHandler
+  @behaviour WebsockexNova.Behaviours.AuthHandler
 
   require Logger
 

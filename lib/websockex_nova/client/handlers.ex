@@ -1,6 +1,6 @@
 defmodule WebsockexNova.Client.Handlers do
   @moduledoc """
-  Utility functions for registering various handler behaviors with WebsockexNova connections.
+  Utility functions for registering various handler behaviours with WebsockexNova connections.
 
   This module provides helper functions to set up behavior handlers for WebSocket connections,
   ensuring that appropriate defaults are used when not explicitly provided.
@@ -9,13 +9,13 @@ defmodule WebsockexNova.Client.Handlers do
   @doc """
   Configures handlers for a WebSocket connection based on the adapter module.
 
-  This function examines the adapter module to determine which behaviors it implements,
+  This function examines the adapter module to determine which behaviours it implements,
   and configures the connection options accordingly. For any behavior not implemented
   by the adapter, it falls back to the default implementation.
 
   ## Parameters
 
-  * `adapter` - Module implementing one or more WebsockexNova behaviors
+  * `adapter` - Module implementing one or more WebsockexNova behaviours
   * `options` - Connection options (may already contain handler configurations)
 
   ## Returns
@@ -40,7 +40,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :connection_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.ConnectionHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.ConnectionHandler) do
         Map.put(options, :connection_handler, adapter)
       else
         Map.put(options, :connection_handler, WebsockexNova.Defaults.DefaultConnectionHandler)
@@ -53,7 +53,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :message_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.MessageHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.MessageHandler) do
         Map.put(options, :message_handler, adapter)
       else
         Map.put(options, :message_handler, WebsockexNova.Defaults.DefaultMessageHandler)
@@ -66,7 +66,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :subscription_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.SubscriptionHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.SubscriptionHandler) do
         Map.put(options, :subscription_handler, adapter)
       else
         Map.put(options, :subscription_handler, WebsockexNova.Defaults.DefaultSubscriptionHandler)
@@ -79,7 +79,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :auth_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.AuthHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.AuthHandler) do
         Map.put(options, :auth_handler, adapter)
       else
         Map.put(options, :auth_handler, WebsockexNova.Defaults.DefaultAuthHandler)
@@ -92,7 +92,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :error_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.ErrorHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.ErrorHandler) do
         Map.put(options, :error_handler, adapter)
       else
         Map.put(options, :error_handler, WebsockexNova.Defaults.DefaultErrorHandler)
@@ -105,7 +105,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :rate_limit_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.RateLimitHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.RateLimitHandler) do
         Map.put(options, :rate_limit_handler, adapter)
       else
         Map.put(options, :rate_limit_handler, WebsockexNova.Defaults.DefaultRateLimitHandler)
@@ -118,7 +118,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :logging_handler) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.LoggingHandler) do
+      if implements?(adapter, WebsockexNova.Behaviours.LoggingHandler) do
         Map.put(options, :logging_handler, adapter)
       else
         Map.put(options, :logging_handler, WebsockexNova.Defaults.DefaultLoggingHandler)
@@ -131,7 +131,7 @@ defmodule WebsockexNova.Client.Handlers do
     if Map.has_key?(options, :metrics_collector) do
       options
     else
-      if implements?(adapter, WebsockexNova.Behaviors.MetricsCollector) do
+      if implements?(adapter, WebsockexNova.Behaviours.MetricsCollector) do
         Map.put(options, :metrics_collector, adapter)
       else
         Map.put(options, :metrics_collector, WebsockexNova.Defaults.DefaultMetricsCollector)

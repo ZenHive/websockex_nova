@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.ConnectionHandler do
+defmodule WebsockexNova.Behaviours.ConnectionHandler do
   @moduledoc """
   Behaviour for connection handlers.
   All state is a map. All arguments and return values are explicit and documented.

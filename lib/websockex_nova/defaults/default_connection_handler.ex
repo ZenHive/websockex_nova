@@ -33,7 +33,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   * `:ping_interval` - Interval in milliseconds between ping frames (default: 30000)
   """
 
-  @behaviour WebsockexNova.Behaviors.ConnectionHandler
+  @behaviour WebsockexNova.Behaviours.ConnectionHandler
 
   alias WebsockexNova.ClientConn
 

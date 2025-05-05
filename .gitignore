@@ -27,3 +27,5 @@ websockex_nova-*.tar
 # Dialyzer PLT files
 /priv/plts/*.plt
 /priv/plts/*.plt.hash
+
+.env

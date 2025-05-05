@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.SubscriptionHandler do
+defmodule WebsockexNova.Behaviours.SubscriptionHandler do
   @moduledoc """
   Behaviour for subscription handlers.
   All state is a map. All arguments and return values are explicit and documented.

@@ -2,22 +2,29 @@ defmodule Mix.Tasks.WebsockexNova.CheckHandlers do
   @shortdoc "Check all WebsockexNova default handler modules for required callbacks"
 
   @moduledoc """
-  Checks all WebsockexNova.Defaults.* handler modules to ensure they implement all required callbacks for their respective behaviors.
+  Checks all WebsockexNova.Defaults.* handler modules to ensure they implement all required callbacks for their respective behaviours.
   Prints missing callbacks or confirms all are correct.
   """
 
   use Mix.Task
 
   @handlers [
-    {WebsockexNova.Defaults.DefaultConnectionHandler, WebsockexNova.Behaviors.ConnectionHandler, "ConnectionHandler"},
-    {WebsockexNova.Defaults.DefaultMessageHandler, WebsockexNova.Behaviors.MessageHandler, "MessageHandler"},
-    {WebsockexNova.Defaults.DefaultSubscriptionHandler, WebsockexNova.Behaviors.SubscriptionHandler,
-     "SubscriptionHandler"},
-    {WebsockexNova.Defaults.DefaultAuthHandler, WebsockexNova.Behaviors.AuthHandler, "AuthHandler"},
-    {WebsockexNova.Defaults.DefaultErrorHandler, WebsockexNova.Behaviors.ErrorHandler, "ErrorHandler"},
-    {WebsockexNova.Defaults.DefaultRateLimitHandler, WebsockexNova.Behaviors.RateLimitHandler, "RateLimitHandler"},
-    {WebsockexNova.Defaults.DefaultLoggingHandler, WebsockexNova.Behaviors.LoggingHandler, "LoggingHandler"},
-    {WebsockexNova.Defaults.DefaultMetricsCollector, WebsockexNova.Behaviors.MetricsCollector, "MetricsCollector"}
+    {WebsockexNova.Defaults.DefaultConnectionHandler, WebsockexNova.Behaviours.ConnectionHandler,
+     "ConnectionHandler"},
+    {WebsockexNova.Defaults.DefaultMessageHandler, WebsockexNova.Behaviours.MessageHandler,
+     "MessageHandler"},
+    {WebsockexNova.Defaults.DefaultSubscriptionHandler,
+     WebsockexNova.Behaviours.SubscriptionHandler, "SubscriptionHandler"},
+    {WebsockexNova.Defaults.DefaultAuthHandler, WebsockexNova.Behaviours.AuthHandler,
+     "AuthHandler"},
+    {WebsockexNova.Defaults.DefaultErrorHandler, WebsockexNova.Behaviours.ErrorHandler,
+     "ErrorHandler"},
+    {WebsockexNova.Defaults.DefaultRateLimitHandler, WebsockexNova.Behaviours.RateLimitHandler,
+     "RateLimitHandler"},
+    {WebsockexNova.Defaults.DefaultLoggingHandler, WebsockexNova.Behaviours.LoggingHandler,
+     "LoggingHandler"},
+    {WebsockexNova.Defaults.DefaultMetricsCollector, WebsockexNova.Behaviours.MetricsCollector,
+     "MetricsCollector"}
   ]
 
   @impl true

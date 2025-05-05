@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.LoggingHandler do
+defmodule WebsockexNova.Behaviours.LoggingHandler do
   @moduledoc """
   Defines the behavior for standardized, configurable logging in WebsockexNova.
 
@@ -14,12 +14,12 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
 
       state = %{logging_handler: MyApp.LoggingHandler, ...}
 
-  Your handler module must implement the `WebsockexNova.Behaviors.LoggingHandler` behavior.
+  Your handler module must implement the `WebsockexNova.Behaviours.LoggingHandler` behavior.
 
   ### Implementing the LoggingHandler Behavior
 
       defmodule MyApp.LoggingHandler do
-        @behaviour WebsockexNova.Behaviors.LoggingHandler
+        @behaviour WebsockexNova.Behaviours.LoggingHandler
 
         @impl true
         def log_connection_event(event, context, state) do
@@ -48,7 +48,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
   ### Example: Capturing Log Events in Tests
 
       defmodule MyTest.LoggingHandler do
-        @behaviour WebsockexNova.Behaviors.LoggingHandler
+        @behaviour WebsockexNova.Behaviours.LoggingHandler
         def log_connection_event(event, context, state), do: send(self(), {:log, :connection, event, context}); :ok
         def log_message_event(event, context, state), do: send(self(), {:log, :message, event, context}); :ok
         def log_error_event(event, context, state), do: send(self(), {:log, :error, event, context}); :ok
@@ -71,7 +71,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
 
   ```elixir
   defmodule MyApp.LoggingHandler do
-    @behaviour WebsockexNova.Behaviors.LoggingHandler
+    @behaviour WebsockexNova.Behaviours.LoggingHandler
 
     @impl true
     def log_connection_event(event, context, state) do

@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.AuthHandler do
+defmodule WebsockexNova.Behaviours.AuthHandler do
   @moduledoc """
   Defines a behavior for handling WebSocket authentication flows.
 
@@ -37,7 +37,7 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
 
   ```elixir
   defmodule MyApp.ApiAuthHandler do
-    @behaviour WebsockexNova.Behaviors.AuthHandler
+    @behaviour WebsockexNova.Behaviours.AuthHandler
 
     @impl true
     def generate_auth_data(state) do

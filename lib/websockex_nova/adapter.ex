@@ -1,16 +1,17 @@
 defmodule WebsockexNova.Adapter do
   @moduledoc """
-  Macro for building WebsockexNova adapters with minimal boilerplate.
+  Macro that implements WebsockexNova behaviours.
 
   Usage:
+  ```elixir
+  defmodule MyApp.MyAdapter do
+    use WebsockexNova.Adapter
 
-      defmodule MyApp.MyAdapter do
-        use WebsockexNova.Adapter
-
-        # Override only what you need:
-        @impl WebsockexNova.Behaviors.MessageHandler
-        def handle_message(message, state), do: ...
-      end
+    # Override only what you need:
+    @impl WebsockexNova.Behaviours.MessageHandler
+    def handle_message(message, state), do: ...
+  end
+  ```
 
   This macro:
   - Declares all core @behaviour attributes
@@ -20,18 +21,18 @@ defmodule WebsockexNova.Adapter do
 
   defmacro __using__(_opts) do
     quote do
-      @behaviour WebsockexNova.Behaviors.AuthHandler
       # Behaviours
-      @behaviour WebsockexNova.Behaviors.ConnectionHandler
-      @behaviour WebsockexNova.Behaviors.ErrorHandler
-      @behaviour WebsockexNova.Behaviors.MessageHandler
-      @behaviour WebsockexNova.Behaviors.SubscriptionHandler
+      @behaviour WebsockexNova.Behaviours.AuthHandler
+      @behaviour WebsockexNova.Behaviours.ConnectionHandler
+      @behaviour WebsockexNova.Behaviours.ErrorHandler
+      @behaviour WebsockexNova.Behaviours.MessageHandler
+      @behaviour WebsockexNova.Behaviours.SubscriptionHandler
 
-      alias WebsockexNova.Behaviors.AuthHandler
-      alias WebsockexNova.Behaviors.ConnectionHandler
-      alias WebsockexNova.Behaviors.ErrorHandler
-      alias WebsockexNova.Behaviors.MessageHandler
-      alias WebsockexNova.Behaviors.SubscriptionHandler
+      alias WebsockexNova.Behaviours.AuthHandler
+      alias WebsockexNova.Behaviours.ConnectionHandler
+      alias WebsockexNova.Behaviours.ErrorHandler
+      alias WebsockexNova.Behaviours.MessageHandler
+      alias WebsockexNova.Behaviours.SubscriptionHandler
       alias WebsockexNova.Defaults.DefaultAuthHandler
       alias WebsockexNova.Defaults.DefaultConnectionHandler
       alias WebsockexNova.Defaults.DefaultErrorHandler
@@ -40,79 +41,116 @@ defmodule WebsockexNova.Adapter do
 
       # --- ConnectionHandler defaults ---
       @impl ConnectionHandler
-      def init(opts), do: DefaultConnectionHandler.init(opts)
-      @impl ConnectionHandler
-      def connection_info(opts), do: DefaultConnectionHandler.connection_info(opts)
-      @impl ConnectionHandler
-      def handle_connect(conn_info, state), do: DefaultConnectionHandler.handle_connect(conn_info, state)
+      def init(opts),
+        do: DefaultConnectionHandler.init(opts)
 
       @impl ConnectionHandler
-      def handle_disconnect(reason, state), do: DefaultConnectionHandler.handle_disconnect(reason, state)
+      def connection_info(opts),
+        do: DefaultConnectionHandler.connection_info(opts)
 
       @impl ConnectionHandler
-      def handle_frame(type, data, state), do: DefaultConnectionHandler.handle_frame(type, data, state)
+      def handle_connect(conn_info, state),
+        do: DefaultConnectionHandler.handle_connect(conn_info, state)
 
       @impl ConnectionHandler
-      def handle_timeout(state), do: DefaultConnectionHandler.handle_timeout(state)
+      def handle_disconnect(reason, state),
+        do: DefaultConnectionHandler.handle_disconnect(reason, state)
+
       @impl ConnectionHandler
-      def ping(stream_ref, state), do: DefaultConnectionHandler.ping(stream_ref, state)
+      def handle_frame(type, data, state),
+        do: DefaultConnectionHandler.handle_frame(type, data, state)
+
       @impl ConnectionHandler
-      def status(stream_ref, state), do: DefaultConnectionHandler.status(stream_ref, state)
+      def handle_timeout(state),
+        do: DefaultConnectionHandler.handle_timeout(state)
+
+      @impl ConnectionHandler
+      def ping(stream_ref, state),
+        do: DefaultConnectionHandler.ping(stream_ref, state)
+
+      @impl ConnectionHandler
+      def status(stream_ref, state),
+        do: DefaultConnectionHandler.status(stream_ref, state)
 
       # --- MessageHandler defaults ---
       @impl MessageHandler
-      def message_init(opts), do: DefaultMessageHandler.message_init(opts)
+      def message_init(opts),
+        do: DefaultMessageHandler.message_init(opts)
+
       @impl MessageHandler
-      def handle_message(message, state), do: DefaultMessageHandler.handle_message(message, state)
+      def handle_message(message, state),
+        do: DefaultMessageHandler.handle_message(message, state)
+
       @impl MessageHandler
-      def validate_message(message), do: DefaultMessageHandler.validate_message(message)
+      def validate_message(message),
+        do: DefaultMessageHandler.validate_message(message)
+
       @impl MessageHandler
-      def message_type(message), do: DefaultMessageHandler.message_type(message)
+      def message_type(message),
+        do: DefaultMessageHandler.message_type(message)
+
       @impl MessageHandler
-      def encode_message(message, state), do: DefaultMessageHandler.encode_message(message, state)
+      def encode_message(message, state),
+        do: DefaultMessageHandler.encode_message(message, state)
 
       # --- SubscriptionHandler defaults ---
       @impl SubscriptionHandler
-      def subscription_init(opts), do: DefaultSubscriptionHandler.subscription_init(opts)
-      @impl SubscriptionHandler
-      def subscribe(channel, params, state), do: DefaultSubscriptionHandler.subscribe(channel, params, state)
+      def subscription_init(opts),
+        do: DefaultSubscriptionHandler.subscription_init(opts)
 
       @impl SubscriptionHandler
-      def unsubscribe(channel, state), do: DefaultSubscriptionHandler.unsubscribe(channel, state)
+      def subscribe(channel, params, state),
+        do: DefaultSubscriptionHandler.subscribe(channel, params, state)
+
+      @impl SubscriptionHandler
+      def unsubscribe(channel, state),
+        do: DefaultSubscriptionHandler.unsubscribe(channel, state)
+
       @impl SubscriptionHandler
       def handle_subscription_response(response, state),
         do: DefaultSubscriptionHandler.handle_subscription_response(response, state)
 
       @impl SubscriptionHandler
-      def active_subscriptions(state), do: DefaultSubscriptionHandler.active_subscriptions(state)
+      def active_subscriptions(state),
+        do: DefaultSubscriptionHandler.active_subscriptions(state)
+
       @impl SubscriptionHandler
       def find_subscription_by_channel(channel, state),
         do: DefaultSubscriptionHandler.find_subscription_by_channel(channel, state)
 
       # --- AuthHandler defaults ---
       @impl AuthHandler
-      def generate_auth_data(state), do: DefaultAuthHandler.generate_auth_data(state)
-      @impl AuthHandler
-      def handle_auth_response(response, state), do: DefaultAuthHandler.handle_auth_response(response, state)
+      def generate_auth_data(state),
+        do: DefaultAuthHandler.generate_auth_data(state)
 
       @impl AuthHandler
-      def needs_reauthentication?(state), do: DefaultAuthHandler.needs_reauthentication?(state)
+      def handle_auth_response(response, state),
+        do: DefaultAuthHandler.handle_auth_response(response, state)
+
+      @impl AuthHandler
+      def needs_reauthentication?(state),
+        do: DefaultAuthHandler.needs_reauthentication?(state)
+
       @impl AuthHandler
       def authenticate(stream_ref, credentials, state),
         do: DefaultAuthHandler.authenticate(stream_ref, credentials, state)
 
       # --- ErrorHandler defaults ---
       @impl ErrorHandler
-      def handle_error(error, context, state), do: DefaultErrorHandler.handle_error(error, context, state)
+      def handle_error(error, context, state),
+        do: DefaultErrorHandler.handle_error(error, context, state)
 
       @impl ErrorHandler
-      def should_reconnect?(error, attempt, state), do: DefaultErrorHandler.should_reconnect?(error, attempt, state)
+      def should_reconnect?(error, attempt, state),
+        do: DefaultErrorHandler.should_reconnect?(error, attempt, state)
 
       @impl ErrorHandler
-      def log_error(error, context, state), do: DefaultErrorHandler.log_error(error, context, state)
+      def log_error(error, context, state),
+        do: DefaultErrorHandler.log_error(error, context, state)
 
       @impl ErrorHandler
-      def classify_error(error, state), do: DefaultErrorHandler.classify_error(error, state)
+      def classify_error(error, state),
+        do: DefaultErrorHandler.classify_error(error, state)
 
       # Allow adapter authors to override any callback
       defoverridable init: 1,

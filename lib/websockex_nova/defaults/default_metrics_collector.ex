@@ -23,7 +23,7 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
       WebsockexNova.Defaults.DefaultMetricsCollector.get_metric(:connections_opened)
   """
 
-  @behaviour WebsockexNova.Behaviors.MetricsCollector
+  @behaviour WebsockexNova.Behaviours.MetricsCollector
 
   use GenServer
 

@@ -43,7 +43,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
   Use `increment_reconnect_attempts/1` and `reset_reconnect_attempts/1` to update this count.
   """
 
-  @behaviour WebsockexNova.Behaviors.ErrorHandler
+  @behaviour WebsockexNova.Behaviours.ErrorHandler
 
   require Logger
 

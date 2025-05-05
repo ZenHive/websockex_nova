@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.MessageHandler do
+defmodule WebsockexNova.Behaviours.MessageHandler do
   @moduledoc """
   Defines the behavior for handling WebSocket messages.
 
@@ -41,7 +41,7 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
 
   ```elixir
   defmodule MyApp.ChatMessageHandler do
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNova.Behaviours.MessageHandler
 
     @impl true
     def handle_message(%{"type" => "chat_message", "text" => text, "user" => user}, state) do

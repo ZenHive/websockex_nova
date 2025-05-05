@@ -103,7 +103,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
   ## Options
 
   * `:name` - The name to register the server under
-  * `:handler` - The module implementing the `WebsockexNova.Behaviors.RateLimitHandler` behavior
+  * `:handler` - The module implementing the `WebsockexNova.Behaviours.RateLimitHandler` behavior
   * `:handler_opts` - Options to pass to the handler module
   * `:process_interval` - Interval in milliseconds to process the queue
   * `:mode` - Rate limiting mode (`:normal`, `:always_allow`, `:always_queue`, `:always_reject`)

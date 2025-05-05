@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.MetricsCollector do
+defmodule WebsockexNova.Behaviours.MetricsCollector do
   @moduledoc """
   Behaviour for metrics collectors.
   All state and context are maps. All arguments and return values are explicit and documented.

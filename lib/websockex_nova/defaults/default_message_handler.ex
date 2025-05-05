@@ -32,7 +32,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
   * Provides standardized error handling
   """
 
-  @behaviour WebsockexNova.Behaviors.MessageHandler
+  @behaviour WebsockexNova.Behaviours.MessageHandler
 
   @allowed_types Enum.map(~w(subscription ping pong error info data), &String.to_atom/1)
   @allowed_methods Enum.map(~w(subscribe unsubscribe publish), &String.to_atom/1)

@@ -6,8 +6,8 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   """
   use WebsockexNova.Adapter
 
-  alias WebsockexNova.Behaviors.AuthHandler
-  alias WebsockexNova.Behaviors.ConnectionHandler
+  alias WebsockexNova.Behaviours.AuthHandler
+  alias WebsockexNova.Behaviours.ConnectionHandler
 
   @port 443
   @path "/ws/api/v2"
@@ -126,7 +126,10 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   end
 
   @impl AuthHandler
-  def handle_auth_response(%{"result" => %{"access_token" => access_token, "expires_in" => expires_in}}, state) do
+  def handle_auth_response(
+        %{"result" => %{"access_token" => access_token, "expires_in" => expires_in}},
+        state
+      ) do
     state =
       state
       |> Map.put(:auth_status, :authenticated)
@@ -147,7 +150,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
 
   def handle_auth_response(_other, state), do: {:ok, state}
 
-  @impl WebsockexNova.Behaviors.SubscriptionHandler
+  @impl WebsockexNova.Behaviours.SubscriptionHandler
   def subscribe(channel, _params, state) do
     message = %{
       "jsonrpc" => "2.0",

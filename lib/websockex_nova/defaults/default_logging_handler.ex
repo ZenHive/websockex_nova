@@ -14,7 +14,7 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   All logging state is now stored in the canonical WebsockexNova.ClientConn struct under the :logging field.
   """
 
-  @behaviour WebsockexNova.Behaviors.LoggingHandler
+  @behaviour WebsockexNova.Behaviours.LoggingHandler
 
   alias WebsockexNova.ClientConn
 

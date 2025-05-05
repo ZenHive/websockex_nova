@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.ClientBehavior do
+defmodule WebsockexNova.Behaviours.ClientBehavior do
   @moduledoc """
   Behavior defining the contract for WebSocket client operations.
 

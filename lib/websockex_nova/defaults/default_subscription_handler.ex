@@ -27,7 +27,7 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandler do
       end
   """
 
-  @behaviour WebsockexNova.Behaviors.SubscriptionHandler
+  @behaviour WebsockexNova.Behaviours.SubscriptionHandler
 
   require Logger
 

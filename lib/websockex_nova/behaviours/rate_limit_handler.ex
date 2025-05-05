@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.RateLimitHandler do
+defmodule WebsockexNova.Behaviours.RateLimitHandler do
   @moduledoc """
   Behaviour for rate limit handlers.
   All state is a map. All arguments and return values are explicit and documented.

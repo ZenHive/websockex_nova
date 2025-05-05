@@ -54,7 +54,7 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   ```
   """
 
-  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Behaviours.SubscriptionHandler
 
   @type t :: %__MODULE__{
           handler: module(),

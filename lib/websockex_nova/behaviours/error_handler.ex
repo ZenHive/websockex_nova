@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.ErrorHandler do
+defmodule WebsockexNova.Behaviours.ErrorHandler do
   @moduledoc """
   Behaviour for error handlers.
 

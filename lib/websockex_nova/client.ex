@@ -84,13 +84,13 @@ defmodule WebsockexNova.Client do
 
   ## Adapter Integration
 
-  The client API works with any adapter that implements the required behaviors:
+  The client API works with any adapter that implements the required behaviours:
 
-  - `WebsockexNova.Behaviors.ConnectionHandler`
-  - `WebsockexNova.Behaviors.MessageHandler`
-  - `WebsockexNova.Behaviors.SubscriptionHandler`
-  - `WebsockexNova.Behaviors.AuthHandler`
-  - `WebsockexNova.Behaviors.ErrorHandler`
+  - `WebsockexNova.Behaviours.ConnectionHandler`
+  - `WebsockexNova.Behaviours.MessageHandler`
+  - `WebsockexNova.Behaviours.SubscriptionHandler`
+  - `WebsockexNova.Behaviours.AuthHandler`
+  - `WebsockexNova.Behaviours.ErrorHandler`
 
   If an adapter doesn't implement a behavior, the client falls back to using default implementations
   from the `WebsockexNova.Defaults` namespace.
@@ -112,11 +112,11 @@ defmodule WebsockexNova.Client do
   - `{:ok, value}` to match and return the value
   - `:skip` to ignore and continue waiting
   """
-  @behaviour WebsockexNova.Behaviors.ClientBehavior
+  @behaviour WebsockexNova.Behaviours.ClientBehavior
 
-  alias WebsockexNova.Behaviors.AuthHandler
-  alias WebsockexNova.Behaviors.MessageHandler
-  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Behaviours.AuthHandler
+  alias WebsockexNova.Behaviours.MessageHandler
+  alias WebsockexNova.Behaviours.SubscriptionHandler
   alias WebsockexNova.Client.Handlers
   alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultAuthHandler
@@ -227,7 +227,7 @@ defmodule WebsockexNova.Client do
 
   ## Parameters
 
-  * `adapter` - Module implementing adapter behaviors
+  * `adapter` - Module implementing adapter behaviours
   * `options` - Connection options
 
   ## Options
@@ -248,7 +248,9 @@ defmodule WebsockexNova.Client do
   def connect(adapter, options) when is_atom(adapter) and is_map(options) do
     require Logger
 
-    Logger.debug("[Client.connect] Initializing adapter: #{inspect(adapter)} with options: #{inspect(options)}")
+    Logger.debug(
+      "[Client.connect] Initializing adapter: #{inspect(adapter)} with options: #{inspect(options)}"
+    )
 
     with {:ok, adapter_state} <- init_adapter(adapter),
          {:ok, connection_info} <- get_connection_info(adapter, adapter_state, options),
@@ -436,7 +438,8 @@ defmodule WebsockexNova.Client do
   def subscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
     subscription_handler = get_subscription_handler(conn.adapter)
 
-    with {:ok, sub_message, new_state} <- subscription_handler.subscribe(channel, conn.adapter_state, %{}),
+    with {:ok, sub_message, new_state} <-
+           subscription_handler.subscribe(channel, conn.adapter_state, %{}),
          {:ok, conn} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn, {:text, sub_message}) do
       wait_for_response(conn, options)
@@ -462,11 +465,13 @@ defmodule WebsockexNova.Client do
   * `{:ok, result}` on success
   * `{:error, reason}` on failure
   """
-  @spec unsubscribe(ClientConn.t(), String.t(), subscribe_options() | nil) :: subscription_result()
+  @spec unsubscribe(ClientConn.t(), String.t(), subscribe_options() | nil) ::
+          subscription_result()
   def unsubscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
     subscription_handler = get_subscription_handler(conn.adapter)
 
-    with {:ok, unsub_message, new_state} <- subscription_handler.unsubscribe(channel, conn.adapter_state),
+    with {:ok, unsub_message, new_state} <-
+           subscription_handler.unsubscribe(channel, conn.adapter_state),
          {:ok, conn} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn, {:text, unsub_message}) do
       wait_for_response(conn, options)

@@ -6,8 +6,8 @@ defmodule WebsockexNova do
 
   WebsockexNova employs a "thin adapter" architecture that separates concerns through:
 
-  1. **Behavioral Interfaces**: Well-defined behaviors for various aspects of WebSocket handling
-  2. **Default Implementations**: Ready-to-use default implementations of these behaviors
+  1. **Behavioral Interfaces**: Well-defined behaviours for various aspects of WebSocket handling
+  2. **Default Implementations**: Ready-to-use default implementations of these behaviours
   3. **Platform Adapters**: Thin adapters that bridge to specific platforms/services
   4. **Connection Management**: Process-based connection handling with ownership semantics
 
@@ -17,8 +17,8 @@ defmodule WebsockexNova do
 
   * **Connection**: The core GenServer process managing the WebSocket lifecycle
   * **Client**: A convenient API for interacting with connections
-  * **Behaviors**: Interfaces for connection, message, authentication, error handling, etc.
-  * **Defaults**: Ready-to-use implementations of all behaviors
+  * **Behaviours**: Interfaces for connection, message, authentication, error handling, etc.
+  * **Defaults**: Ready-to-use implementations of all behaviours
   * **Platform Adapters**: Thin adapters for specific WebSocket services
 
   ## Basic Usage
@@ -79,11 +79,11 @@ defmodule WebsockexNova do
   ## Implementing Custom Handlers
 
   Each aspect of WebSocket communication can be customized by implementing one of
-  the behaviors in `WebsockexNova.Behaviors`:
+  the behaviours in `WebsockexNova.Behaviours`:
 
   ```elixir
   defmodule MyApp.MessageHandler do
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNova.Behaviours.MessageHandler
 
     @impl true
     def init(opts) do
@@ -144,7 +144,7 @@ defmodule WebsockexNova do
   end
   ```
 
-  ## Available Behaviors
+  ## Available Behaviours
 
   * `ConnectionHandler`: Handle connection lifecycle events
   * `MessageHandler`: Process incoming WebSocket messages

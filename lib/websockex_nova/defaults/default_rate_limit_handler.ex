@@ -40,7 +40,7 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   ```
   """
 
-  @behaviour WebsockexNova.Behaviors.RateLimitHandler
+  @behaviour WebsockexNova.Behaviours.RateLimitHandler
 
   alias WebsockexNova.ClientConn
 
