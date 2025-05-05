@@ -4,10 +4,10 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
   alias WebsockexNova.Gun.BehaviorBridge
   alias WebsockexNova.Gun.ConnectionState
 
-  # Create test implementations of the behaviors
+  # Create test implementations of the behaviours
   defmodule TestConnectionHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.ConnectionHandler
+    @behaviour WebsockexNova.Behaviours.ConnectionHandler
 
     @impl true
     def init(opts) do
@@ -72,7 +72,7 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
 
   defmodule TestMessageHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNova.Behaviours.MessageHandler
 
     @impl true
     def handle_message(message, state) do
@@ -118,7 +118,7 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
 
   defmodule TestErrorHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.ErrorHandler
+    @behaviour WebsockexNova.Behaviours.ErrorHandler
 
     @impl true
     def handle_error(error, context, state) do

@@ -1,12 +1,12 @@
-defmodule WebsockexNova.Behaviors.RateLimitHandlerTest do
+defmodule WebsockexNova.Behaviours.RateLimitHandlerTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Behaviors.RateLimitHandler
+  alias WebsockexNova.Behaviours.RateLimitHandler
 
   # Define a test implementation that just wraps the behavior for testing
   defmodule TestRateLimitHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.RateLimitHandler
+    @behaviour WebsockexNova.Behaviours.RateLimitHandler
 
     @impl true
     def rate_limit_init(opts) do

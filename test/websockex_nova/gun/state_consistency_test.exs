@@ -5,7 +5,7 @@ defmodule WebsockexNova.Gun.StateConsistencyTest do
 
   @tag :integration
   test "configuration propagation and state consistency before and after authentication" do
-    # 1. Setup: All possible config options for default behaviors
+    # 1. Setup: All possible config options for default behaviours
     config = %{
       host: "test.deribit.com",
       port: 443,

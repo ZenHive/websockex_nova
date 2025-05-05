@@ -14,7 +14,7 @@ This document outlines a comprehensive implementation plan for WebsockexNova to 
 6. **Flexible Message Handling**: Support for both synchronous and asynchronous message processing
 7. **Monitor-Based Error Handling**: Ability to use process monitors instead of links for more robust error handling
 
-Using Gun allows us to focus on the application-specific aspects of WebsockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
+Using Gun allows us to focus on the application-specific aspects of WebsockexNova (behaviours, platform integrations) without reinventing the wheel for WebSocket protocol handling.
 
 ## Project Overview
 
@@ -24,11 +24,11 @@ Using Gun allows us to focus on the application-specific aspects of WebsockexNov
 lib/
 ├── websockex_nova.ex                # Client API (uses Gun underneath)
 ├── websockex_nova/
-    ├── behaviors/                   # Behavior definitions
+    ├── behaviours/                   # Behavior definitions
     │   ├── connection_handler.ex    # How to handle connection lifecycle
     │   ├── message_handler.ex       # How to process messages
     │   ├── error_handler.ex         # How to handle errors
-    │   └── ...                      # Other behaviors
+    │   └── ...                      # Other behaviours
     │
     ├── gun/                         # Gun-specific implementation
     │   ├── connection_state.ex      # Connection state structure
@@ -50,7 +50,7 @@ lib/
     │
     ├── platform/                    # Platform-specific adapters
     │   ├── deribit/                 # Example exchange integration
-    │   │   ├── adapter.ex           # Implements behaviors for Deribit
+    │   │   ├── adapter.ex           # Implements behaviours for Deribit
     │   │   ├── client.ex            # Platform-specific client
     │   │   └── ...
     │   └── ...                      # Other platform integrations
@@ -117,15 +117,15 @@ Implement a robust Gun client adapter with the following features:
    - Frame sending and receiving with proper error handling
    - Use gun:await/3 with monitor references for waiting on WebSocket upgrades
 
-### Phase 1: Core Behaviors (2 weeks)
+### Phase 1: Core Behaviours (2 weeks)
 
 #### 1.1 Define Behavior Interfaces
 
 Start by defining behavior interfaces with TDD:
 
-# test/websockex_nova/behaviors/connection_handler_test.exs
+# test/websockex_nova/behaviours/connection_handler_test.exs
 
-# lib/websockex_nova/behaviors/connection_handler.ex
+# lib/websockex_nova/behaviours/connection_handler.ex
 
 #### 1.2 Add Strategy Macros
 

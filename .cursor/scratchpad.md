@@ -15,7 +15,7 @@ Tasks follow this format:
 - **Dependencies**: IDs of tasks that must be completed first
 - **Status**: TODO, IN_PROGRESS, DONE
 
-## Phase 1: Project Setup & Core Behaviors
+## Phase 1: Project Setup & Core Behaviours
 
 ### T1.1
 
@@ -109,7 +109,7 @@ Tasks follow this format:
 ### T1.8
 
 - **Name**: Create default behavior implementation tests
-- **Description**: Test the default implementations of all behaviors
+- **Description**: Test the default implementations of all behaviours
 - **Acceptance Criteria**:
   - Tests for DefaultConnectionHandler
   - Tests for DefaultMessageHandler
@@ -427,9 +427,9 @@ Tasks follow this format:
 ### T3.3
 
 - **Name**: Create Gun-to-behavior bridge tests
-- **Description**: Test the integration between Gun and behaviors
+- **Description**: Test the integration between Gun and behaviours
 - **Acceptance Criteria**:
-  - Tests for message routing from Gun to behaviors
+  - Tests for message routing from Gun to behaviours
   - Tests for behavior callback invocation
   - Tests for error propagation
 - **Priority**: P0
@@ -533,7 +533,7 @@ Tasks follow this format:
 - **Status**: DONE
 - **Progress**:
   - [x] Telemetry event design and documentation complete (`lib/websockex_nova/telemetry/telemetry_events.ex`)
-  - [x] MetricsCollector behavior defined (`lib/websockex_nova/behaviors/metrics_collector.ex`)
+  - [x] MetricsCollector behavior defined (`lib/websockex_nova/behaviours/metrics_collector.ex`)
   - [x] DefaultMetricsCollector implemented and tested (`lib/websockex_nova/defaults/default_metrics_collector.ex`)
   - [x] Tests for event emission and aggregation (`test/websockex_nova/defaults/default_metrics_collector_test.exs`)
   - [x] Telemetry emission integration into core modules (next step)

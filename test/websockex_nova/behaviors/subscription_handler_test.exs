@@ -1,10 +1,10 @@
-defmodule WebsockexNova.Behaviors.SubscriptionHandlerTest do
+defmodule WebsockexNova.Behaviours.SubscriptionHandlerTest do
   use ExUnit.Case, async: true
 
   # Define a mock module that implements the SubscriptionHandler behavior
   defmodule MockSubscriptionHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.SubscriptionHandler
+    @behaviour WebsockexNova.Behaviours.SubscriptionHandler
 
     @impl true
     def subscription_init(opts) do

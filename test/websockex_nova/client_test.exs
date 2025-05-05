@@ -1,11 +1,11 @@
 defmodule WebsockexNova.ClientTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Behaviors.AuthHandler
-  alias WebsockexNova.Behaviors.ConnectionHandler
-  alias WebsockexNova.Behaviors.ErrorHandler
-  alias WebsockexNova.Behaviors.MessageHandler
-  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Behaviours.AuthHandler
+  alias WebsockexNova.Behaviours.ConnectionHandler
+  alias WebsockexNova.Behaviours.ErrorHandler
+  alias WebsockexNova.Behaviours.MessageHandler
+  alias WebsockexNova.Behaviours.SubscriptionHandler
   alias WebsockexNova.Client
   alias WebsockexNova.ClientConn
   alias WebsockexNova.Defaults.DefaultRateLimitHandler

@@ -4,7 +4,7 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
   and is used for various test scenarios in the rate limiting test suite.
   """
 
-  alias WebsockexNova.Behaviors.RateLimitHandler
+  alias WebsockexNova.Behaviours.RateLimitHandler
 
   require Logger
 

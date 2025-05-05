@@ -1,7 +1,7 @@
 defmodule WebsockexNova.Message.SubscriptionManagerTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Behaviours.SubscriptionHandler
   alias WebsockexNova.Message.SubscriptionManager
 
   # Define a test subscription handler for our tests

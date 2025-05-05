@@ -6,7 +6,7 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
 
   defmodule MockErrorHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.ErrorHandler
+    @behaviour WebsockexNova.Behaviours.ErrorHandler
 
     def should_reconnect?(_error, attempt, _state) do
       # Allow up to 2 attempts

@@ -6,7 +6,7 @@ A robust, highly extensible WebSocket client library for Elixir with elegant abs
 
 - **Behavior-Based Architecture**: Easily extendable through behavior interfaces
 - **Adapter Pattern**: Customize specific aspects of WebSocket communication
-- **Default Implementations**: Sensible defaults provided for all behaviors
+- **Default Implementations**: Sensible defaults provided for all behaviours
 - **Gun Integration**: Uses the battle-tested Gun library as the transport layer
 - **Client Macro**: Simplify creation of service-specific WebSocket clients
 - **Adapter Macro**: Build service-specific adapters with minimal boilerplate
@@ -79,7 +79,7 @@ defmodule MyApp.DeribitAdapter do
   use WebsockexNova.Adapter
 
   # Override only what you need:
-  @impl WebsockexNova.Behaviors.ConnectionHandler
+  @impl WebsockexNova.Behaviours.ConnectionHandler
   def connection_info(opts) do
     defaults = %{
       host: "www.deribit.com",
@@ -91,7 +91,7 @@ defmodule MyApp.DeribitAdapter do
     {:ok, Map.merge(defaults, opts)}
   end
 
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNova.Behaviours.MessageHandler
   def handle_message(message, state) do
     # Custom message handling...
     {:ok, decoded_message, updated_state}

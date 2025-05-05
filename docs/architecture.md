@@ -97,7 +97,7 @@ WebsockexNova uses Erlang process monitors rather than links for tracking Gun pr
 
 - **Transport Core** (`websockex_nova/transport/`)
 
-  - Protocol-agnostic WebSocket behaviors
+  - Protocol-agnostic WebSocket behaviours
   - Connection management (`ConnectionHandler` behavior)
   - Rate limiting (`RateLimitHandler` behavior)
   - Heartbeat management (`HeartbeatHandler` behavior)
@@ -111,7 +111,7 @@ WebsockexNova uses Erlang process monitors rather than links for tracking Gun pr
   - Error handling (`ErrorHandler` behavior)
 
 - **Platform Core** (`websockex_nova/platform/`)
-  - Platform-specific behaviors and adapters
+  - Platform-specific behaviours and adapters
   - Provider-specific modules (e.g., Deribit, Bybit, Slack, Discord)
   - Protocol-specific handling (e.g., Ethereum, JSON-RPC)
 
@@ -125,7 +125,7 @@ For detailed platform integration examples and directory structures, see `docs/e
 
 #### Protocol Integrations
 
-Protocol integrations follow similar organization patterns but focus on protocol-specific behaviors and message formats.
+Protocol integrations follow similar organization patterns but focus on protocol-specific behaviours and message formats.
 
 For detailed protocol integration examples and directory structures, see `docs/examples/protocol_integration.md`.
 
@@ -168,9 +168,9 @@ For detailed protocol integration examples and directory structures, see `docs/e
                        └─────────────────────┘     └───────────────────┘
 ```
 
-### 2. Core Behaviors and Modules Overview
+### 2. Core Behaviours and Modules Overview
 
-WebsockexNova defines a set of behaviors that establish contracts for different aspects of WebSocket communication. Each behavior serves a specific purpose and can be customized based on application requirements.
+WebsockexNova defines a set of behaviours that establish contracts for different aspects of WebSocket communication. Each behavior serves a specific purpose and can be customized based on application requirements.
 
 #### 2.1 ConnectionHandler Behavior
 
@@ -214,9 +214,9 @@ Handles authentication flows with callbacks:
 - `handle_auth_response/2`: Process authentication responses
 - `needs_reauthentication?/1`: Check if reauthentication is needed
 
-#### 2.6 Clustering Behaviors
+#### 2.6 Clustering Behaviours
 
-<!-- TODO: Verify that all clustering-related behaviors (especially ClusterAware callbacks like handle_node_transition, handle_cluster_update) are documented here as they are implemented -->
+<!-- TODO: Verify that all clustering-related behaviours (especially ClusterAware callbacks like handle_node_transition, handle_cluster_update) are documented here as they are implemented -->
 
 - **ClusterAware Behavior**: For components that need to respond to cluster state changes
   - `handle_node_transition/3`: React to node joins/leaves in the cluster
@@ -246,13 +246,13 @@ The connection state management system provides robust tracking and management o
 - Provides searchable history of connection events
 - Can export trace events to a file or monitoring system
 
-> **Note:** The specific implementations of these behaviors depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
+> **Note:** The specific implementations of these behaviours depend on the platform being integrated. Each platform may require different authentication mechanisms, reconnection strategies, and message formats.
 
 > **For Complete API Documentation:** See `docs/api/` for full behavior specifications and callback signatures.
 
 ### 3. Behavior Completeness and Extensibility
 
-While the core behaviors provide a solid foundation for most WebSocket interactions, they can be extended to address specific use cases or advanced scenarios.
+While the core behaviours provide a solid foundation for most WebSocket interactions, they can be extended to address specific use cases or advanced scenarios.
 
 #### 3.1 Potential Extensions
 
@@ -276,7 +276,7 @@ The current behavior set may benefit from these additional capabilities:
 
 #### 3.2 Behavior Evolution Strategy
 
-As the library evolves, new behaviors and callbacks will be added judiciously:
+As the library evolves, new behaviours and callbacks will be added judiciously:
 
 1. **Versioning Approach**:
 
@@ -285,7 +285,7 @@ As the library evolves, new behaviors and callbacks will be added judiciously:
 
 2. **Extension Mechanisms**:
    - Protocol extensions through behavior composition
-   - Platform-specific behaviors implemented as separate modules
+   - Platform-specific behaviours implemented as separate modules
    - Configuration-driven behavior selection
 
 ## Telemetry and Observability
@@ -505,7 +505,7 @@ config :websockex_nova,
 
 ### 5. Custom Profile
 
-Applications can define custom profiles by overriding specific behaviors:
+Applications can define custom profiles by overriding specific behaviours:
 
 ```elixir
 defmodule MyApp.CustomConnectionHandler do
@@ -685,11 +685,11 @@ When implementing WebsockexNova for your application:
    - Monitor message throughput and latency
    - Alert on abnormal reconnection patterns
 
-> **Maintainer Note:** As WebsockexNova profiles and behaviors evolve, revisit these best practice recommendations to ensure they remain aligned with the library's capabilities and recommended usage patterns.
+> **Maintainer Note:** As WebsockexNova profiles and behaviours evolve, revisit these best practice recommendations to ensure they remain aligned with the library's capabilities and recommended usage patterns.
 
 ## Conclusion
 
-WebsockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviors and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
+WebsockexNova's behavior-based architecture provides a flexible, extensible foundation for WebSocket interactions across various platforms. By separating core behaviours and offering implementation profiles, the library supports applications ranging from high-frequency trading to simple messaging systems.
 
 The use of Gun as the transport layer ensures a reliable foundation, while the behavior interfaces enable custom implementations tailored to specific requirements.
 

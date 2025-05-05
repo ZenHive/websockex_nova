@@ -1,10 +1,10 @@
-defmodule WebsockexNova.Behaviors.ErrorHandlerTest do
+defmodule WebsockexNova.Behaviours.ErrorHandlerTest do
   use ExUnit.Case, async: true
 
   # Define a mock module that implements the ErrorHandler behavior
   defmodule MockErrorHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.ErrorHandler
+    @behaviour WebsockexNova.Behaviours.ErrorHandler
 
     def error_init(opts) do
       send(opts[:test_pid], {:error_init, opts})

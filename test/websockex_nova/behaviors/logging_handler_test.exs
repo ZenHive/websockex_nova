@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
+defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
   use ExUnit.Case, async: true
 
   import ExUnit.CaptureLog
@@ -145,7 +145,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandlerTest do
   # Add a custom handler integration test
   defmodule TestHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.LoggingHandler
+    @behaviour WebsockexNova.Behaviours.LoggingHandler
 
     def log_connection_event(event, context, _state), do: send(self(), {:log, :connection, event, context})
     def log_message_event(event, context, _state), do: send(self(), {:log, :message, event, context})

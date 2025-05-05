@@ -1,10 +1,10 @@
-defmodule WebsockexNova.Behaviors.ConnectionHandlerTest do
+defmodule WebsockexNova.Behaviours.ConnectionHandlerTest do
   use ExUnit.Case, async: true
 
   # Define a mock module that implements the ConnectionHandler behavior
   defmodule MockConnectionHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.ConnectionHandler
+    @behaviour WebsockexNova.Behaviours.ConnectionHandler
 
     def init(opts) do
       {:ok, opts}

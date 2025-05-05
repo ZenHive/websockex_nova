@@ -1,10 +1,10 @@
-defmodule WebsockexNova.Behaviors.AuthHandlerTest do
+defmodule WebsockexNova.Behaviours.AuthHandlerTest do
   use ExUnit.Case, async: true
 
   # Define a mock module that implements the AuthHandler behavior
   defmodule MockAuthHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.AuthHandler
+    @behaviour WebsockexNova.Behaviours.AuthHandler
 
     @impl true
     def generate_auth_data(state) do

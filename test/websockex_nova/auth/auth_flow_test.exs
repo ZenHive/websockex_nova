@@ -2,7 +2,7 @@ defmodule WebsockexNova.Auth.AuthFlowTest do
   use ExUnit.Case, async: true
 
   alias WebsockexNova.Auth.AuthFlow
-  alias WebsockexNova.Behaviors.AuthHandler
+  alias WebsockexNova.Behaviours.AuthHandler
 
   # Define a mock AuthHandler for testing
   defmodule MockAuthHandler do

@@ -1,9 +1,9 @@
 defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
   use ExUnit.Case, async: false
 
-  alias WebsockexNova.Behaviors.AuthHandler
-  alias WebsockexNova.Behaviors.ConnectionHandler
-  alias WebsockexNova.Behaviors.SubscriptionHandler
+  alias WebsockexNova.Behaviours.AuthHandler
+  alias WebsockexNova.Behaviours.ConnectionHandler
+  alias WebsockexNova.Behaviours.SubscriptionHandler
   alias WebsockexNova.Gun.ConnectionWrapper
   alias WebsockexNova.Test.Support.MockWebSockServer
 

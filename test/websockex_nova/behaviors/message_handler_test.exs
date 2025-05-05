@@ -1,10 +1,10 @@
-defmodule WebsockexNova.Behaviors.MessageHandlerTest do
+defmodule WebsockexNova.Behaviours.MessageHandlerTest do
   use ExUnit.Case, async: true
 
   # Define a mock module that implements the MessageHandler behavior
   defmodule MockMessageHandler do
     @moduledoc false
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNova.Behaviours.MessageHandler
 
     def message_init(opts) do
       send(opts[:test_pid], {:message_init, opts})

@@ -4,5 +4,5 @@ defmodule WebsockexNova.Mocks do
   """
 
   # Define mock for the Client behavior
-  Mox.defmock(WebsockexNova.ClientMock, for: WebsockexNova.Behaviors.ClientBehavior)
+  Mox.defmock(WebsockexNova.ClientMock, for: WebsockexNova.Behaviours.ClientBehavior)
 end
