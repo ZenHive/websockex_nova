@@ -296,7 +296,9 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
   describe "edge cases" do
     test "rejects requests when queue is full" do
       unique_name = String.to_atom("overflow_#{:erlang.unique_integer([:positive])}")
-      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.OverflowHandler)
+
+      {:ok, _pid} =
+        RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.OverflowHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -311,7 +313,9 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "handles negative/zero refill rates and intervals safely" do
       unique_name = String.to_atom("neg_refill_#{:erlang.unique_integer([:positive])}")
-      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NegativeRefillHandler)
+
+      {:ok, _pid} =
+        RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NegativeRefillHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -326,7 +330,9 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "uses default cost for unknown request types" do
       unique_name = String.to_atom("unknown_type_#{:erlang.unique_integer([:positive])}")
-      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.UnknownTypeHandler)
+
+      {:ok, _pid} =
+        RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.UnknownTypeHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -341,7 +347,9 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "logs and rejects on invalid handler return" do
       unique_name = String.to_atom("invalid_return_#{:erlang.unique_integer([:positive])}")
-      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.InvalidReturnHandler)
+
+      {:ok, _pid} =
+        RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.InvalidReturnHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -355,7 +363,9 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
     test "callback for never-processed request is not executed" do
       unique_name = String.to_atom("never_process_#{:erlang.unique_integer([:positive])}")
-      {:ok, _pid} = RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NeverProcessHandler)
+
+      {:ok, _pid} =
+        RateLimiting.start_link(name: unique_name, handler: RateLimitHandlers.NeverProcessHandler)
 
       on_exit(fn ->
         case Process.whereis(unique_name) do
@@ -366,7 +376,14 @@ defmodule WebsockexNova.Transport.RateLimitingTest do
 
       {:queue, request_id} = RateLimiting.check(%{}, unique_name)
       test_pid = self()
-      :ok = RateLimiting.on_process(request_id, fn -> send(test_pid, :should_not_happen) end, unique_name)
+
+      :ok =
+        RateLimiting.on_process(
+          request_id,
+          fn -> send(test_pid, :should_not_happen) end,
+          unique_name
+        )
+
       refute_receive :should_not_happen, 100
     end
   end
@@ -381,7 +398,13 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
 
   property "queue never exceeds its limit" do
     check all n <- integer(1..20),
-              seq <- list_of(constant(%{type: :queue_type}), min_length: n, max_length: n, unique: false) do
+              seq <-
+                list_of(
+                  constant(%{type: :queue_type}),
+                  min_length: n,
+                  max_length: n,
+                  unique: false
+                ) do
       unique_name = :"pb_queue_#{:erlang.unique_integer([:positive])}"
 
       {:ok, pid} =
@@ -438,7 +461,13 @@ defmodule WebsockexNova.Transport.RateLimitingPropertyTest do
 
   property "tokens never negative and never exceed capacity" do
     check all n <- integer(5..20),
-              seq <- list_of(constant(%{type: :allow_type}), min_length: n, max_length: n, unique: false) do
+              seq <-
+                list_of(
+                  constant(%{type: :allow_type}),
+                  min_length: n,
+                  max_length: n,
+                  unique: false
+                ) do
       unique_name = :"pb_tokens_#{:erlang.unique_integer([:positive])}"
 
       {:ok, pid} =

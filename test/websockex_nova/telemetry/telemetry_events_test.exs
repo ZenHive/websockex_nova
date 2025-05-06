@@ -13,7 +13,11 @@ defmodule WebsockexNova.Telemetry.TelemetryEventsTest do
     end
 
     test "connection_websocket_upgrade/0 returns the correct event name" do
-      assert TelemetryEvents.connection_websocket_upgrade() == [:websockex_nova, :connection, :websocket_upgrade]
+      assert TelemetryEvents.connection_websocket_upgrade() == [
+               :websockex_nova,
+               :connection,
+               :websocket_upgrade
+             ]
     end
 
     test "message_sent/0 returns the correct event name" do

@@ -34,7 +34,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
       try do
         # Connect with HTTP/2 protocol
         {:error, :connection_failed} =
-          ConnectionWrapper.open(@host, port, @websocket_path, %{protocols: [:http2], transport: :tcp})
+          ConnectionWrapper.open(@host, port, @websocket_path, %{
+            protocols: [:http2],
+            transport: :tcp
+          })
 
         # Verify connection
         # assert Process.alive?(conn.transport_pid)
@@ -115,8 +118,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServerTest do
 
     @tag :skip
     test "websocket upgrade works over HTTP/2" do
-      # Skipped: WebSocket upgrades over HTTP/2 (RFC 8441) are not supported by Cowboy or Gun as of 2024.
-      # See: https://ninenines.eu/docs/en/cowboy/2.13/guide/listeners/ and https://elixirforum.com/t/working-config-for-gun-websocket-client/46376
+      # Skipped: WebSocket upgrades over HTTP/2 (RFC 8441) are not supported by Cowboy or Gun as of
+      # 2024.
+      # See: https://ninenines.eu/docs/en/cowboy/2.13/guide/listeners/ and
+      # https://elixirforum.com/t/working-config-for-gun-websocket-client/46376
     end
 
     test "connects with wildcard certificate to subdomain" do

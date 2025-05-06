@@ -36,13 +36,23 @@ defmodule WebsockexNova.Gun.StateConsistencyTest do
 
     # 3. Assert: No session/auth/subscription state in ConnectionState.options
     options = state.options
-    refute Map.has_key?(options, :auth_status), "auth_status should not be in ConnectionState.options"
-    refute Map.has_key?(options, :access_token), "access_token should not be in ConnectionState.options"
-    refute Map.has_key?(options, :credentials), "credentials should not be in ConnectionState.options"
-    refute Map.has_key?(options, :subscriptions), "subscriptions should not be in ConnectionState.options"
+
+    refute Map.has_key?(options, :auth_status),
+           "auth_status should not be in ConnectionState.options"
+
+    refute Map.has_key?(options, :access_token),
+           "access_token should not be in ConnectionState.options"
+
+    refute Map.has_key?(options, :credentials),
+           "credentials should not be in ConnectionState.options"
+
+    refute Map.has_key?(options, :subscriptions),
+           "subscriptions should not be in ConnectionState.options"
 
     # 4. Assert: All session/auth/subscription state is canonical in ClientConn
-    assert is_nil(conn.adapter_state.auth_status) or conn.adapter_state.auth_status in [:unauthenticated, :authenticated]
+    assert is_nil(conn.adapter_state.auth_status) or
+             conn.adapter_state.auth_status in [:unauthenticated, :authenticated]
+
     assert is_map(conn.adapter_state)
 
     # 5. Authenticate (call authenticate/3 and use updated conn)
@@ -60,13 +70,21 @@ defmodule WebsockexNova.Gun.StateConsistencyTest do
     handler_state = state2.handlers[:subscription_handler_state]
 
     if is_map(handler_state) and Map.has_key?(handler_state, :auth_status) do
-      assert handler_state.auth_status == conn2.adapter_state.auth_status, "Handler state should match canonical state"
-      assert handler_state.credentials == conn2.adapter_state.credentials, "Handler state should match canonical state"
+      assert handler_state.auth_status == conn2.adapter_state.auth_status,
+             "Handler state should match canonical state"
+
+      assert handler_state.credentials == conn2.adapter_state.credentials,
+             "Handler state should match canonical state"
     end
 
     # 7. Assert: No duplicated or stale state in ConnectionState
-    refute Map.has_key?(state2.options, :auth_status), "auth_status should not be in ConnectionState.options after auth"
-    refute Map.has_key?(state2.options, :access_token), "access_token should not be in ConnectionState.options after auth"
-    refute Map.has_key?(state2.options, :credentials), "credentials should not be in ConnectionState.options after auth"
+    refute Map.has_key?(state2.options, :auth_status),
+           "auth_status should not be in ConnectionState.options after auth"
+
+    refute Map.has_key?(state2.options, :access_token),
+           "access_token should not be in ConnectionState.options after auth"
+
+    refute Map.has_key?(state2.options, :credentials),
+           "credentials should not be in ConnectionState.options after auth"
   end
 end

@@ -31,7 +31,10 @@ defmodule WebsockexNova.Examples.ClientDeribitMacroTest do
     # Helper to generate appropriate mock result for each API method
     defp get_mock_result("public/get_time"), do: 1_550_147_385_946
     defp get_mock_result("public/hello"), do: %{"version" => "1.2.26"}
-    defp get_mock_result("public/status"), do: %{"locked_currencies" => ["BTC", "ETH"], "locked" => true}
+
+    defp get_mock_result("public/status"),
+      do: %{"locked_currencies" => ["BTC", "ETH"], "locked" => true}
+
     defp get_mock_result("public/test"), do: %{"version" => "1.2.26"}
     defp get_mock_result(_), do: %{}
   end

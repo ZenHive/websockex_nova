@@ -34,7 +34,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
     log =
       capture_log(fn ->
         # Open a connection and get the Gun PID
-        {:ok, conn} = ConnectionWrapper.open("localhost", port, @websocket_path, %{callback_pid: self(), transport: :tcp})
+        {:ok, conn} =
+          ConnectionWrapper.open("localhost", port, @websocket_path, %{
+            callback_pid: self(),
+            transport: :tcp
+          })
+
         state = ConnectionWrapper.get_state(conn)
         old_gun_pid = state.gun_pid
         assert is_pid(old_gun_pid)
@@ -73,15 +78,21 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
   end
 
   @tag :stress
-  test "stress: repeated disconnects, reconnects, and stale Gun PID messages do not cause log spam or state errors", %{
-    port: port
-  } do
+  test "stress: repeated disconnects, reconnects, and stale Gun PID messages do not cause log spam or state errors",
+       %{
+         port: port
+       } do
     # Reduce iterations for faster tests
     iterations = 3
 
     log =
       capture_log(fn ->
-        {:ok, conn} = ConnectionWrapper.open("localhost", port, @websocket_path, %{callback_pid: self(), transport: :tcp})
+        {:ok, conn} =
+          ConnectionWrapper.open("localhost", port, @websocket_path, %{
+            callback_pid: self(),
+            transport: :tcp
+          })
+
         assert_connection_status(conn, :websocket_connected)
         state = ConnectionWrapper.get_state(conn)
         gun_pid = state.gun_pid
@@ -147,7 +158,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
     assert_status_with_timeout(conn, expected_status, timeout, 0)
   end
 
-  defp assert_status_with_timeout(conn, expected_status, timeout, elapsed) when elapsed >= timeout do
+  defp assert_status_with_timeout(conn, expected_status, timeout, elapsed)
+       when elapsed >= timeout do
     state = ConnectionWrapper.get_state(conn)
     flunk("Connection status timeout: expected #{expected_status}, got #{state.status}")
   end

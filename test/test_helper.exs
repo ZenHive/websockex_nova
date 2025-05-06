@@ -9,7 +9,11 @@ ExUnit.start()
 Mox.defmock(WebsockexNova.TransportMock, for: WebsockexNova.Transport)
 Mox.defmock(WebsockexNova.ConnectionHandlerMock, for: WebsockexNova.Behaviours.ConnectionHandler)
 Mox.defmock(WebsockexNova.MessageHandlerMock, for: WebsockexNova.Behaviours.MessageHandler)
-Mox.defmock(WebsockexNova.SubscriptionHandlerMock, for: WebsockexNova.Behaviours.SubscriptionHandler)
+
+Mox.defmock(WebsockexNova.SubscriptionHandlerMock,
+  for: WebsockexNova.Behaviours.SubscriptionHandler
+)
+
 Mox.defmock(WebsockexNova.AuthHandlerMock, for: WebsockexNova.Behaviours.AuthHandler)
 Mox.defmock(WebsockexNova.ErrorHandlerMock, for: WebsockexNova.Behaviours.ErrorHandler)
 Mox.defmock(WebsockexNova.RateLimitHandlerMock, for: WebsockexNova.Behaviours.RateLimitHandler)

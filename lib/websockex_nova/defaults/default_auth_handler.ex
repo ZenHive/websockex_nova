@@ -60,7 +60,10 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: _adapter_state} = conn) do
+  def handle_auth_response(
+        response,
+        %WebsockexNova.ClientConn{adapter_state: _adapter_state} = conn
+      ) do
     case response do
       %{"type" => "auth_success"} = resp ->
         handle_auth_success(resp, conn)
@@ -93,7 +96,11 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   end
 
   @impl true
-  def authenticate(_stream_ref, credentials, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn)
+  def authenticate(
+        _stream_ref,
+        credentials,
+        %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn
+      )
       when is_map(credentials) do
     updated_adapter_state = Map.put(adapter_state, :credentials, credentials)
     updated_conn = %{conn | adapter_state: updated_adapter_state}
@@ -105,9 +112,14 @@ defmodule WebsockexNova.Defaults.DefaultAuthHandler do
   defp handle_auth_success(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     expires_at =
       case response do
-        %{"expires_at" => expires_at} when is_integer(expires_at) -> expires_at
-        %{"expires_in" => expires_in} when is_integer(expires_in) -> System.system_time(:second) + expires_in
-        _ -> System.system_time(:second) + @default_auth_timeout
+        %{"expires_at" => expires_at} when is_integer(expires_at) ->
+          expires_at
+
+        %{"expires_in" => expires_in} when is_integer(expires_in) ->
+          System.system_time(:second) + expires_in
+
+        _ ->
+          System.system_time(:second) + @default_auth_timeout
       end
 
     token = Map.get(response, "token")

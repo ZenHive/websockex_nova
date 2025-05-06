@@ -203,7 +203,14 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   """
   @spec set_scenario(pid(), atom(), function() | nil) :: :ok
   def set_scenario(server_pid, scenario, custom_handler \\ nil)
-      when scenario in [:normal, :delayed_response, :drop_messages, :echo_with_error, :unstable, :custom] do
+      when scenario in [
+             :normal,
+             :delayed_response,
+             :drop_messages,
+             :echo_with_error,
+             :unstable,
+             :custom
+           ] do
     Logger.debug("Setting server scenario to #{scenario}")
     GenServer.call(server_pid, {:set_scenario, scenario, custom_handler})
   end
@@ -238,7 +245,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     # Check for TLS certificates or generate if needed
     {certfile, keyfile} = get_tls_files(protocol, opts)
 
-    Logger.debug("Initializing MockWebSockServer with path: #{path}, port: #{port}, protocol: #{protocol}")
+    Logger.debug(
+      "Initializing MockWebSockServer with path: #{path}, port: #{port}, protocol: #{protocol}"
+    )
 
     # Create a unique name for this server instance to avoid conflicts
     server_name = :"mock_websocket_server_#{System.unique_integer([:positive])}"
@@ -312,7 +321,8 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   @impl true
-  def handle_call({:set_response_delay, delay_ms}, _from, state) when is_integer(delay_ms) and delay_ms >= 0 do
+  def handle_call({:set_response_delay, delay_ms}, _from, state)
+      when is_integer(delay_ms) and delay_ms >= 0 do
     {:reply, :ok, %{state | response_delay: delay_ms}}
   end
 
@@ -562,7 +572,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
 
   defp echo_message(client_pid, :text, message, state), do: send_text(client_pid, message, state)
-  defp echo_message(client_pid, :binary, message, state), do: send_binary(client_pid, message, state)
+
+  defp echo_message(client_pid, :binary, message, state),
+    do: send_binary(client_pid, message, state)
 
   # Helper functions
 
@@ -577,7 +589,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
 
   defp send_binary(client_pid, data, _state) do
     if Process.alive?(client_pid) do
-      Logger.debug("Sending BINARY frame to client #{inspect(client_pid)}: #{byte_size(data)} bytes")
+      Logger.debug(
+        "Sending BINARY frame to client #{inspect(client_pid)}: #{byte_size(data)} bytes"
+      )
 
       send(client_pid, {:send_binary, data})
     else

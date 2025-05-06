@@ -120,7 +120,8 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       channel = "market.btcusd.trades"
       params = %{frequency: "100ms"}
 
-      {:ok, subscription_id, updated_manager} = SubscriptionManager.subscribe(manager, channel, params)
+      {:ok, subscription_id, updated_manager} =
+        SubscriptionManager.subscribe(manager, channel, params)
 
       assert is_binary(subscription_id)
       assert updated_manager.state.subscriptions[subscription_id].channel == channel
@@ -166,7 +167,8 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
     test "handles error subscription response", %{manager: manager, sub2: sub2} do
       response = %{"type" => "error", "id" => sub2, "reason" => "access_denied"}
 
-      {:error, "access_denied", updated_manager} = SubscriptionManager.handle_response(manager, response)
+      {:error, "access_denied", updated_manager} =
+        SubscriptionManager.handle_response(manager, response)
 
       assert updated_manager.state.subscriptions[sub2].status == :failed
       assert updated_manager.state.subscriptions[sub2].error == "access_denied"
@@ -223,7 +225,10 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       {:ok, manager: manager, sub1: sub1, sub2: sub2}
     end
 
-    test "prepares resubscription list for confirmed subscriptions", %{manager: manager, sub1: _sub1} do
+    test "prepares resubscription list for confirmed subscriptions", %{
+      manager: manager,
+      sub1: _sub1
+    } do
       {:ok, updated_manager} = SubscriptionManager.prepare_for_reconnect(manager)
 
       # The confirmed subscription should be in the pending_subscriptions list
@@ -259,8 +264,12 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
   describe "subscription state persistence" do
     test "can export subscription state" do
       {:ok, manager} = SubscriptionManager.new(TestSubscriptionHandler)
-      {:ok, _sub1, manager} = SubscriptionManager.subscribe(manager, "channel1", %{priority: "high"})
-      {:ok, _sub2, manager} = SubscriptionManager.subscribe(manager, "channel2", %{priority: "medium"})
+
+      {:ok, _sub1, manager} =
+        SubscriptionManager.subscribe(manager, "channel1", %{priority: "high"})
+
+      {:ok, _sub2, manager} =
+        SubscriptionManager.subscribe(manager, "channel2", %{priority: "medium"})
 
       exported_state = SubscriptionManager.export_state(manager)
 
@@ -272,7 +281,9 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
     test "can import subscription state" do
       # Create a manager and export its state
       {:ok, original_manager} = SubscriptionManager.new(TestSubscriptionHandler)
-      {:ok, sub1, original_manager} = SubscriptionManager.subscribe(original_manager, "channel1", %{priority: "high"})
+
+      {:ok, sub1, original_manager} =
+        SubscriptionManager.subscribe(original_manager, "channel1", %{priority: "high"})
 
       exported_state = SubscriptionManager.export_state(original_manager)
 

@@ -112,7 +112,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           if websocket_stream = find_websocket_stream(updated_state) do
             :gun.ws_send(updated_state.gun_pid, websocket_stream, {frame_type, data})
           else
-            log_event(:error, :no_active_websocket_stream, %{frame_type: frame_type, data: data}, updated_state)
+            log_event(
+              :error,
+              :no_active_websocket_stream,
+              %{frame_type: frame_type, data: data},
+              updated_state
+            )
           end
 
           updated_state
@@ -122,7 +127,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           if websocket_stream = find_websocket_stream(updated_state) do
             :gun.ws_send(updated_state.gun_pid, websocket_stream, {:close, code, reason})
           else
-            log_event(:error, :no_active_websocket_stream_close, %{code: code, reason: reason}, updated_state)
+            log_event(
+              :error,
+              :no_active_websocket_stream_close,
+              %{code: code, reason: reason},
+              updated_state
+            )
           end
 
           updated_state
@@ -168,7 +178,14 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
           {:noreply, ConnectionState.t()}
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
-  def handle_connection_down(_gun_pid, protocol, reason, state, killed_streams \\ [], _unprocessed_streams \\ []) do
+  def handle_connection_down(
+        _gun_pid,
+        protocol,
+        reason,
+        state,
+        killed_streams \\ [],
+        _unprocessed_streams \\ []
+      ) do
     # Telemetry: connection close
     :telemetry.execute(
       TelemetryEvents.connection_close(),
@@ -197,7 +214,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       |> clean_up_killed_streams(killed_streams)
 
     # This message pattern must match what the test expects
-    Logger.debug("Sending connection_down notification: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}")
+    Logger.debug(
+      "Sending connection_down notification: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}"
+    )
 
     notify(state.callback_pid, {:connection_down, protocol, reason})
 
@@ -346,7 +365,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     state =
       case frame do
         {:close, code, reason} ->
-          Logger.debug("Received close frame for stream: #{inspect(stream_ref)}, code=#{code}, reason=#{inspect(reason)}")
+          Logger.debug(
+            "Received close frame for stream: #{inspect(stream_ref)}, code=#{code}, reason=#{inspect(reason)}"
+          )
 
           ConnectionState.remove_stream(state, stream_ref)
 
@@ -359,7 +380,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       end
 
     # Notify callback - this is required for tests to pass
-    Logger.debug("Sending websocket_frame notification: stream=#{inspect(stream_ref)}, frame=#{inspect(frame)}")
+    Logger.debug(
+      "Sending websocket_frame notification: stream=#{inspect(stream_ref)}, frame=#{inspect(frame)}"
+    )
 
     notify(state.callback_pid, {:websocket_frame, stream_ref, frame})
 
@@ -428,7 +451,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       |> clean_stream_on_error(stream_ref)
 
     # Notify callback
-    Logger.debug("Sending error notification: stream=#{inspect(stream_ref)}, reason=#{inspect(reason)}")
+    Logger.debug(
+      "Sending error notification: stream=#{inspect(stream_ref)}, reason=#{inspect(reason)}"
+    )
 
     notify(state.callback_pid, {:error, stream_ref, reason})
 
@@ -470,7 +495,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       end
 
     # Notify callback
-    Logger.debug("Sending http_response notification: stream=#{inspect(stream_ref)}, status=#{status}")
+    Logger.debug(
+      "Sending http_response notification: stream=#{inspect(stream_ref)}, status=#{status}"
+    )
 
     notify(state.callback_pid, {:http_response, stream_ref, is_fin, status, headers})
 
@@ -554,7 +581,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
 
   # Logging helpers
   defp log_event(:connection, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_connection_event, 3) do
       state.logging_handler.log_connection_event(event, context, state)
     else
       Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
@@ -562,7 +590,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   end
 
   defp log_event(:message, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_message_event, 3) do
       state.logging_handler.log_message_event(event, context, state)
     else
       Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
@@ -570,7 +599,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
   end
 
   defp log_event(:error, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_error_event, 3) do
       state.logging_handler.log_error_event(event, context, state)
     else
       Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")

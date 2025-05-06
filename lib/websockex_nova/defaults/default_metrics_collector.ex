@@ -195,7 +195,10 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollector do
 
   # ETS metric helpers
   defp incr(key), do: :ets.update_counter(@table, key, {2, 1}, {key, 0})
-  defp add(key, value) when is_integer(value), do: :ets.update_counter(@table, key, {2, value}, {key, 0})
+
+  defp add(key, value) when is_integer(value),
+    do: :ets.update_counter(@table, key, {2, value}, {key, 0})
+
   defp add(_key, _), do: :ok
 
   # Record duration with pattern matching optimization

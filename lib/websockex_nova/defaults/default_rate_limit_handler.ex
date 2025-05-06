@@ -93,7 +93,8 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
   Accepts and returns the canonical struct.
   """
   @impl true
-  def check_rate_limit(request, %ClientConn{rate_limit: rl} = conn) when is_map(request) and is_map(rl) do
+  def check_rate_limit(request, %ClientConn{rate_limit: rl} = conn)
+      when is_map(request) and is_map(rl) do
     Logger.debug("Checking rate limit for request: #{inspect(request)}, mode: #{inspect(rl.mode)}")
 
     case rl.mode do
@@ -159,7 +160,8 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandler do
 
   defp extract_mode(_), do: :normal
 
-  defp normal_check_rate_limit(request, %ClientConn{rate_limit: rl} = conn) when is_map(request) and is_map(rl) do
+  defp normal_check_rate_limit(request, %ClientConn{rate_limit: rl} = conn)
+       when is_map(request) and is_map(rl) do
     # Calculate available tokens since last refill
     updated_bucket = refill_bucket(rl.bucket)
 

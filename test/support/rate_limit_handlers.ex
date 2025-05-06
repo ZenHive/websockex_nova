@@ -100,11 +100,16 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     @behaviour RateLimitHandler
 
     @impl true
-    def rate_limit_init(_opts), do: {:ok, %{bucket: %{tokens: 1, refill_rate: -1, refill_interval: 0}}}
+    def rate_limit_init(_opts),
+      do: {:ok, %{bucket: %{tokens: 1, refill_rate: -1, refill_interval: 0}}}
+
     @impl true
     def check_rate_limit(_req, state) do
       tokens = state.bucket.tokens + max(state.bucket.refill_rate, 0)
-      if tokens > 0, do: {:allow, %{state | bucket: %{state.bucket | tokens: tokens - 1}}}, else: {:queue, state}
+
+      if tokens > 0,
+        do: {:allow, %{state | bucket: %{state.bucket | tokens: tokens - 1}}},
+        else: {:queue, state}
     end
 
     @impl true
@@ -177,7 +182,11 @@ defmodule WebsockexNova.TestSupport.RateLimitHandlers do
     def check_rate_limit(request, state) do
       if state.bucket.tokens > 0 do
         {:allow,
-         %{state | bucket: %{state.bucket | tokens: state.bucket.tokens - 1}, processed: state.processed ++ [request.id]}}
+         %{
+           state
+           | bucket: %{state.bucket | tokens: state.bucket.tokens - 1},
+             processed: state.processed ++ [request.id]
+         }}
       else
         if :queue.len(state.queue) < state.queue_limit do
           {:queue, %{state | queue: :queue.in(request, state.queue)}}

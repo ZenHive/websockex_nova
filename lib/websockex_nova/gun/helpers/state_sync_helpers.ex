@@ -81,7 +81,10 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
   Updated ClientConn struct
   """
   @spec update_client_conn_from_transport(ClientConn.t(), ConnectionState.t()) :: ClientConn.t()
-  def update_client_conn_from_transport(%ClientConn{} = client_conn, %ConnectionState{} = conn_state) do
+  def update_client_conn_from_transport(
+        %ClientConn{} = client_conn,
+        %ConnectionState{} = conn_state
+      ) do
     # Create updated connection_info with new status and error if present
     connection_info = client_conn.connection_info || %{}
     connection_info = Map.put(connection_info, :status, conn_state.status)
@@ -118,8 +121,12 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
 
   Updated ConnectionState
   """
-  @spec sync_connection_state_from_client(ConnectionState.t(), ClientConn.t()) :: ConnectionState.t()
-  def sync_connection_state_from_client(%ConnectionState{} = conn_state, %ClientConn{} = client_conn) do
+  @spec sync_connection_state_from_client(ConnectionState.t(), ClientConn.t()) ::
+          ConnectionState.t()
+  def sync_connection_state_from_client(
+        %ConnectionState{} = conn_state,
+        %ClientConn{} = client_conn
+      ) do
     transport_state = extract_transport_state(client_conn)
 
     # Update the connection state with the transport configuration
@@ -221,9 +228,15 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
 
   {updated_client_conn, updated_conn_state}
   """
-  @spec register_callback(ClientConn.t(), ConnectionState.t(), pid()) :: {ClientConn.t(), ConnectionState.t()}
-  def register_callback(%ClientConn{} = client_conn, %ConnectionState{} = conn_state, pid) when is_pid(pid) do
-    updated_client_conn = %{client_conn | callback_pids: MapSet.put(client_conn.callback_pids || MapSet.new(), pid)}
+  @spec register_callback(ClientConn.t(), ConnectionState.t(), pid()) ::
+          {ClientConn.t(), ConnectionState.t()}
+  def register_callback(%ClientConn{} = client_conn, %ConnectionState{} = conn_state, pid)
+      when is_pid(pid) do
+    updated_client_conn = %{
+      client_conn
+      | callback_pids: MapSet.put(client_conn.callback_pids || MapSet.new(), pid)
+    }
+
     updated_conn_state = %{conn_state | callback_pid: pid}
 
     {updated_client_conn, updated_conn_state}
@@ -243,9 +256,14 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpers do
   {updated_client_conn, updated_conn_state} - ConnectionState will have nil callback_pid if the removed PID
   was the current one
   """
-  @spec unregister_callback(ClientConn.t(), ConnectionState.t(), pid()) :: {ClientConn.t(), ConnectionState.t()}
-  def unregister_callback(%ClientConn{} = client_conn, %ConnectionState{} = conn_state, pid) when is_pid(pid) do
-    updated_client_conn = %{client_conn | callback_pids: MapSet.delete(client_conn.callback_pids || MapSet.new(), pid)}
+  @spec unregister_callback(ClientConn.t(), ConnectionState.t(), pid()) ::
+          {ClientConn.t(), ConnectionState.t()}
+  def unregister_callback(%ClientConn{} = client_conn, %ConnectionState{} = conn_state, pid)
+      when is_pid(pid) do
+    updated_client_conn = %{
+      client_conn
+      | callback_pids: MapSet.delete(client_conn.callback_pids || MapSet.new(), pid)
+    }
 
     # If the PID being removed is the current callback_pid in conn_state, set it to nil
     updated_conn_state =

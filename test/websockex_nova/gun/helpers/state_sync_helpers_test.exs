@@ -91,7 +91,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       }
 
       # Update client_conn from conn_state
-      updated_client_conn = StateSyncHelpers.update_client_conn_from_transport(client_conn, conn_state)
+      updated_client_conn =
+        StateSyncHelpers.update_client_conn_from_transport(client_conn, conn_state)
 
       # Verify transport fields were updated
       assert updated_client_conn.transport_pid == self()
@@ -129,7 +130,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       }
 
       # Sync conn_state from client_conn
-      updated_conn_state = StateSyncHelpers.sync_connection_state_from_client(conn_state, client_conn)
+      updated_conn_state =
+        StateSyncHelpers.sync_connection_state_from_client(conn_state, client_conn)
 
       # Verify transport config was updated
       assert updated_conn_state.host == "example.com"
@@ -170,7 +172,8 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       }
 
       # Sync client_conn from conn_state
-      updated_client_conn = StateSyncHelpers.sync_client_conn_from_connection(client_conn, conn_state)
+      updated_client_conn =
+        StateSyncHelpers.sync_client_conn_from_connection(client_conn, conn_state)
 
       # Verify transport state was updated
       assert updated_client_conn.transport_pid == self()
@@ -335,14 +338,16 @@ defmodule WebsockexNova.Gun.Helpers.StateSyncHelpersTest do
       }
 
       # Register callback
-      {updated_client, updated_state} = StateSyncHelpers.register_callback(client_conn, conn_state, self())
+      {updated_client, updated_state} =
+        StateSyncHelpers.register_callback(client_conn, conn_state, self())
 
       # Verify callback was registered
       assert MapSet.member?(updated_client.callback_pids, self())
       assert updated_state.callback_pid == self()
 
       # Unregister callback
-      {final_client, final_state} = StateSyncHelpers.unregister_callback(updated_client, updated_state, self())
+      {final_client, final_state} =
+        StateSyncHelpers.unregister_callback(updated_client, updated_state, self())
 
       # Verify callback was unregistered
       refute MapSet.member?(final_client.callback_pids, self())

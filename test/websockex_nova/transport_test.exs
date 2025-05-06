@@ -40,8 +40,13 @@ defmodule WebsockexNova.TransportTest do
       path = @path
       headers = @headers
       stream_ref = @stream_ref
-      expect(WebsockexNova.MockTransport, :upgrade_to_websocket, fn ^state, ^path, ^headers -> {:ok, stream_ref} end)
-      assert {:ok, stream_ref} == WebsockexNova.MockTransport.upgrade_to_websocket(state, path, headers)
+
+      expect(WebsockexNova.MockTransport, :upgrade_to_websocket, fn ^state, ^path, ^headers ->
+        {:ok, stream_ref}
+      end)
+
+      assert {:ok, stream_ref} ==
+               WebsockexNova.MockTransport.upgrade_to_websocket(state, path, headers)
     end
 
     test "close/1 routes to the transport and returns :ok" do
@@ -52,8 +57,13 @@ defmodule WebsockexNova.TransportTest do
 
     test "process_transport_message/2 routes to the transport and returns a value" do
       state = @state
-      expect(WebsockexNova.MockTransport, :process_transport_message, fn ^state, :some_msg -> {:handled, :some_msg} end)
-      assert {:handled, :some_msg} == WebsockexNova.MockTransport.process_transport_message(state, :some_msg)
+
+      expect(WebsockexNova.MockTransport, :process_transport_message, fn ^state, :some_msg ->
+        {:handled, :some_msg}
+      end)
+
+      assert {:handled, :some_msg} ==
+               WebsockexNova.MockTransport.process_transport_message(state, :some_msg)
     end
 
     test "get_state/1 routes to the transport and returns the state" do
@@ -66,8 +76,13 @@ defmodule WebsockexNova.TransportTest do
       state = @state
       stream_ref = @stream_ref
       frame = @frame
-      expect(WebsockexNova.MockTransport, :send_frame, fn ^state, ^stream_ref, ^frame -> {:error, :not_connected} end)
-      assert {:error, :not_connected} == WebsockexNova.MockTransport.send_frame(state, stream_ref, frame)
+
+      expect(WebsockexNova.MockTransport, :send_frame, fn ^state, ^stream_ref, ^frame ->
+        {:error, :not_connected}
+      end)
+
+      assert {:error, :not_connected} ==
+               WebsockexNova.MockTransport.send_frame(state, stream_ref, frame)
     end
   end
 end

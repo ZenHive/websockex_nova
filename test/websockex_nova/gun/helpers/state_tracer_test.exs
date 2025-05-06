@@ -143,7 +143,10 @@ defmodule WebsockexNova.Gun.Helpers.StateTracerTest do
       # Create a temporary file for testing
       export_dir = Application.get_env(:websockex_nova, :export_dir)
       File.mkdir_p!(export_dir)
-      path = Path.join(export_dir, "websockex_nova_trace_test_") <> Integer.to_string(:rand.uniform(999_999)) <> ".json"
+
+      path =
+        Path.join(export_dir, "websockex_nova_trace_test_") <>
+          Integer.to_string(:rand.uniform(999_999)) <> ".json"
 
       result = StateTracer.export_trace(state, path)
       assert result == :ok

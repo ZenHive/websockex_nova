@@ -119,7 +119,8 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     # Try to determine if this is JSON or binary data
     cond do
       # If it's clearly a JSON string (starts with { or [), try to parse it
-      String.valid?(message) && (String.starts_with?(message, "{") || String.starts_with?(message, "[")) ->
+      String.valid?(message) &&
+          (String.starts_with?(message, "{") || String.starts_with?(message, "[")) ->
         case Jason.decode(message) do
           {:ok, decoded} ->
             {:ok, decoded}

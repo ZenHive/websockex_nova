@@ -51,7 +51,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         |> Map.put(:disconnect_reason, reason)
 
       if test_pid = Map.get(state, :test_pid) do
-        Logger.debug("TestConnectionHandler - Sending handler_disconnect message to #{inspect(test_pid)}")
+        Logger.debug(
+          "TestConnectionHandler - Sending handler_disconnect message to #{inspect(test_pid)}"
+        )
+
         send(test_pid, {:handler_disconnect, reason, state})
       else
         Logger.debug("TestConnectionHandler - No test PID available for disconnect notification")
@@ -73,7 +76,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
         end)
 
       if test_pid = Map.get(state, :test_pid) do
-        Logger.debug("TestConnectionHandler - Sending handler_frame message to #{inspect(test_pid)}")
+        Logger.debug(
+          "TestConnectionHandler - Sending handler_frame message to #{inspect(test_pid)}"
+        )
+
         send(test_pid, {:handler_frame, frame_type, frame_data, state})
       else
         Logger.debug("TestConnectionHandler - No test PID available for frame notification")
@@ -130,7 +136,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.BehaviorDelegationTest do
     def generate_auth_data(state), do: {:ok, %{token: "t"}, state || %{}}
     def handle_auth_response(_resp, state), do: {:ok, state || %{}}
     def needs_reauthentication?(_state), do: false
-    def authenticate(stream_ref, credentials, state), do: {:authenticated, stream_ref, credentials, state || %{}}
+
+    def authenticate(stream_ref, credentials, state),
+      do: {:authenticated, stream_ref, credentials, state || %{}}
   end
 
   describe "behavior delegation" do

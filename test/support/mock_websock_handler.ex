@@ -89,16 +89,25 @@ defmodule WebsockexNova.Test.Support.MockWebSockHandler do
 
   @impl WebSock
   def handle_in({:ping, message, _opts}, state) do
-    Logger.debug("[MockWebSockHandler] Received ping frame with message: #{inspect(message)} from #{inspect(self())}")
+    Logger.debug(
+      "[MockWebSockHandler] Received ping frame with message: #{inspect(message)} from #{inspect(self())}"
+    )
+
     log_event(:message, :received_ping_frame, %{message: message}, state)
     # Auto-respond with pong
-    Logger.debug("[MockWebSockHandler] Sending pong frame with message: #{inspect(message)} to #{inspect(self())}")
+    Logger.debug(
+      "[MockWebSockHandler] Sending pong frame with message: #{inspect(message)} to #{inspect(self())}"
+    )
+
     {:push, {:pong, message}, state}
   end
 
   @impl WebSock
   def handle_in({:pong, message, _opts}, state) do
-    Logger.debug("[MockWebSockHandler] Received pong frame with message: #{inspect(message)} from #{inspect(self())}")
+    Logger.debug(
+      "[MockWebSockHandler] Received pong frame with message: #{inspect(message)} from #{inspect(self())}"
+    )
+
     log_event(:message, :received_pong_frame, %{message: message}, state)
     # Ignore pongs
     {:ok, state}

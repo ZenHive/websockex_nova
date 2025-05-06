@@ -139,7 +139,9 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
 
     test "setup_handler with module having init function", %{state: state} do
       handler_options = %{option1: "value1"}
-      updated_state = StateHelpers.setup_handler(state, :test_handler, MockHandlerWithInit, handler_options)
+
+      updated_state =
+        StateHelpers.setup_handler(state, :test_handler, MockHandlerWithInit, handler_options)
 
       assert updated_state.handlers[:test_handler] == MockHandlerWithInit
       assert updated_state.handlers[{:test_handler, :state}].option1 == "value1"
@@ -149,7 +151,9 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
 
     test "setup_handler with module having no init function", %{state: state} do
       handler_options = %{option1: "value1"}
-      updated_state = StateHelpers.setup_handler(state, :test_handler, MockHandlerNoInit, handler_options)
+
+      updated_state =
+        StateHelpers.setup_handler(state, :test_handler, MockHandlerNoInit, handler_options)
 
       assert updated_state.handlers[:test_handler] == MockHandlerNoInit
       assert updated_state.handlers[{:test_handler, :state}] == handler_options
@@ -158,7 +162,9 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
 
     test "setup_handler with module having init function that returns error", %{state: state} do
       handler_options = %{option1: "value1"}
-      updated_state = StateHelpers.setup_handler(state, :test_handler, MockHandlerErrorInit, handler_options)
+
+      updated_state =
+        StateHelpers.setup_handler(state, :test_handler, MockHandlerErrorInit, handler_options)
 
       assert updated_state.handlers[:test_handler] == MockHandlerErrorInit
       # When init returns error, it should fall back to using handler_options
@@ -168,7 +174,9 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
 
     test "setup_handler with no existing handlers", %{empty_state: state} do
       handler_options = %{option1: "value1"}
-      updated_state = StateHelpers.setup_handler(state, :test_handler, MockHandlerWithInit, handler_options)
+
+      updated_state =
+        StateHelpers.setup_handler(state, :test_handler, MockHandlerWithInit, handler_options)
 
       assert updated_state.handlers[:test_handler] == MockHandlerWithInit
       assert updated_state.handlers[{:test_handler, :state}].option1 == "value1"
@@ -190,7 +198,10 @@ defmodule WebsockexNova.Helpers.StateHelpersTest do
     test "get_host/1 returns host from top-level, adapter_state, config, or nil" do
       assert StateHelpers.get_host(%{host: "a.com"}) == "a.com"
       assert StateHelpers.get_host(%{adapter_state: %{host: "b.com"}}) == "b.com"
-      assert StateHelpers.get_host(%{adapter_state: %{other: 1}, config: %{host: "c.com"}}) == "c.com"
+
+      assert StateHelpers.get_host(%{adapter_state: %{other: 1}, config: %{host: "c.com"}}) ==
+               "c.com"
+
       assert StateHelpers.get_host(%{config: %{host: "d.com"}}) == "d.com"
       assert StateHelpers.get_host(%{adapter_state: %{config: %{host: "e.com"}}}) == "e.com"
       assert StateHelpers.get_host(%{}) == nil

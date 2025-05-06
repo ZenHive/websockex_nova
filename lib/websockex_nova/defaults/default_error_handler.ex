@@ -61,7 +61,12 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
     known_map = Map.new(known)
     custom_map = Map.new(custom)
     conn = struct(WebsockexNova.ClientConn, known_map)
-    conn = %{conn | error_handler_settings: Map.merge(conn.error_handler_settings || %{}, custom_map)}
+
+    conn = %{
+      conn
+      | error_handler_settings: Map.merge(conn.error_handler_settings || %{}, custom_map)
+    }
+
     # Initialize adapter_state with reconnect_attempts = 1
     adapter_state = Map.get(conn, :adapter_state, %{})
     adapter_state = Map.put_new(adapter_state, :reconnect_attempts, 1)
@@ -126,7 +131,9 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandler do
 
     case classify_error(error, context) do
       :critical ->
-        Logger.warning("CRITICAL WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}")
+        Logger.warning(
+          "CRITICAL WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}"
+        )
 
       :normal ->
         Logger.info("WebSocket error: #{error_type} - #{inspect(error)}. #{context_str}")

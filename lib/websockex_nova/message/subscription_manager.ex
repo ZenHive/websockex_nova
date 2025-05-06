@@ -258,16 +258,19 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   def resubscribe_after_reconnect(%__MODULE__{} = manager) do
     # Resubscribe to each pending subscription and collect results
     {results, _final_manager} =
-      Enum.map_reduce(manager.pending_subscriptions, %{manager | pending_subscriptions: []}, fn {channel, params},
-                                                                                                acc_manager ->
-        case subscribe(acc_manager, channel, params) do
-          {:ok, subscription_id, updated_manager} ->
-            {{:ok, subscription_id, updated_manager}, updated_manager}
+      Enum.map_reduce(
+        manager.pending_subscriptions,
+        %{manager | pending_subscriptions: []},
+        fn {channel, params}, acc_manager ->
+          case subscribe(acc_manager, channel, params) do
+            {:ok, subscription_id, updated_manager} ->
+              {{:ok, subscription_id, updated_manager}, updated_manager}
 
-          {:error, reason, updated_manager} ->
-            {{:error, reason, updated_manager}, updated_manager}
+            {:error, reason, updated_manager} ->
+              {{:error, reason, updated_manager}, updated_manager}
+          end
         end
-      end)
+      )
 
     results
   end
@@ -318,7 +321,11 @@ defmodule WebsockexNova.Message.SubscriptionManager do
     # Update pending subscriptions if provided
     pending_subscriptions = Map.get(exported_state, :pending_subscriptions, [])
 
-    updated_manager = %{manager | state: updated_state, pending_subscriptions: pending_subscriptions}
+    updated_manager = %{
+      manager
+      | state: updated_state,
+        pending_subscriptions: pending_subscriptions
+    }
 
     {:ok, updated_manager}
   end

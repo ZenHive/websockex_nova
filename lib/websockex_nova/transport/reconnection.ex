@@ -107,7 +107,11 @@ defmodule WebsockexNova.Transport.Reconnection.ExponentialBackoff do
   """
   @spec calculate_delay(t(), pos_integer()) :: non_neg_integer()
   def calculate_delay(
-        %__MODULE__{initial_delay: initial_delay, max_delay: max_delay, jitter_factor: jitter_factor},
+        %__MODULE__{
+          initial_delay: initial_delay,
+          max_delay: max_delay,
+          jitter_factor: jitter_factor
+        },
         attempt
       ) do
     # First attempt uses initial delay, then exponential growth

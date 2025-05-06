@@ -44,7 +44,9 @@ defmodule WebsockexNova.HandlerInvokerTest do
   end
 
   test "invoke/3 dispatches to connection_handler handle_connect", %{handlers: handlers} do
-    result = HandlerInvoker.invoke(:connection_handler, :handle_connect, [%{host: "a"}, :state], handlers)
+    result =
+      HandlerInvoker.invoke(:connection_handler, :handle_connect, [%{host: "a"}, :state], handlers)
+
     assert result == {:ok, {:connect, %{host: "a"}, :state}}
   end
 
@@ -54,7 +56,14 @@ defmodule WebsockexNova.HandlerInvokerTest do
   end
 
   test "invoke/3 dispatches to subscription_handler subscribe", %{handlers: handlers} do
-    result = HandlerInvoker.invoke(:subscription_handler, :subscribe, ["chan", %{foo: 1}, :state], handlers)
+    result =
+      HandlerInvoker.invoke(
+        :subscription_handler,
+        :subscribe,
+        ["chan", %{foo: 1}, :state],
+        handlers
+      )
+
     assert result == {:ok, {:subscribe, "chan", %{foo: 1}, :state}}
   end
 
@@ -64,7 +73,9 @@ defmodule WebsockexNova.HandlerInvokerTest do
   end
 
   test "invoke/3 dispatches to error_handler handle_error", %{handlers: handlers} do
-    result = HandlerInvoker.invoke(:error_handler, :handle_error, [:err, %{ctx: 1}, :state], handlers)
+    result =
+      HandlerInvoker.invoke(:error_handler, :handle_error, [:err, %{ctx: 1}, :state], handlers)
+
     assert result == {:ok, {:error, :err, %{ctx: 1}, :state}}
   end
 

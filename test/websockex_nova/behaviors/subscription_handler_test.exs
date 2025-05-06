@@ -41,7 +41,10 @@ defmodule WebsockexNova.Behaviours.SubscriptionHandlerTest do
     end
 
     @impl true
-    def handle_subscription_response(%{"type" => "subscription", "result" => "success", "id" => id}, state) do
+    def handle_subscription_response(
+          %{"type" => "subscription", "result" => "success", "id" => id},
+          state
+        ) do
       send(self(), {:subscription_success, id})
       updated_state = put_in(state, [:confirmed_subscriptions, id], true)
       {:ok, updated_state}
@@ -163,8 +166,12 @@ defmodule WebsockexNova.Behaviours.SubscriptionHandlerTest do
     end
 
     test "find_subscription_by_channel/2 finds subscription IDs by channel", %{state: state} do
-      assert MockSubscriptionHandler.find_subscription_by_channel("trades", state) == "existing_sub_1"
-      assert MockSubscriptionHandler.find_subscription_by_channel("ticker", state) == "existing_sub_2"
+      assert MockSubscriptionHandler.find_subscription_by_channel("trades", state) ==
+               "existing_sub_1"
+
+      assert MockSubscriptionHandler.find_subscription_by_channel("ticker", state) ==
+               "existing_sub_2"
+
       assert MockSubscriptionHandler.find_subscription_by_channel("non_existent", state) == nil
     end
   end

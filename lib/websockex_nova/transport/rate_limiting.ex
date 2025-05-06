@@ -223,7 +223,10 @@ defmodule WebsockexNova.Transport.RateLimiting do
       queued_request_ids: MapSet.new()
     }
 
-    Logger.debug("Rate limiting initialized with handler: #{inspect(handler_module)}, interval: #{process_interval}ms")
+    Logger.debug(
+      "Rate limiting initialized with handler: #{inspect(handler_module)}, interval: #{process_interval}ms"
+    )
+
     {:ok, state}
   end
 
@@ -237,7 +240,9 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
       {:queue, new_handler_state} ->
         new_queued = MapSet.put(state.queued_request_ids, request_id)
-        {:reply, {:queue, request_id}, %{state | handler_state: new_handler_state, queued_request_ids: new_queued}}
+
+        {:reply, {:queue, request_id},
+         %{state | handler_state: new_handler_state, queued_request_ids: new_queued}}
 
       {:reject, reason, new_handler_state} ->
         {:reply, {:reject, reason}, %{state | handler_state: new_handler_state}}
@@ -255,7 +260,10 @@ defmodule WebsockexNova.Transport.RateLimiting do
       {:reply, :ok, %{state | callbacks: new_callbacks}}
     else
       # Stub: In the future, we could track orphaned callbacks and warn if they are never processed
-      Logger.warning("Tried to register callback for non-existent request_id: #{inspect(request_id)}")
+      Logger.warning(
+        "Tried to register callback for non-existent request_id: #{inspect(request_id)}"
+      )
+
       {:reply, {:error, :not_found}, state}
     end
   end
@@ -383,7 +391,14 @@ defmodule WebsockexNova.Transport.RateLimiting do
       callback = Map.get(state.callbacks, request_id)
       start_callback_task(callback, request_id)
       new_callbacks = Map.delete(state.callbacks, request_id)
-      new_state = %{state | handler_state: new_handler_state, callbacks: new_callbacks, queued_request_ids: new_queued}
+
+      new_state = %{
+        state
+        | handler_state: new_handler_state,
+          callbacks: new_callbacks,
+          queued_request_ids: new_queued
+      }
+
       {1, new_state}
     else
       new_state = %{state | handler_state: new_handler_state, queued_request_ids: new_queued}

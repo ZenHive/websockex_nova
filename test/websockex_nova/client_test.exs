@@ -370,7 +370,9 @@ defmodule WebsockexNova.ClientTest do
           path: "/ws"
         })
 
-      {:ok, updated_conn, response} = Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+      {:ok, updated_conn, response} =
+        Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+
       assert %ClientConn{} = updated_conn
       assert response == "{\"auth\":true}"
     end
@@ -472,9 +474,14 @@ defmodule WebsockexNova.ClientTest do
         })
 
       # Simulate the expected response in the mailbox
-      send(self(), {:websockex_nova, {:websocket_frame, conn.stream_ref, {:text, "{\"auth\":true}"}}})
+      send(
+        self(),
+        {:websockex_nova, {:websocket_frame, conn.stream_ref, {:text, "{\"auth\":true}"}}}
+      )
 
-      {:ok, updated_conn, _response} = WebsockexNova.Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+      {:ok, updated_conn, _response} =
+        WebsockexNova.Client.authenticate(conn, %{api_key: "key", api_secret: "secret"})
+
       assert updated_conn.adapter_state.auth_status == :authenticated
     end
   end

@@ -20,7 +20,8 @@ defmodule WebsockexNova.Gun.FrameHandlers.ControlFrameHandler do
 
   def validate_frame({:close, code}) when is_integer(code), do: validate_close_code(code)
 
-  def validate_frame({:close, code, reason}) when is_integer(code) and is_binary(reason), do: validate_close_code(code)
+  def validate_frame({:close, code, reason}) when is_integer(code) and is_binary(reason),
+    do: validate_close_code(code)
 
   def validate_frame(_frame), do: {:error, :invalid_control_frame}
 
@@ -34,7 +35,8 @@ defmodule WebsockexNova.Gun.FrameHandlers.ControlFrameHandler do
 
   def encode_frame({:close, code}) when is_integer(code), do: {:close, code, <<>>}
 
-  def encode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason), do: {:close, code, reason}
+  def encode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason),
+    do: {:close, code, reason}
 
   @impl true
   def decode_frame(:ping), do: {:ok, :ping}
@@ -46,7 +48,8 @@ defmodule WebsockexNova.Gun.FrameHandlers.ControlFrameHandler do
 
   def decode_frame({:close, code}) when is_integer(code), do: {:ok, {:close, code, ""}}
 
-  def decode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason), do: {:ok, {:close, code, reason}}
+  def decode_frame({:close, code, reason}) when is_integer(code) and is_binary(reason),
+    do: {:ok, {:close, code, reason}}
 
   def decode_frame(frame), do: {:error, {:invalid_control_frame, frame}}
 

@@ -41,12 +41,10 @@ defmodule WebsockexNova.Adapter do
 
       # --- ConnectionHandler defaults ---
       @impl ConnectionHandler
-      def init(opts),
-        do: DefaultConnectionHandler.init(opts)
+      def init(opts), do: DefaultConnectionHandler.init(opts)
 
       @impl ConnectionHandler
-      def connection_info(opts),
-        do: DefaultConnectionHandler.connection_info(opts)
+      def connection_info(opts), do: DefaultConnectionHandler.connection_info(opts)
 
       @impl ConnectionHandler
       def handle_connect(conn_info, state),
@@ -61,58 +59,47 @@ defmodule WebsockexNova.Adapter do
         do: DefaultConnectionHandler.handle_frame(type, data, state)
 
       @impl ConnectionHandler
-      def handle_timeout(state),
-        do: DefaultConnectionHandler.handle_timeout(state)
+      def handle_timeout(state), do: DefaultConnectionHandler.handle_timeout(state)
 
       @impl ConnectionHandler
-      def ping(stream_ref, state),
-        do: DefaultConnectionHandler.ping(stream_ref, state)
+      def ping(stream_ref, state), do: DefaultConnectionHandler.ping(stream_ref, state)
 
       @impl ConnectionHandler
-      def status(stream_ref, state),
-        do: DefaultConnectionHandler.status(stream_ref, state)
+      def status(stream_ref, state), do: DefaultConnectionHandler.status(stream_ref, state)
 
       # --- MessageHandler defaults ---
       @impl MessageHandler
-      def message_init(opts),
-        do: DefaultMessageHandler.message_init(opts)
+      def message_init(opts), do: DefaultMessageHandler.message_init(opts)
 
       @impl MessageHandler
-      def handle_message(message, state),
-        do: DefaultMessageHandler.handle_message(message, state)
+      def handle_message(message, state), do: DefaultMessageHandler.handle_message(message, state)
 
       @impl MessageHandler
-      def validate_message(message),
-        do: DefaultMessageHandler.validate_message(message)
+      def validate_message(message), do: DefaultMessageHandler.validate_message(message)
 
       @impl MessageHandler
-      def message_type(message),
-        do: DefaultMessageHandler.message_type(message)
+      def message_type(message), do: DefaultMessageHandler.message_type(message)
 
       @impl MessageHandler
-      def encode_message(message, state),
-        do: DefaultMessageHandler.encode_message(message, state)
+      def encode_message(message, state), do: DefaultMessageHandler.encode_message(message, state)
 
       # --- SubscriptionHandler defaults ---
       @impl SubscriptionHandler
-      def subscription_init(opts),
-        do: DefaultSubscriptionHandler.subscription_init(opts)
+      def subscription_init(opts), do: DefaultSubscriptionHandler.subscription_init(opts)
 
       @impl SubscriptionHandler
       def subscribe(channel, params, state),
         do: DefaultSubscriptionHandler.subscribe(channel, params, state)
 
       @impl SubscriptionHandler
-      def unsubscribe(channel, state),
-        do: DefaultSubscriptionHandler.unsubscribe(channel, state)
+      def unsubscribe(channel, state), do: DefaultSubscriptionHandler.unsubscribe(channel, state)
 
       @impl SubscriptionHandler
       def handle_subscription_response(response, state),
         do: DefaultSubscriptionHandler.handle_subscription_response(response, state)
 
       @impl SubscriptionHandler
-      def active_subscriptions(state),
-        do: DefaultSubscriptionHandler.active_subscriptions(state)
+      def active_subscriptions(state), do: DefaultSubscriptionHandler.active_subscriptions(state)
 
       @impl SubscriptionHandler
       def find_subscription_by_channel(channel, state),
@@ -120,16 +107,14 @@ defmodule WebsockexNova.Adapter do
 
       # --- AuthHandler defaults ---
       @impl AuthHandler
-      def generate_auth_data(state),
-        do: DefaultAuthHandler.generate_auth_data(state)
+      def generate_auth_data(state), do: DefaultAuthHandler.generate_auth_data(state)
 
       @impl AuthHandler
       def handle_auth_response(response, state),
         do: DefaultAuthHandler.handle_auth_response(response, state)
 
       @impl AuthHandler
-      def needs_reauthentication?(state),
-        do: DefaultAuthHandler.needs_reauthentication?(state)
+      def needs_reauthentication?(state), do: DefaultAuthHandler.needs_reauthentication?(state)
 
       @impl AuthHandler
       def authenticate(stream_ref, credentials, state),
@@ -145,12 +130,10 @@ defmodule WebsockexNova.Adapter do
         do: DefaultErrorHandler.should_reconnect?(error, attempt, state)
 
       @impl ErrorHandler
-      def log_error(error, context, state),
-        do: DefaultErrorHandler.log_error(error, context, state)
+      def log_error(error, context, state), do: DefaultErrorHandler.log_error(error, context, state)
 
       @impl ErrorHandler
-      def classify_error(error, state),
-        do: DefaultErrorHandler.classify_error(error, state)
+      def classify_error(error, state), do: DefaultErrorHandler.classify_error(error, state)
 
       # Allow adapter authors to override any callback
       defoverridable init: 1,

@@ -89,7 +89,9 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
       request1 = %{type: :subscription, method: "test1", data: nil}
       {:queue, conn_with_queue} = DefaultRateLimitHandler.check_rate_limit(request1, conn)
       request2 = %{type: :subscription, method: "test2", data: nil}
-      {:reject, :rate_limit_exceeded, _new_conn} = DefaultRateLimitHandler.check_rate_limit(request2, conn_with_queue)
+
+      {:reject, :rate_limit_exceeded, _new_conn} =
+        DefaultRateLimitHandler.check_rate_limit(request2, conn_with_queue)
     end
 
     test "handles request priorities correctly" do
@@ -154,7 +156,10 @@ defmodule WebsockexNova.Defaults.DefaultRateLimitHandlerTest do
       request = %{type: :query, method: "test", data: nil}
       {:queue, conn_with_request} = DefaultRateLimitHandler.check_rate_limit(request, conn)
       conn_with_tokens = put_in(conn_with_request.rate_limit.bucket.tokens, 5)
-      {:process, processed_request, new_conn} = DefaultRateLimitHandler.handle_tick(conn_with_tokens)
+
+      {:process, processed_request, new_conn} =
+        DefaultRateLimitHandler.handle_tick(conn_with_tokens)
+
       assert processed_request.method == "test"
       assert :queue.is_empty(get_rate_limit(new_conn).queue)
       assert get_rate_limit(new_conn).bucket.tokens == 2

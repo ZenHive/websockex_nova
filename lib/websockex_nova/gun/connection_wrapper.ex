@@ -162,7 +162,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
           {:text, binary}
           | {:binary, binary}
           | :ping
+          | {:ping, binary()}
           | :pong
+          | {:pong, binary()}
           | :close
           | {:close, non_neg_integer(), binary}
 
@@ -214,7 +216,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:ok, %WebsockexNova.ClientConn{}}` on success
   * `{:error, reason}` on failure
   """
-  @spec open(binary(), pos_integer(), binary(), options()) :: {:ok, WebsockexNova.ClientConn.t()} | {:error, term()}
+  @spec open(host :: binary(), port :: pos_integer(), path :: binary(), options()) ::
+          {:ok, WebsockexNova.ClientConn.t()}
+          | {:error, term()}
   @impl WebsockexNova.Transport
   def open(host, port, path, options \\ %{}) do
     Logger.debug(
@@ -233,19 +237,31 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
          :connected <-
            (
              result = wait_for_connection(pid, options)
-             Logger.debug("[ConnectionWrapper.open/4] wait_for_connection result: #{inspect(result)}")
+
+             Logger.debug(
+               "[ConnectionWrapper.open/4] wait_for_connection result: #{inspect(result)}"
+             )
+
              result
            ),
          {:ok, stream_ref} <-
            (
              result = upgrade_to_websocket_helper(pid, path, options)
-             Logger.debug("[ConnectionWrapper.open/4] upgrade_to_websocket_helper result: #{inspect(result)}")
+
+             Logger.debug(
+               "[ConnectionWrapper.open/4] upgrade_to_websocket_helper result: #{inspect(result)}"
+             )
+
              result
            ),
          :websocket_connected <-
            (
              result = wait_for_websocket(pid, options)
-             Logger.debug("[ConnectionWrapper.open/4] wait_for_websocket result: #{inspect(result)}")
+
+             Logger.debug(
+               "[ConnectionWrapper.open/4] wait_for_websocket result: #{inspect(result)}"
+             )
+
              result
            ),
          {:ok, client_conn} <-
@@ -327,7 +343,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   * `{:error, reason}` on failure
   """
   @impl WebsockexNova.Transport
-  @spec send_frame(WebsockexNova.ClientConn.t(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
+  @spec send_frame(WebsockexNova.ClientConn.t(), reference(), frame() | [frame()]) ::
+          :ok | {:error, term()}
   def send_frame(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, frame) do
     Logger.debug(
       "[ConnectionWrapper.send_frame/3] Sending frame: #{inspect(frame)} to stream_ref: #{inspect(stream_ref)}"
@@ -480,7 +497,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   """
   @spec wait_for_websocket_upgrade(WebsockexNova.ClientConn.t(), reference(), non_neg_integer()) ::
           {:ok, list()} | {:error, term()}
-  def wait_for_websocket_upgrade(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, timeout \\ 5000) do
+  def wait_for_websocket_upgrade(
+        %WebsockexNova.ClientConn{transport_pid: pid},
+        stream_ref,
+        timeout \\ 5000
+      ) do
     GenServer.call(pid, {:wait_for_websocket_upgrade, stream_ref, timeout})
   end
 
@@ -558,7 +579,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
         # Set up logging handler (default if not provided)
         {logging_handler, logging_handler_opts} =
-          case {Map.get(validated_options, :logging_handler), Map.get(validated_options, :logging_handler_options)} do
+          case {Map.get(validated_options, :logging_handler),
+                Map.get(validated_options, :logging_handler_options)} do
             {nil, _} -> {WebsockexNova.Defaults.DefaultLoggingHandler, %{}}
             {mod, nil} -> {mod, %{}}
             {mod, opts} -> {mod, opts}
@@ -577,7 +599,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, msg} ->
         Logger.error("Invalid connection options: #{msg}")
-        error_state = host |> ConnectionState.new(port, %{}) |> ConnectionState.update_status(:error)
+
+        error_state =
+          host |> ConnectionState.new(port, %{}) |> ConnectionState.update_status(:error)
+
         {:ok, error_state}
     end
   end
@@ -602,7 +627,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       updated_state = ConnectionState.update_stream(state, stream_ref, :upgrading)
       {:reply, {:ok, stream_ref}, updated_state}
     else
-      Logger.error("[ConnectionWrapper] Cannot upgrade: not connected or missing gun_pid. State: #{inspect(state)}")
+      Logger.error(
+        "[ConnectionWrapper] Cannot upgrade: not connected or missing gun_pid. State: #{inspect(state)}"
+      )
+
       {:reply, {:error, :not_connected}, state}
     end
   end
@@ -682,7 +710,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       Logger.debug("[ConnectionWrapper] :gun.await result: #{inspect(result)}")
       handle_websocket_upgrade_result(result, stream_ref, state)
     else
-      Logger.error("[ConnectionWrapper] Cannot wait for upgrade: gun_pid is nil. State: #{inspect(state)}")
+      Logger.error(
+        "[ConnectionWrapper] Cannot wait for upgrade: gun_pid is nil. State: #{inspect(state)}"
+      )
+
       ErrorHandler.handle_connection_error(:not_connected, state)
     end
   end
@@ -770,13 +801,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         {:noreply, new_state}
       end
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
 
   @impl true
-  def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams}, state) do
+  def handle_info(
+        {:gun_down, gun_pid, protocol, reason, killed_streams, unprocessed_streams},
+        state
+      ) do
     if gun_pid == state.gun_pid do
       callback_pid = state.callback_pid
 
@@ -784,11 +821,16 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         "[ConnectionWrapper] 6-arg :gun_down received: protocol=#{inspect(protocol)}, reason=#{inspect(reason)}. Sending connection_down message."
       )
 
-      result = handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
+      result =
+        handle_gun_down(state, gun_pid, protocol, reason, killed_streams, unprocessed_streams)
+
       if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
       result
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -805,7 +847,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       if callback_pid, do: send(callback_pid, {:connection_down, protocol, reason})
       result
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -818,10 +863,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
         {:error, reason} ->
           Logger.error("Failed to transition state: #{inspect(reason)}")
-          ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
+
+          ErrorHandler.handle_transition_error(
+            StateHelpers.get_status(state),
+            :websocket_connected,
+            reason,
+            state
+          )
       end
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -830,7 +884,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if gun_pid == state.gun_pid do
       MessageHandlers.handle_websocket_frame(gun_pid, stream_ref, frame, state)
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -843,7 +900,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       if callback_pid, do: send(callback_pid, {:connection_error, reason})
       result
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -852,7 +912,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if gun_pid == state.gun_pid do
       MessageHandlers.handle_http_response(gun_pid, stream_ref, is_fin, status, headers, state)
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -861,7 +924,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if gun_pid == state.gun_pid do
       MessageHandlers.handle_http_data(gun_pid, stream_ref, is_fin, data, state)
     else
-      Logger.debug("Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}")
+      Logger.debug(
+        "Ignoring stale Gun message from pid=#{inspect(gun_pid)}; current gun_pid=#{inspect(state.gun_pid)}"
+      )
+
       {:noreply, state}
     end
   end
@@ -921,14 +987,16 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         :killed ->
           # When a process is killed (especially in tests), immediately set to disconnected
           # without reconnection logic so tests can observe this state
-          {:ok, disconnected_state} = ConnectionManager.transition_to(state, :disconnected, %{reason: :killed})
+          {:ok, disconnected_state} =
+            ConnectionManager.transition_to(state, :disconnected, %{reason: :killed})
 
           # Notify callback_pid about the disconnection
           if state.callback_pid do
             MessageHandlers.notify(state.callback_pid, {:connection_down, :http, :killed})
           end
 
-          # Wait before scheduling reconnection (do this after test has verified the :disconnected state)
+          # Wait before scheduling reconnection (do this after test has verified the :disconnected
+          # state)
           Process.send_after(self(), {:schedule_reconnect_after_killed, 500}, 800)
 
           # Return immediately with the disconnected state
@@ -949,7 +1017,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   # Special handler for delayed reconnection scheduling
   def handle_info({:schedule_reconnect_after_killed, delay}, state) do
-    Logger.debug("[ConnectionWrapper] Now scheduling reconnection after kill with delay: #{delay}ms")
+    Logger.debug(
+      "[ConnectionWrapper] Now scheduling reconnection after kill with delay: #{delay}ms"
+    )
 
     # For the tests, first check if we are still in :disconnected state
     if state.status == :disconnected do
@@ -961,7 +1031,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       new_state = ConnectionManager.schedule_reconnection(state, reconnect_callback)
       {:noreply, new_state}
     else
-      Logger.debug("[ConnectionWrapper] State is no longer :disconnected, skipping reconnection scheduling")
+      Logger.debug(
+        "[ConnectionWrapper] State is no longer :disconnected, skipping reconnection scheduling"
+      )
+
       {:noreply, state}
     end
   end
@@ -1003,7 +1076,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     |> process_handler_result()
   end
 
-  defp handle_gun_message({:gun_down, pid, protocol, reason, killed_streams, unprocessed_streams}, state) do
+  defp handle_gun_message(
+         {:gun_down, pid, protocol, reason, killed_streams, unprocessed_streams},
+         state
+       ) do
     # First transition to disconnected state for consistency with handle_info
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
@@ -1041,7 +1117,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, reason} ->
         Logger.error("Failed to transition state: #{inspect(reason)}")
-        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :websocket_connected, reason, state)
+
+        ErrorHandler.handle_transition_error(
+          StateHelpers.get_status(state),
+          :websocket_connected,
+          reason,
+          state
+        )
     end
   end
 
@@ -1211,7 +1293,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
       {:error, transition_reason} ->
         Logger.error("Failed to transition state: #{inspect(transition_reason)}")
-        ErrorHandler.handle_transition_error(StateHelpers.get_status(state), :disconnected, transition_reason, state)
+
+        ErrorHandler.handle_transition_error(
+          StateHelpers.get_status(state),
+          :disconnected,
+          transition_reason,
+          state
+        )
     end
   end
 
@@ -1223,7 +1311,8 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     end
   end
 
-  defp handle_connection_down_result({:noreply, new_state}, _disconnected_state, _reason) when is_map(new_state) do
+  defp handle_connection_down_result({:noreply, new_state}, _disconnected_state, _reason)
+       when is_map(new_state) do
     reconnect_callback = fn delay, _attempt ->
       Process.send_after(self(), {:reconnect, :timer}, delay)
     end
@@ -1232,7 +1321,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     {:noreply, final_state}
   end
 
-  defp handle_connection_down_result({:stop, stop_reason, final_state}, _disconnected_state, _reason)
+  defp handle_connection_down_result(
+         {:stop, stop_reason, final_state},
+         _disconnected_state,
+         _reason
+       )
        when is_map(final_state) do
     {:stop, stop_reason, final_state}
   end
@@ -1328,7 +1421,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp handle_gun_process_down(state, reason) do
-    Logger.error("[ConnectionWrapper] Gun process terminated: #{inspect(reason)}. State: #{inspect(state)}")
+    Logger.error(
+      "[ConnectionWrapper] Gun process terminated: #{inspect(reason)}. State: #{inspect(state)}"
+    )
 
     case ConnectionManager.transition_to(state, :disconnected, %{reason: reason}) do
       {:ok, disconnected_state} ->
@@ -1346,7 +1441,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         # Otherwise, always attempt to recover and keep the process alive
         case reason do
           :shutdown ->
-            Logger.debug("[ConnectionWrapper] Terminating due to explicit :shutdown reason. State: #{inspect(new_state)}")
+            Logger.debug(
+              "[ConnectionWrapper] Terminating due to explicit :shutdown reason. State: #{inspect(new_state)}"
+            )
+
             {:stop, :gun_terminated, new_state}
 
           {:shutdown, _} ->
@@ -1537,7 +1635,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   defp upgrade_to_websocket_helper(pid, path, options) do
     headers = Map.get(options, :headers, [])
 
-    case GenServer.call(pid, {:upgrade_to_websocket, path, headers}, Map.get(options, :timeout, 5000)) do
+    case GenServer.call(
+           pid,
+           {:upgrade_to_websocket, path, headers},
+           Map.get(options, :timeout, 5000)
+         ) do
       {:ok, stream_ref} ->
         {:ok, stream_ref}
 

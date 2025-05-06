@@ -117,6 +117,8 @@ defmodule WebsockexNova.Defaults.DefaultMetricsCollectorTest do
     event = [:websockex_nova, :connection, :open]
     measurements = %{duration: 10}
     metadata = %{connection_id: 1}
-    assert {:ok, ^conn} = DefaultMetricsCollector.handle_connection_event(event, measurements, metadata, conn)
+
+    assert {:ok, ^conn} =
+             DefaultMetricsCollector.handle_connection_event(event, measurements, metadata, conn)
   end
 end

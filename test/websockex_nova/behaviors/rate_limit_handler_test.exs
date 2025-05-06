@@ -71,7 +71,9 @@ defmodule WebsockexNova.Behaviours.RateLimitHandlerTest do
     test "check_rate_limit/2 returns :reject for rejected requests" do
       request = %{type: :test_reject, method: "test", data: nil}
       state = %{test: :state}
-      assert {:reject, :test_reason, %{test: :state}} = TestRateLimitHandler.check_rate_limit(request, state)
+
+      assert {:reject, :test_reason, %{test: :state}} =
+               TestRateLimitHandler.check_rate_limit(request, state)
     end
 
     test "handle_tick/1 processes queued requests" do

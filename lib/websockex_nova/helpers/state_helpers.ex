@@ -68,7 +68,10 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def update_connection_handler_state(state, connection_handler_state) do
     case state do
       %{handlers: handlers} when is_map(handlers) ->
-        %{state | handlers: Map.put(handlers, {:connection_handler, :state}, connection_handler_state)}
+        %{
+          state
+          | handlers: Map.put(handlers, {:connection_handler, :state}, connection_handler_state)
+        }
 
       _ ->
         # If there's no handlers map yet, create one
@@ -85,7 +88,10 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def update_subscription_handler_state(state, subscription_handler_state) do
     case state do
       %{handlers: handlers} when is_map(handlers) ->
-        %{state | handlers: Map.put(handlers, {:subscription_handler, :state}, subscription_handler_state)}
+        %{
+          state
+          | handlers: Map.put(handlers, {:subscription_handler, :state}, subscription_handler_state)
+        }
 
       _ ->
         # If there's no handlers map yet, create one
@@ -141,7 +147,8 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   end
 
   # sobelow_skip ["DOS.BinToAtom"]
-  def setup_handler(state, handler_type, handler_module, handler_options) when is_atom(handler_type) do
+  def setup_handler(state, handler_type, handler_module, handler_options)
+      when is_atom(handler_type) do
     setup_handler(state, handler_type, handler_module, handler_options, :"#{handler_type}_init")
   end
 
@@ -153,11 +160,14 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def get_host(%{host: host}) when is_binary(host), do: host
   def get_host(%{adapter_state: %{host: host}}) when is_binary(host), do: host
 
-  def get_host(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+  def get_host(%{adapter_state: adapter_state, config: config})
+      when is_map(adapter_state) and is_map(config) do
     get_host(config)
   end
 
-  def get_host(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_host(adapter_state)
+  def get_host(%{adapter_state: adapter_state}) when is_map(adapter_state),
+    do: get_host(adapter_state)
+
   def get_host(%{config: %{host: host}}) when is_binary(host), do: host
   def get_host(%{config: config}) when is_map(config), do: get_host(config)
   def get_host(_), do: nil
@@ -170,11 +180,14 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def get_port(%{port: port}) when is_integer(port), do: port
   def get_port(%{adapter_state: %{port: port}}) when is_integer(port), do: port
 
-  def get_port(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+  def get_port(%{adapter_state: adapter_state, config: config})
+      when is_map(adapter_state) and is_map(config) do
     get_port(config)
   end
 
-  def get_port(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_port(adapter_state)
+  def get_port(%{adapter_state: adapter_state}) when is_map(adapter_state),
+    do: get_port(adapter_state)
+
   def get_port(%{config: %{port: port}}) when is_integer(port), do: port
   def get_port(%{config: config}) when is_map(config), do: get_port(config)
   def get_port(_), do: nil
@@ -187,11 +200,14 @@ defmodule WebsockexNova.Helpers.StateHelpers do
   def get_status(%{status: status}) when is_atom(status), do: status
   def get_status(%{adapter_state: %{status: status}}) when is_atom(status), do: status
 
-  def get_status(%{adapter_state: adapter_state, config: config}) when is_map(adapter_state) and is_map(config) do
+  def get_status(%{adapter_state: adapter_state, config: config})
+      when is_map(adapter_state) and is_map(config) do
     get_status(config)
   end
 
-  def get_status(%{adapter_state: adapter_state}) when is_map(adapter_state), do: get_status(adapter_state)
+  def get_status(%{adapter_state: adapter_state}) when is_map(adapter_state),
+    do: get_status(adapter_state)
+
   def get_status(%{config: %{status: status}}) when is_atom(status), do: status
   def get_status(%{config: config}) when is_map(config), do: get_status(config)
   def get_status(_), do: nil

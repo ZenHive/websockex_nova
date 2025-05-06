@@ -132,7 +132,14 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
           {:noreply, ConnectionState.t()}
           | {:noreply, {:reconnect, ConnectionState.t()}}
           | {:stop, term(), ConnectionState.t()}
-  def handle_gun_down(_gun_pid, _protocol, reason, state, killed_streams \\ [], _unprocessed_streams \\ []) do
+  def handle_gun_down(
+        _gun_pid,
+        _protocol,
+        reason,
+        state,
+        killed_streams \\ [],
+        _unprocessed_streams \\ []
+      ) do
     log_event(:connection, :gun_down, %{reason: reason}, state)
 
     # First transition to the disconnected state
@@ -211,7 +218,14 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
     process_text_message(gun_pid, stream_ref, frame_data, handler_state)
   end
 
-  defp handle_frame_result({:ok, handler_state}, _gun_pid, _stream_ref, _frame_type, _frame_data, _state) do
+  defp handle_frame_result(
+         {:ok, handler_state},
+         _gun_pid,
+         _stream_ref,
+         _frame_type,
+         _frame_data,
+         _state
+       ) do
     {:noreply, handler_state}
   end
 
@@ -303,7 +317,13 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
         end
 
       {:error, transition_reason} ->
-        log_event(:error, :failed_transition_websocket_connected, %{reason: transition_reason}, state)
+        log_event(
+          :error,
+          :failed_transition_websocket_connected,
+          %{reason: transition_reason},
+          state
+        )
+
         {:noreply, state}
     end
   end
@@ -389,14 +409,16 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   * `{true, delay}` - Should reconnect after the specified delay
   * `{false, _}` - Should not reconnect
   """
-  @spec should_reconnect?(term(), non_neg_integer(), ConnectionState.t()) :: {boolean(), non_neg_integer() | nil}
+  @spec should_reconnect?(term(), non_neg_integer(), ConnectionState.t()) ::
+          {boolean(), non_neg_integer() | nil}
   def should_reconnect?(error, attempt, state) do
     log_event(:connection, :should_reconnect, %{error: error, attempt: attempt}, state)
 
     error_handler = Map.get(state.handlers, :error_handler)
     error_handler_state = Map.get(state.handlers, :error_handler_state)
 
-    if error_handler && error_handler_state && function_exported?(error_handler, :should_reconnect?, 3) do
+    if error_handler && error_handler_state &&
+         function_exported?(error_handler, :should_reconnect?, 3) do
       # Call the error handler's should_reconnect? callback
       error_handler.should_reconnect?(error, attempt, error_handler_state)
     else
@@ -431,7 +453,13 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   end
 
   # Handles JSON decoding, validation, and message processing for text frames
-  defp do_process_text_message(message_handler, message_handler_state, frame_data, state, stream_ref) do
+  defp do_process_text_message(
+         message_handler,
+         message_handler_state,
+         frame_data,
+         state,
+         stream_ref
+       ) do
     with {:ok, decoded} <- decode_json(frame_data),
          {:ok, validated_message} <- validate_message(message_handler, decoded) do
       result = handle_message(message_handler, validated_message, message_handler_state)
@@ -476,7 +504,12 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
     {:noreply, updated_state}
   end
 
-  defp handle_message_result({:reply, reply_message, new_handler_state}, message_handler, state, stream_ref) do
+  defp handle_message_result(
+         {:reply, reply_message, new_handler_state},
+         message_handler,
+         state,
+         stream_ref
+       ) do
     case message_handler.encode_message(reply_message, new_handler_state) do
       {:ok, frame_type, encoded_data} ->
         updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
@@ -489,7 +522,12 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
     end
   end
 
-  defp handle_message_result({:reply_many, messages, new_handler_state}, message_handler, state, stream_ref) do
+  defp handle_message_result(
+         {:reply_many, messages, new_handler_state},
+         message_handler,
+         state,
+         stream_ref
+       ) do
     log_event(:message, :reply_many_not_implemented, %{messages: messages}, state)
     [first_message | _rest] = messages
 
@@ -505,12 +543,22 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
     end
   end
 
-  defp handle_message_result({:close, code, reason, new_handler_state}, _message_handler, state, stream_ref) do
+  defp handle_message_result(
+         {:close, code, reason, new_handler_state},
+         _message_handler,
+         state,
+         stream_ref
+       ) do
     updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
     {:reply, :close, {code, reason}, updated_state, stream_ref}
   end
 
-  defp handle_message_result({:error, reason, new_handler_state}, _message_handler, state, _stream_ref) do
+  defp handle_message_result(
+         {:error, reason, new_handler_state},
+         _message_handler,
+         state,
+         _stream_ref
+       ) do
     log_event(:error, :error_processing_message, %{reason: reason}, state)
     updated_state = put_in(state.handlers.message_handler_state, new_handler_state)
     {:noreply, updated_state}
@@ -539,7 +587,8 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
 
   # Logging helpers
   defp log_event(:connection, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_connection_event, 3) do
       state.logging_handler.log_connection_event(event, context, state)
     else
       Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
@@ -547,7 +596,8 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   end
 
   defp log_event(:message, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_message_event, 3) do
       state.logging_handler.log_message_event(event, context, state)
     else
       Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
@@ -555,7 +605,8 @@ defmodule WebsockexNova.Gun.BehaviorBridge do
   end
 
   defp log_event(:error, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_error_event, 3) do
       state.logging_handler.log_error_event(event, context, state)
     else
       Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")

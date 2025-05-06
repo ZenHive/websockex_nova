@@ -68,7 +68,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   def call_handle_disconnect(%ConnectionState{} = state, reason) do
     with {:ok, handler_module, handler_state} <- fetch_handler(state),
          formatted_reason = format_disconnect_reason(reason),
-         {:ok, result} <- call_handler_disconnect(handler_module, formatted_reason, handler_state, state) do
+         {:ok, result} <-
+           call_handler_disconnect(handler_module, formatted_reason, handler_state, state) do
       result
     else
       :no_handler ->
@@ -146,7 +147,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
           {:reconnect, ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
         {:ok, {:stop, stop_reason, new_handler_state}} ->
-          {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}
+          {:stop, stop_reason,
+           ConnectionState.update_connection_handler_state(state, new_handler_state)}
 
         {:ok, other} ->
           log_event(:error, :invalid_return_handle_timeout, %{other: other}, state)
@@ -215,10 +217,13 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
         {:ok, {:ok, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
 
       {:ok, {:reconnect, new_handler_state}} ->
-        {:ok, {:reconnect, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+        {:ok,
+         {:reconnect, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
 
       {:ok, {:stop, stop_reason, new_handler_state}} ->
-        {:ok, {:stop, stop_reason, ConnectionState.update_connection_handler_state(state, new_handler_state)}}
+        {:ok,
+         {:stop, stop_reason,
+          ConnectionState.update_connection_handler_state(state, new_handler_state)}}
 
       {:ok, other} ->
         log_event(:error, :invalid_return_handle_disconnect, %{other: other}, state)
@@ -262,13 +267,16 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   end
 
   # Format disconnect reason for the handler
-  defp format_disconnect_reason({:remote, code, message}) when is_integer(code) and is_binary(message),
-    do: {:remote, code, message}
+  defp format_disconnect_reason({:remote, code, message})
+       when is_integer(code) and is_binary(message),
+       do: {:remote, code, message}
 
-  defp format_disconnect_reason({:remote, _, _}), do: {:remote, 1006, "Connection closed abnormally"}
+  defp format_disconnect_reason({:remote, _, _}),
+    do: {:remote, 1006, "Connection closed abnormally"}
 
-  defp format_disconnect_reason({:local, code, message}) when is_integer(code) and is_binary(message),
-    do: {:local, code, message}
+  defp format_disconnect_reason({:local, code, message})
+       when is_integer(code) and is_binary(message),
+       do: {:local, code, message}
 
   defp format_disconnect_reason({:local, _, _}), do: {:local, 1000, "Normal closure"}
   defp format_disconnect_reason(reason), do: {:error, reason}
@@ -284,7 +292,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   # end
 
   defp log_event(:message, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_message_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_message_event, 3) do
       state.logging_handler.log_message_event(event, context, state)
     else
       Logger.debug("[MESSAGE] #{inspect(event)} | #{inspect(context)}")
@@ -292,7 +301,8 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
   end
 
   defp log_event(:error, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_error_event, 3) do
       state.logging_handler.log_error_event(event, context, state)
     else
       Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")

@@ -227,7 +227,9 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
     test "routes WebSocket frames to the connection handler", %{state: state} do
       # Create a websocket frame message and route it through the bridge
       frame_data = "Hello, world!"
-      result = BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, frame_data}, state)
+
+      result =
+        BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, frame_data}, state)
 
       # Verify that the connection handler was called with the frame
       assert_receive {:handler_event, :frame, {:text, ^frame_data}}
@@ -239,7 +241,9 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
     test "processes text frame data through message handler", %{state: state} do
       # Create a JSON message and route it through the bridge
       json_data = Jason.encode!(%{"type" => "test", "data" => "value"})
-      result = BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, json_data}, state)
+
+      result =
+        BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, json_data}, state)
 
       # Verify the message handler was called with the decoded message
       assert_receive {:handler_event, :message, message}
@@ -256,7 +260,8 @@ defmodule WebsockexNova.Gun.BehaviorBridgeTest do
       state = put_in(state.handlers.connection_handler_state, conn_handler_state)
 
       # Route a frame through the bridge
-      result = BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, "test"}, state)
+      result =
+        BehaviorBridge.handle_websocket_frame("gun_pid", "stream_ref", {:text, "test"}, state)
 
       # Verify a reply was produced - note the 5-element tuple pattern
       assert {:reply, :text, "response", _updated_state, "stream_ref"} = result

@@ -21,7 +21,13 @@ defmodule WebsockexNova.Transport do
   @type state :: any()
 
   @typedoc "WebSocket frame type"
-  @type frame :: {:text, binary} | {:binary, binary} | :ping | :pong | :close | {:close, non_neg_integer(), binary}
+  @type frame ::
+          {:text, binary}
+          | {:binary, binary}
+          | :ping
+          | :pong
+          | :close
+          | {:close, non_neg_integer(), binary}
 
   @typedoc "Stream reference (opaque)"
   @type stream_ref :: reference() | any()
@@ -36,7 +42,8 @@ defmodule WebsockexNova.Transport do
   Upgrade the connection to WebSocket on the given path and headers.
   Returns {:ok, stream_ref} or {:error, reason}.
   """
-  @callback upgrade_to_websocket(state, path :: binary, headers :: Keyword.t()) :: {:ok, stream_ref} | {:error, term()}
+  @callback upgrade_to_websocket(state, path :: binary, headers :: Keyword.t()) ::
+              {:ok, stream_ref} | {:error, term()}
 
   @doc """
   Close the transport connection.

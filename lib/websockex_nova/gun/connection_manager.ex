@@ -57,7 +57,12 @@ defmodule WebsockexNova.Gun.ConnectionManager do
           {:ok, ConnectionState.t()} | {:error, :invalid_transition}
   def transition_to(state, to_state, params \\ %{}) when is_map(params) do
     if can_transition?(state.status, to_state) do
-      log_event(:connection, :transition, %{from: StateHelpers.get_status(state), to: to_state, params: params}, state)
+      log_event(
+        :connection,
+        :transition,
+        %{from: StateHelpers.get_status(state), to: to_state, params: params},
+        state
+      )
 
       new_state =
         state
@@ -66,12 +71,20 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
       {:ok, new_state}
     else
-      log_event(:error, :invalid_transition, %{from: StateHelpers.get_status(state), to: to_state}, state)
+      log_event(
+        :error,
+        :invalid_transition,
+        %{from: StateHelpers.get_status(state), to: to_state},
+        state
+      )
 
       log_event(
         :connection,
         :valid_transitions,
-        %{from: StateHelpers.get_status(state), valid: Map.get(@valid_transitions, StateHelpers.get_status(state), [])},
+        %{
+          from: StateHelpers.get_status(state),
+          valid: Map.get(@valid_transitions, StateHelpers.get_status(state), [])
+        },
         state
       )
 
@@ -115,8 +128,10 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   * `updated_state` - The new connection state after scheduling (or not scheduling) reconnection
   """
-  @spec schedule_reconnection(ConnectionState.t(), (non_neg_integer(), non_neg_integer() -> any())) ::
-          ConnectionState.t()
+  @spec schedule_reconnection(
+          ConnectionState.t(),
+          (non_neg_integer(), non_neg_integer() -> any())
+        ) :: ConnectionState.t()
   def schedule_reconnection(state, callback) when is_function(callback, 2) do
     log_event(:connection, :schedule_reconnect, %{status: StateHelpers.get_status(state)}, state)
 
@@ -157,8 +172,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     end
   end
 
-  defp ensure_error_handler_state(_error_handler, %WebsockexNova.ClientConn{} = error_handler_state),
-    do: error_handler_state
+  defp ensure_error_handler_state(
+         _error_handler,
+         %WebsockexNova.ClientConn{} = error_handler_state
+       ),
+       do: error_handler_state
 
   defp ensure_error_handler_state(error_handler, _nil) do
     if function_exported?(error_handler, :error_handler_init, 1) do
@@ -232,7 +250,11 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     log_event(
       :connection,
       :start_connection,
-      %{host: StateHelpers.get_host(state), port: StateHelpers.get_port(state), status: StateHelpers.get_status(state)},
+      %{
+        host: StateHelpers.get_host(state),
+        port: StateHelpers.get_port(state),
+        status: StateHelpers.get_status(state)
+      },
       state
     )
 
@@ -285,7 +307,13 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   @doc false
   def apply_disconnected_effects(state, params) do
     if Map.has_key?(params, :reason) do
-      log_event(:connection, :disconnected_effects, %{action: :record_error, reason: params.reason}, state)
+      log_event(
+        :connection,
+        :disconnected_effects,
+        %{action: :record_error, reason: params.reason},
+        state
+      )
+
       ConnectionState.record_error(state, params.reason)
     else
       log_event(:connection, :disconnected_effects, %{action: :no_reason}, state)
@@ -373,12 +401,17 @@ defmodule WebsockexNova.Gun.ConnectionManager do
 
   defp monitor_gun_process(pid) do
     gun_monitor_ref = Process.monitor(pid)
-    log_event(:connection, :monitor_gun_process, %{gun_monitor_ref: gun_monitor_ref}, %{handlers: %{}})
+
+    log_event(:connection, :monitor_gun_process, %{gun_monitor_ref: gun_monitor_ref}, %{
+      handlers: %{}
+    })
+
     {:ok, gun_monitor_ref}
   end
 
   defp log_event(:connection, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_connection_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_connection_event, 3) do
       state.logging_handler.log_connection_event(event, context, state)
     else
       Logger.info("[CONNECTION] #{inspect(event)} | #{inspect(context)}")
@@ -386,7 +419,8 @@ defmodule WebsockexNova.Gun.ConnectionManager do
   end
 
   defp log_event(:error, event, context, state) do
-    if Map.has_key?(state, :logging_handler) and function_exported?(state.logging_handler, :log_error_event, 3) do
+    if Map.has_key?(state, :logging_handler) and
+         function_exported?(state.logging_handler, :log_error_event, 3) do
       state.logging_handler.log_error_event(event, context, state)
     else
       Logger.error("[ERROR] #{inspect(event)} | #{inspect(context)}")

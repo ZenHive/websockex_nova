@@ -22,7 +22,11 @@ defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
     test "logs plain format by default" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_connection_event(:connected, %{host: "localhost"}, default_state())
+          DefaultLoggingHandler.log_connection_event(
+            :connected,
+            %{host: "localhost"},
+            default_state()
+          )
         end)
 
       assert log =~ "[CONNECTION]"
@@ -33,7 +37,11 @@ defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
     test "logs in JSON format when configured" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_connection_event(:disconnected, %{reason: :timeout}, json_state())
+          DefaultLoggingHandler.log_connection_event(
+            :disconnected,
+            %{reason: :timeout},
+            json_state()
+          )
         end)
 
       assert log =~ "\"category\":"
@@ -85,7 +93,11 @@ defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
     test "logs error events at info level by default" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1006, reason: "abnormal"}, default_state())
+          DefaultLoggingHandler.log_error_event(
+            :ws_error,
+            %{code: 1006, reason: "abnormal"},
+            default_state()
+          )
         end)
 
       assert log =~ "[ERROR]"
@@ -97,7 +109,11 @@ defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
     test "logs error events in JSON format" do
       log =
         capture_log(fn ->
-          DefaultLoggingHandler.log_error_event(:ws_error, %{code: 1001, reason: "going away"}, json_state())
+          DefaultLoggingHandler.log_error_event(
+            :ws_error,
+            %{code: 1001, reason: "going away"},
+            json_state()
+          )
         end)
 
       assert log =~ "\"category\":"
@@ -147,8 +163,12 @@ defmodule WebsockexNova.Behaviours.LoggingHandlerTest do
     @moduledoc false
     @behaviour WebsockexNova.Behaviours.LoggingHandler
 
-    def log_connection_event(event, context, _state), do: send(self(), {:log, :connection, event, context})
-    def log_message_event(event, context, _state), do: send(self(), {:log, :message, event, context})
+    def log_connection_event(event, context, _state),
+      do: send(self(), {:log, :connection, event, context})
+
+    def log_message_event(event, context, _state),
+      do: send(self(), {:log, :message, event, context})
+
     def log_error_event(event, context, _state), do: send(self(), {:log, :error, event, context})
   end
 

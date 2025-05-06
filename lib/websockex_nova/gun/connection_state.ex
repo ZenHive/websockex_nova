@@ -209,7 +209,9 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
     state
     |> update_handler(:connection_handler, connection_handler)
-    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :connection_handler_state, handler_state)} end)
+    |> then(fn s ->
+      %{s | handlers: Map.put(s.handlers, :connection_handler_state, handler_state)}
+    end)
   end
 
   @doc """
@@ -271,7 +273,9 @@ defmodule WebsockexNova.Gun.ConnectionState do
 
     state
     |> update_handler(:subscription_handler, subscription_handler)
-    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :subscription_handler_state, handler_state)} end)
+    |> then(fn s ->
+      %{s | handlers: Map.put(s.handlers, :subscription_handler_state, handler_state)}
+    end)
   end
 
   @doc """

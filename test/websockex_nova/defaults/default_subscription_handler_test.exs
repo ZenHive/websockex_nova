@@ -41,7 +41,9 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       assert state.adapter_state.subscriptions == %{}
       assert state.adapter_state.subscription_timeout == 30
 
-      assert {:ok, custom_state} = DefaultSubscriptionHandler.subscription_init(%{subscription_timeout: 120})
+      assert {:ok, custom_state} =
+               DefaultSubscriptionHandler.subscription_init(%{subscription_timeout: 120})
+
       assert custom_state.adapter_state.subscription_timeout == 120
     end
 
@@ -117,7 +119,10 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
                DefaultSubscriptionHandler.handle_subscription_response(response, state)
 
       assert updated_state.adapter_state.subscriptions["existing_sub_2"].status == :failed
-      assert updated_state.adapter_state.subscriptions["existing_sub_2"].error == "invalid_parameters"
+
+      assert updated_state.adapter_state.subscriptions["existing_sub_2"].error ==
+               "invalid_parameters"
+
       assert length(updated_state.adapter_state.subscriptions["existing_sub_2"].history) == 2
     end
 
@@ -136,18 +141,22 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       assert length(updated_state.adapter_state.subscriptions["existing_sub_2"].history) == 2
     end
 
-    test "handle_subscription_response/2 gracefully handles unknown subscription IDs", %{state: state} do
+    test "handle_subscription_response/2 gracefully handles unknown subscription IDs", %{
+      state: state
+    } do
       response = %{"type" => "subscribed", "id" => "unknown_sub"}
 
       # State may be different now since we check for timeouts, but the result should still be :ok
-      assert {:ok, _updated_state} = DefaultSubscriptionHandler.handle_subscription_response(response, state)
+      assert {:ok, _updated_state} =
+               DefaultSubscriptionHandler.handle_subscription_response(response, state)
     end
 
     test "handle_subscription_response/2 ignores unrelated messages", %{state: state} do
       response = %{"type" => "market_data", "ticker" => "btcusd", "price" => 50_000}
 
       # State may be different now since we check for timeouts, but the result should still be :ok
-      assert {:ok, _updated_state} = DefaultSubscriptionHandler.handle_subscription_response(response, state)
+      assert {:ok, _updated_state} =
+               DefaultSubscriptionHandler.handle_subscription_response(response, state)
     end
 
     test "active_subscriptions/1 returns only confirmed subscriptions", %{state: state} do
@@ -158,7 +167,9 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       refute Map.has_key?(active, "existing_sub_2")
     end
 
-    test "find_subscription_by_channel/2 finds subscription IDs for confirmed channels", %{state: state} do
+    test "find_subscription_by_channel/2 finds subscription IDs for confirmed channels", %{
+      state: state
+    } do
       # Only confirmed subscriptions are returned
       assert DefaultSubscriptionHandler.find_subscription_by_channel("ticker.btcusd", state) ==
                "existing_sub_1"
@@ -169,7 +180,9 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       assert DefaultSubscriptionHandler.find_subscription_by_channel("non_existent", state) == nil
     end
 
-    test "find_subscriptions_by_status/2 finds all subscriptions with a specific status", %{state: state} do
+    test "find_subscriptions_by_status/2 finds all subscriptions with a specific status", %{
+      state: state
+    } do
       confirmed = DefaultSubscriptionHandler.find_subscriptions_by_status(:confirmed, state)
       pending = DefaultSubscriptionHandler.find_subscriptions_by_status(:pending, state)
       failed = DefaultSubscriptionHandler.find_subscriptions_by_status(:failed, state)
@@ -206,7 +219,8 @@ defmodule WebsockexNova.Defaults.DefaultSubscriptionHandlerTest do
       # Use cleanup_expired_subscriptions which calls check_subscription_timeouts
       updated_state = DefaultSubscriptionHandler.cleanup_expired_subscriptions(timeout_state)
 
-      # Subscription should be marked as timed out - original test expected :timeout but implementation uses :expired
+      # Subscription should be marked as timed out - original test expected :timeout but
+      # implementation uses :expired
       assert updated_state.adapter_state.subscriptions["timeout_sub"].status == :expired
       assert length(updated_state.adapter_state.subscriptions["timeout_sub"].history) == 2
 

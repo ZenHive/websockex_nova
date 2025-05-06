@@ -29,14 +29,16 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
   end
 
   @impl true
-  def log_message_event(event, context, %ClientConn{logging: logging} = _conn) when is_map(context) and is_map(logging) do
+  def log_message_event(event, context, %ClientConn{logging: logging} = _conn)
+      when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
     log(:message, event_map, context, logging)
     :ok
   end
 
   @impl true
-  def log_error_event(event, context, %ClientConn{logging: logging} = _conn) when is_map(context) and is_map(logging) do
+  def log_error_event(event, context, %ClientConn{logging: logging} = _conn)
+      when is_map(context) and is_map(logging) do
     event_map = ensure_map(event)
     log(:error, event_map, context, logging)
     :ok
@@ -52,7 +54,8 @@ defmodule WebsockexNova.Defaults.DefaultLoggingHandler do
 
   # Private helper functions
 
-  defp log(category, event, context, logging) when is_map(event) and is_map(context) and is_map(logging) do
+  defp log(category, event, context, logging)
+       when is_map(event) and is_map(context) and is_map(logging) do
     level =
       case Map.get(logging, :log_level, :info) do
         l when l in [:debug, :info, :warn, :warning, :error] -> l

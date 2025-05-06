@@ -49,7 +49,9 @@ defmodule WebsockexNova.Gun.ConnectionOptions do
 
     # Warn if using TLS with port 80 (common misconfiguration)
     if opts[:transport] == :tls and Map.get(opts, :port, 443) == 80 do
-      Logger.warning("You are connecting to port 80 with TLS. This is unusual—did you mean to use transport: :tcp?")
+      Logger.warning(
+        "You are connecting to port 80 with TLS. This is unusual—did you mean to use transport: :tcp?"
+      )
     end
 
     with :ok <- validate_transport(opts),

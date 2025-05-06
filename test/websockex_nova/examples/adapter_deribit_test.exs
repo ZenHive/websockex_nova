@@ -25,7 +25,9 @@ defmodule WebsockexNova.Examples.AdapterDeribitTest do
     end
 
     test "merges user opts over defaults" do
-      {:ok, info} = AdapterDeribit.connection_info(%{host: "custom", timeout: 1234, log_level: :debug})
+      {:ok, info} =
+        AdapterDeribit.connection_info(%{host: "custom", timeout: 1234, log_level: :debug})
+
       assert info[:host] == "custom"
       assert info[:timeout] == 1234
       assert info[:log_level] == :debug

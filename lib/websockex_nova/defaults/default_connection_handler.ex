@@ -116,7 +116,9 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
 
     if current_attempts < max_attempts do
       # Increment reconnect_attempts in adapter_state
-      updated_adapter_state = Map.put(updated_adapter_state, :reconnect_attempts, current_attempts + 1)
+      updated_adapter_state =
+        Map.put(updated_adapter_state, :reconnect_attempts, current_attempts + 1)
+
       updated_conn = %{updated_conn | adapter_state: updated_adapter_state}
       {:reconnect, updated_conn}
     else
