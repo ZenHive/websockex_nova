@@ -3,6 +3,8 @@ defmodule WebsockexNova.ClientMacroTest do
 
   # Define test adapter module
   defmodule TestAdapter do
+    use WebsockexNova.Adapter
+
     @moduledoc false
     def connection_info(_opts) do
       {:ok,

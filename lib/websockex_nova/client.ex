@@ -114,14 +114,8 @@ defmodule WebsockexNova.Client do
   """
   @behaviour WebsockexNova.Behaviours.ClientBehavior
 
-  alias WebsockexNova.Behaviours.AuthHandler
-  alias WebsockexNova.Behaviours.MessageHandler
-  alias WebsockexNova.Behaviours.SubscriptionHandler
   alias WebsockexNova.Client.Handlers
   alias WebsockexNova.ClientConn
-  alias WebsockexNova.Defaults.DefaultAuthHandler
-  alias WebsockexNova.Defaults.DefaultMessageHandler
-  alias WebsockexNova.Defaults.DefaultSubscriptionHandler
 
   require Logger
 
@@ -252,7 +246,7 @@ defmodule WebsockexNova.Client do
       "[Client.connect] Initializing adapter: #{inspect(adapter)} with options: #{inspect(options)}"
     )
 
-    with {:ok, adapter_state} <- init_adapter(adapter),
+    with {:ok, adapter_state} <- adapter.init([]),
          {:ok, connection_info} <- get_connection_info(adapter, adapter_state, options),
          {:ok, transport_opts} <- prepare_transport_options(adapter, connection_info) do
       # Ensure callback_pid is set so we get connection notifications
@@ -378,9 +372,7 @@ defmodule WebsockexNova.Client do
   """
   @spec send_text(ClientConn.t(), String.t(), message_options() | nil) :: message_result()
   def send_text(%ClientConn{} = conn, text, options \\ nil) when is_binary(text) do
-    message_handler = get_message_handler(conn.adapter)
-
-    with {:ok, frame_type, encoded} <- message_handler.encode_message(text, conn.adapter_state),
+    with {:ok, frame_type, encoded} <- conn.adapter.encode_message(text, conn.adapter_state),
          :ok <- send_frame(conn, {frame_type, encoded}) do
       wait_for_response(conn, options)
     end
@@ -407,9 +399,7 @@ defmodule WebsockexNova.Client do
   """
   @spec send_json(ClientConn.t(), map(), message_options() | nil) :: message_result()
   def send_json(%ClientConn{} = conn, data, options \\ nil) when is_map(data) do
-    message_handler = get_message_handler(conn.adapter)
-
-    with {:ok, frame_type, encoded} <- message_handler.encode_message(data, conn.adapter_state),
+    with {:ok, frame_type, encoded} <- conn.adapter.encode_message(data, conn.adapter_state),
          :ok <- send_frame(conn, {frame_type, encoded}) do
       wait_for_response(conn, options)
     end
@@ -436,10 +426,8 @@ defmodule WebsockexNova.Client do
   """
   @spec subscribe(ClientConn.t(), String.t(), subscribe_options() | nil) :: subscription_result()
   def subscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
-    subscription_handler = get_subscription_handler(conn.adapter)
-
     with {:ok, sub_message, new_state} <-
-           subscription_handler.subscribe(channel, conn.adapter_state, %{}),
+           conn.adapter.subscribe(channel, conn.adapter_state, %{}),
          {:ok, conn} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn, {:text, sub_message}) do
       wait_for_response(conn, options)
@@ -468,10 +456,8 @@ defmodule WebsockexNova.Client do
   @spec unsubscribe(ClientConn.t(), String.t(), subscribe_options() | nil) ::
           subscription_result()
   def unsubscribe(%ClientConn{} = conn, channel, options \\ nil) when is_binary(channel) do
-    subscription_handler = get_subscription_handler(conn.adapter)
-
     with {:ok, unsub_message, new_state} <-
-           subscription_handler.unsubscribe(channel, conn.adapter_state),
+           conn.adapter.unsubscribe(channel, conn.adapter_state),
          {:ok, conn} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn, {:text, unsub_message}) do
       wait_for_response(conn, options)
@@ -500,10 +486,8 @@ defmodule WebsockexNova.Client do
   @spec authenticate(ClientConn.t(), map(), auth_options() | nil) ::
           {:ok, ClientConn.t(), term()} | {:error, term()} | {:error, term(), ClientConn.t()}
   def authenticate(%ClientConn{} = conn, credentials, options \\ nil) when is_map(credentials) do
-    auth_handler = get_auth_handler(conn.adapter)
-
     with {:ok, auth_data, new_state} <-
-           auth_handler.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
+           conn.adapter.generate_auth_data(Map.put(conn.adapter_state, :credentials, credentials)),
          {:ok, conn1} <- update_adapter_state(conn, new_state),
          :ok <- send_frame(conn1, {:text, auth_data}),
          {:ok, response} <- wait_for_response(conn1, options) do
@@ -514,7 +498,7 @@ defmodule WebsockexNova.Client do
           _ -> response
         end
 
-      case auth_handler.handle_auth_response(parsed_response, conn1.adapter_state) do
+      case conn.adapter.handle_auth_response(parsed_response, conn1.adapter_state) do
         {:ok, updated_state} ->
           {:ok, %{conn1 | adapter_state: updated_state}, response}
 
@@ -699,15 +683,6 @@ defmodule WebsockexNova.Client do
 
   # Private helpers
 
-  # Initialize the adapter
-  defp init_adapter(adapter) do
-    if function_exported?(adapter, :init, 1) do
-      adapter.init([])
-    else
-      {:ok, %{}}
-    end
-  end
-
   # Get connection information from the adapter or options
   defp get_connection_info(adapter, adapter_state, options) do
     if function_exported?(adapter, :connection_info, 1) do
@@ -733,45 +708,6 @@ defmodule WebsockexNova.Client do
     transport_opts = Handlers.configure_handlers(adapter, base_opts)
 
     {:ok, transport_opts}
-  end
-
-  # Get the message handler module
-  defp get_message_handler(adapter) do
-    if implements?(adapter, MessageHandler) do
-      adapter
-    else
-      DefaultMessageHandler
-    end
-  end
-
-  # Get the subscription handler module
-  defp get_subscription_handler(adapter) do
-    if implements?(adapter, SubscriptionHandler) do
-      adapter
-    else
-      DefaultSubscriptionHandler
-    end
-  end
-
-  # Get the auth handler module
-  defp get_auth_handler(adapter) do
-    if implements?(adapter, AuthHandler) do
-      adapter
-    else
-      DefaultAuthHandler
-    end
-  end
-
-  # Check if a module implements a behavior
-  defp implements?(module, behavior) do
-    :attributes
-    |> module.__info__()
-    |> Keyword.get_values(:behaviour)
-    |> List.flatten()
-    |> Enum.member?(behavior)
-  rescue
-    # Handle case where module doesn't exist or doesn't have __info__
-    _ -> false
   end
 
   # Wait for response with timeout and matcher/filter support

@@ -3,16 +3,17 @@ defmodule WebsockexNova.ClientMacro do
   Macro for building WebsockexNova client modules with minimal boilerplate.
 
   Usage:
+  ```elixir
+  defmodule MyApp.MyClient do
+    use WebsockexNova.ClientMacro, adapter: MyApp.MyAdapter
 
-      defmodule MyApp.MyClient do
-        use WebsockexNova.ClientMacro, adapter: MyApp.MyAdapter
-
-        # Add domain-specific methods:
-        def subscribe_to_custom_channel(conn, instrument_id, opts \\ nil) do
-          channel = "custom.\#{instrument_id}.events"
-          Client.subscribe(conn, channel, opts)
-        end
-      end
+    # Add domain-specific methods:
+    def subscribe_to_custom_channel(conn, instrument_id, opts \\ nil) do
+      channel = "custom.\#{instrument_id}.events"
+      Client.subscribe(conn, channel, opts)
+    end
+  end
+  ```
 
   This macro:
   - Injects common client functionality (connect, authenticate, send_json, etc.)

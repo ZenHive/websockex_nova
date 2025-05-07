@@ -86,11 +86,8 @@ defmodule WebsockexNova.ClientTest do
   # Mock adapter for testing
   defmodule MockAdapter do
     @moduledoc false
-    @behaviour AuthHandler
-    @behaviour ConnectionHandler
-    @behaviour ErrorHandler
-    @behaviour MessageHandler
-    @behaviour SubscriptionHandler
+
+    use WebsockexNova.Adapter
 
     # ConnectionHandler callbacks
     @impl ConnectionHandler
