@@ -22,6 +22,7 @@ defmodule WebsockexNova.ClientMacro do
 
   defmacro __using__(opts) do
     adapter = Keyword.fetch!(opts, :adapter)
+    default_options = Keyword.get(opts, :default_options, %{})
 
     quote do
       # Get client module from config or use WebsockexNova.Client as default
@@ -30,8 +31,8 @@ defmodule WebsockexNova.ClientMacro do
         Application.get_env(:websockex_nova, :client_module, WebsockexNova.Client)
       end
 
-      # Default options - clients can override this as needed
-      @default_opts %{}
+      # Define the function that returns default options
+      def default_opts, do: unquote(Macro.escape(default_options))
 
       @doc """
       Connect to WebSocket API with sensible defaults from the adapter.
@@ -103,8 +104,7 @@ defmodule WebsockexNova.ClientMacro do
         client_module().close(conn)
       end
 
-      # Allow clients to define their own default options
-      defp default_opts, do: @default_opts
+      # Allow clients to override default options by redefining this function
       defoverridable default_opts: 0
     end
   end
