@@ -11,7 +11,6 @@ defmodule WebsockexNova.Examples.AdapterWithSubscriptionPreservation do
   alias WebsockexNova.Behaviors.ConnectionHandler
   alias WebsockexNova.Behaviors.MessageHandler
   alias WebsockexNova.Behaviors.SubscriptionHandler
-  alias WebsockexNova.ClientConn
   alias WebsockexNova.Message.SubscriptionManager
 
   require Logger
@@ -108,7 +107,7 @@ defmodule WebsockexNova.Examples.AdapterWithSubscriptionPreservation do
   end
 
   @impl ConnectionHandler
-  def handle_disconnect(reason, state) do
+  def handle_disconnect(_reason, state) do
     # Prepare subscriptions for reconnect
     manager = get_in(state, [:adapter_state, :subscription_manager])
 
@@ -123,7 +122,6 @@ defmodule WebsockexNova.Examples.AdapterWithSubscriptionPreservation do
     end
   end
 
-  @impl MessageHandler
   def prepare_frame(message, _options, state) do
     case message do
       %{method: "subscribe", params: %{channel: channel} = params} ->
@@ -184,7 +182,7 @@ defmodule WebsockexNova.Examples.AdapterWithSubscriptionPreservation do
     end
   end
 
-  @impl MessageHandler
+  @impl ConnectionHandler
   def handle_frame({:text, data}, conn, state) do
     case Jason.decode(data) do
       {:ok, %{"type" => "subscribed", "id" => sub_id}} ->
