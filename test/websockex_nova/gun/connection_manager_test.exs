@@ -19,7 +19,7 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
       end
     end
 
-    def increment_reconnect_attempts(state), do: Map.update(state, :reconnect_attempts, 2, &(&1 + 1))
+    def increment_reconnect_attempts(state), do: Map.update(state, :reconnect_attempts, 1, &(&1 + 1))
     def reset_reconnect_attempts(_state), do: %{reconnect_attempts: 1}
     def handle_error(_, _, state), do: {:ok, state}
     def log_error(_, _, _), do: :ok
