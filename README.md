@@ -2,6 +2,8 @@
 
 A robust, highly extensible WebSocket client library for Elixir with elegant abstractions for building specialized WebSocket clients.
 
+This library is based on the excellent [Websockex](https://github.com/Azolo/websockex) library by [Azolo](https://github.com/Azolo) and has been heavily extended with additional capabilities including behavior-based extensibility, adapter patterns, Gun transport integration, automatic reconnection, subscription management, rate limiting, and more.
+
 ## Features
 
 - **Behavior-Based Architecture**: Easily extendable through behavior interfaces

@@ -1,11 +1,13 @@
 defmodule WebsockexNova.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :websockex_nova,
-      version: "0.1.0",
-      elixir: "~> 1.18",
+      version: @version,
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
@@ -21,6 +23,21 @@ defmodule WebsockexNova.MixProject do
         coverage: :test,
         check: :dev,
         docs: :dev
+      ],
+      
+      # Hex Package metadata
+      description: description(),
+      package: package(),
+      
+      # Docs
+      name: "WebsockexNova",
+      source_url: "https://github.com/ZenHive/websockex_nova",
+      homepage_url: "https://github.com/ZenHive/websockex_nova",
+      docs: [
+        main: "WebsockexNova",
+        extras: ["README.md"],
+        source_url: "https://github.com/ZenHive/websockex_nova",
+        source_ref: "v#{@version}"
       ]
     ]
   end
@@ -109,6 +126,26 @@ defmodule WebsockexNova.MixProject do
         "coverage"
       ],
       rebuild: ["deps.clean --all", "clean", "deps.get", "compile", "dialyzer", "credo --strict"]
+    ]
+  end
+
+  defp description do
+    """
+    A robust WebSocket client library based on Websockex, extended with Gun transport, 
+    behavior-based architecture, automatic reconnection, and enterprise-grade features.
+    """
+  end
+
+  defp package do
+    [
+      name: "websockex_nova",
+      files: ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG*),
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => "https://github.com/ZenHive/websockex_nova",
+        "Docs" => "https://hexdocs.pm/websockex_nova"
+      },
+      maintainers: ["ZenHive"]
     ]
   end
 end

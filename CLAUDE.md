@@ -25,10 +25,10 @@ mix test.watch
 mix lint
 
 # Run Dialyzer (type checker)
-mix typecheck
+mix dialyzer
 
 # Run Sobelow (security scanner)
-mix security
+mix sobelow
 
 # Run all quality checks
 mix check
