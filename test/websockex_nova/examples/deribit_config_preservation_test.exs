@@ -1,35 +1,36 @@
 defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
   use ExUnit.Case, async: true
 
-  alias WebsockexNova.Examples.AdapterDeribit
   alias WebsockexNova.ClientConn
+  alias WebsockexNova.Defaults.DefaultRateLimitHandler
+  alias WebsockexNova.Examples.AdapterDeribit
 
   # Instead of mocking, create a simple config capture module
   defmodule ConfigCaptureClient do
+    @moduledoc false
     def connect(adapter, opts) do
-      {:ok, 
-        %ClientConn{
-          adapter: adapter,
-          transport_pid: self(),
-          stream_ref: nil,
-          callback_pids: MapSet.new([]),
-          connection_info: opts,
-          rate_limit: %{},
-          logging: %{},
-          metrics: %{},
-          reconnection: %{},
-          connection_handler_settings: %{},
-          auth_handler_settings: %{},
-          subscription_handler_settings: %{},
-          error_handler_settings: %{},
-          message_handler_settings: %{},
-          adapter_state: %{},
-          extras: %{}
-        }
-      }
+      {:ok,
+       %ClientConn{
+         adapter: adapter,
+         transport_pid: self(),
+         stream_ref: nil,
+         callback_pids: MapSet.new([]),
+         connection_info: opts,
+         rate_limit: %{},
+         logging: %{},
+         metrics: %{},
+         reconnection: %{},
+         connection_handler_settings: %{},
+         auth_handler_settings: %{},
+         subscription_handler_settings: %{},
+         error_handler_settings: %{},
+         message_handler_settings: %{},
+         adapter_state: %{},
+         extras: %{}
+       }}
     end
   end
-  
+
   setup do
     %{}
   end
@@ -81,7 +82,7 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
     test "preserves all rate limiting options" do
       # Define rate limiting options
       rate_limit_opts = %{
-        rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
+        rate_limit_handler: DefaultRateLimitHandler,
         rate_limit_opts: %{
           mode: :strict,
           capacity: 60,
@@ -101,7 +102,7 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
       {:ok, conn} = ConfigCaptureClient.connect(AdapterDeribit, rate_limit_opts)
 
       # Verify rate limiting options are preserved
-      assert conn.connection_info.rate_limit_handler == WebsockexNova.Defaults.DefaultRateLimitHandler
+      assert conn.connection_info.rate_limit_handler == DefaultRateLimitHandler
       assert conn.connection_info.rate_limit_opts.mode == :strict
       assert conn.connection_info.rate_limit_opts.capacity == 60
       assert conn.connection_info.rate_limit_opts.refill_rate == 5
@@ -267,14 +268,14 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
       assert deep_config.map_value == %{a: 1, b: 2, c: 3}
       assert is_function(deep_config.function_value, 1)
     end
-    
+
     test "preserves all config when merging with defaults" do
       # Get default config directly from adapter
       {:ok, defaults} = AdapterDeribit.connection_info(%{})
-      
+
       # Create a custom config with some overrides and some new values
       custom_config = %{
-        host: "override.deribit.com", 
+        host: "override.deribit.com",
         port: 8443,
         custom_value: "should be preserved",
         nested: %{
@@ -282,19 +283,19 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
           key2: "value2"
         }
       }
-      
+
       # Use our capture client instead of the real client
       {:ok, conn} = ConfigCaptureClient.connect(AdapterDeribit, custom_config)
-      
+
       # Verify overridden values
       assert conn.connection_info.host == "override.deribit.com"
       assert conn.connection_info.port == 8443
-      
+
       # Verify new values were preserved
       assert conn.connection_info.custom_value == "should be preserved"
       assert conn.connection_info.nested.key1 == "value1"
       assert conn.connection_info.nested.key2 == "value2"
-      
+
       # Verify custom values were retained and default values were not automatically merged
       # This is because our ConfigCaptureClient just captures the passed options
       # without merging defaults (unlike the real client)
@@ -307,22 +308,29 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
 
   # Define simple module references for testing - not actual implementations
   defmodule MyApp do
+    @moduledoc false
     defmodule CustomLogger do
+      @moduledoc false
     end
 
     defmodule MetricsCollector do
+      @moduledoc false
     end
 
     defmodule CustomAuthHandler do
+      @moduledoc false
     end
 
     defmodule CustomSubscriptionHandler do
+      @moduledoc false
     end
 
     defmodule CustomMessageHandler do
+      @moduledoc false
     end
 
     defmodule CustomErrorHandler do
+      @moduledoc false
     end
   end
 end

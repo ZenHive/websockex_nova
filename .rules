@@ -77,7 +77,7 @@
         message = enrich_with_business_data(message)
         apply_business_rules(message)
         store_in_database(message.id, message)
-        
+
         {:ok, Jason.encode!(message)}
       end
     end
@@ -96,16 +96,16 @@
     ```elixir
     @tag :integration
     test "reconnects after connection interruption", %{test_server: server} do
-      # Use local WebSocket test server 
+      # Use local WebSocket test server
       client_opts = [url: server.url, reconnect: true]
 
       # Simulate realistic conditions
       {:ok, client} = WebsockexNova.Client.connect_with_reconnection(client_opts)
       assert WebsockexNova.Client.connected?(client)
-      
+
       # Force disconnect the server side
       server.disconnect_client(client.id)
-      
+
       # Verify client reconnects properly
       wait_for_reconnection(client)
       assert WebsockexNova.Client.connected?(client)
@@ -130,9 +130,9 @@
   - ✅ **DO**: Use clear, consistent API patterns
     ```elixir
     # Primary parameters as explicit args, optional params as keyword list
-    @spec connect(url :: String.t(), opts :: keyword()) :: 
+    @spec connect(url :: String.t(), opts :: keyword()) ::
           {:ok, client()} | {:error, WebsockexNova.error()}
-    
+
     # Clear async vs sync patterns
     @spec send_message(client(), message()) :: {:ok, response()} | {:error, error()}
     @spec send_message_async(client(), message(), callback()) :: :ok
@@ -184,14 +184,14 @@
     pool_opts = [
       size: 5,                          # Default pool size
       max_overflow: 10,                 # Maximum additional connections
-      strategy: :fifo,                  # Connection selection strategy 
+      strategy: :fifo,                  # Connection selection strategy
       name: {:local, :websocket_pool}   # Local name
     ]
-    
+
     # Simple pool initialization
     {:ok, _} = WebsockexNova.Pool.start_link(pool_opts)
-    
-    # Usage pattern 
+
+    # Usage pattern
     WebsockexNova.Pool.with_conn(:websocket_pool, fn conn ->
       WebsockexNova.Client.send_message(conn, message)
     end)
@@ -211,7 +211,7 @@
   - Include typical usage patterns
   - Document error scenarios and handling
 
-## Task Management 
+## Task Management
 
 - **Task Format in Issues/PRs**:
   - **ID**: WSN#### (sequential numbering)
@@ -526,7 +526,7 @@
     2. [Test with real workloads]
     3. [Add complexity only when necessary]
     ```
-    
+
   - **Simplicity Principle Format**:
     ```
     **Simplicity Principle**:
@@ -552,13 +552,13 @@
     - [Requirement 2]
     - [Requirement 3]
     ```
-    
+
   - **TypeSpec Documentation Format**:
     ```
     **TypeSpec Documentation**:
     [Description of how types should be documented]
     ```
-    
+
   - **TypeSpec Verification Format**:
     ```
     **TypeSpec Verification**:
@@ -592,6 +592,7 @@
     - `##` for major sections
     - `###` for tasks
     - `####` for subtasks
+  - RUN mix validate_tasklist to validate the tasklist
 
 ## Simplicity Guidelines
 
