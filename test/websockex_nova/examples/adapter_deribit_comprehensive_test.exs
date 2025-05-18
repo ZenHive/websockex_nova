@@ -283,7 +283,7 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
   # Group 4: Integration Tests with real API
   describe "integration with Deribit test server" do
     @tag :integration
-    @tag :skip
+
     test "full connection lifecycle", %{credentials: credentials, credentials_available: creds_available} do
       if !creds_available, do: flunk("Skipping - credentials not available in environment")
 
@@ -341,48 +341,80 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
     end
 
     @tag :integration
-    @tag :skip
-    test "handles reconnection gracefully", %{credentials_available: creds_available} do
-      if !creds_available, do: flunk("Skipping - credentials not available in environment")
 
-      # Connect with lower timeout and retry values for faster testing
+    @tag :integration
+    test "handles reconnection gracefully" do
+      require Logger
+      
+      # Make sure we trap exits for cleaner testing
+      Process.flag(:trap_exit, true)
+      
+      # Connect with parameters specifically for reconnection testing
       {:ok, conn} =
         ClientDeribit.connect(%{
           host: @deribit_host,
-          timeout: 5_000,
-          max_reconnect_attempts: 3,
-          retry: 5
+          timeout: 10_000,
+          max_reconnect_attempts: 5,
+          retry: 1,         # Fast retry attempts 
+          base_backoff: 500 # Short delay between attempts
         })
-
-      # Subscribe to a channel
-      {:ok, _} = ClientDeribit.subscribe_to_ticker(conn, "BTC-PERPETUAL")
-
-      # Force disconnect by closing underlying connection
-      :ok = Client.close(conn)
-
-      # Allow time for automatic reconnection - need more time to ensure reconnect completes
-      Process.sleep(5_000)
-
-      # Test that connection is still functional by making a simple API call
+      
+      # Store the original transport PID
+      original_pid = conn.transport_pid
+      Logger.info("Original connection PID: #{inspect(original_pid)}")
+      
+      # Send a basic test message to verify initial connection works
       test_payload = %{
         "jsonrpc" => @json_rpc_version,
         "id" => 9999,
         "method" => "public/test",
         "params" => %{}
       }
-
-      {:ok, test_response} = ClientDeribit.send_json(conn, test_payload)
-
-      # Verify test response after reconnection
-      assert test_response["id"] == 9999
-      assert test_response["result"]["version"]
-
+      
+      {:ok, _} = ClientDeribit.send_json(conn, test_payload)
+      
+      # Register ourselves with the connection to get notifications about reconnection
+      {:ok, conn_with_callback} = Client.register_callback(conn, self())
+      
+      # Force disconnect by killing the Gun process to simulate network failure
+      # But first we need to get access to the internal gun_pid
+      state = conn.transport.get_state(conn)
+      gun_pid = state.gun_pid
+      Process.exit(gun_pid, :kill)
+      
+      # Wait for notification that connection went down
+      assert_receive {:connection_down, :http, _reason}, 5000
+      
+      # Wait for notification about reconnection
+      assert_receive {:connection_reconnected, updated_conn}, 15000
+      
+      # The conn struct should have been automatically updated by the process
+      assert updated_conn.transport_pid == conn_with_callback.transport_pid
+      assert updated_conn.transport_pid != original_pid
+      
+      # The original connection reference should now point to the new process
+      refute conn.transport_pid == original_pid
+      assert Process.alive?(conn.transport_pid)
+      
+      # Test that the updated connection works by sending a message
+      test_payload2 = %{
+        "jsonrpc" => @json_rpc_version,
+        "id" => 10000,
+        "method" => "public/test",
+        "params" => %{}
+      }
+      
+      # Use the original conn reference which should now point to the new process
+      {:ok, response} = ClientDeribit.send_json(conn, test_payload2)
+      assert response["id"] == 10000
+      assert response["result"]["version"]
+      
       # Clean up
       :ok = Client.close(conn)
     end
 
     @tag :integration
-    @tag :skip
+
     test "preserves subscriptions across reconnects", %{credentials_available: creds_available} do
       if !creds_available, do: flunk("Skipping - credentials not available in environment")
 

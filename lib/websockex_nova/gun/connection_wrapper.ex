@@ -747,6 +747,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_cast({:set_status, status}, state) do
     {:noreply, ConnectionState.update_status(state, status)}
   end
+  
+  def handle_cast({:update_state, new_state}, _state) do
+    {:noreply, new_state}
+  end
 
   @impl true
   def handle_info({:gun_up, gun_pid, protocol}, state) do
@@ -814,7 +818,44 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     if gun_pid == state.gun_pid do
       case ConnectionManager.transition_to(state, :websocket_connected) do
         {:ok, new_state} ->
-          MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, new_state)
+          # Store the websocket stream reference for future use
+          updated_state = Map.put(new_state, :websocket_stream_ref, stream_ref)
+          
+          # If this is a reconnection, update all client connections
+          updated_state = 
+            if Map.get(updated_state, :pending_reconnection, false) do
+              Logger.debug("[ConnectionWrapper] Handling reconnection - updating client connections")
+              
+              # Clear the reconnection flag
+              updated_state = Map.delete(updated_state, :pending_reconnection)
+              
+              # Update all client connections with the new transport_pid and stream_ref
+              if Map.has_key?(updated_state, :client_conns) && map_size(updated_state.client_conns) > 0 do
+                Enum.reduce(updated_state.client_conns, updated_state, fn {conn_ref, client_conn}, acc_state ->
+                  # Update the client connection with new process info
+                  updated_conn = update_client_conn(client_conn, self(), stream_ref)
+                  
+                  # Update the connection in state
+                  updated_conns = Map.put(acc_state.client_conns, conn_ref, updated_conn)
+                  updated_acc = Map.put(acc_state, :client_conns, updated_conns)
+                  
+                  # Notify the callback_pids about reconnection
+                  Enum.each(MapSet.to_list(updated_conn.callback_pids), fn pid ->
+                    if Process.alive?(pid) do
+                      send(pid, {:connection_reconnected, updated_conn})
+                    end
+                  end)
+                  
+                  updated_acc
+                end)
+              else
+                updated_state
+              end
+            else
+              updated_state
+            end
+          
+          MessageHandlers.handle_websocket_upgrade(gun_pid, stream_ref, headers, updated_state)
 
         {:error, reason} ->
           Logger.error("Failed to transition state: #{inspect(reason)}")
@@ -871,7 +912,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
     case initiate_connection(state) do
       {:ok, new_state} ->
-        {:noreply, new_state}
+        # After reconnection, the connection will be upgraded to websocket
+        # The stream_ref will be set later during the upgrade
+        # For now, store a flag to indicate we need to update client connections after upgrade
+        reconnected_state = Map.put(new_state, :pending_reconnection, true)
+        {:noreply, reconnected_state}
 
       {:error, reason, error_state} ->
         # Use standard error handler with reconnect-specific context
@@ -1337,6 +1382,9 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         end
 
         new_state = ConnectionManager.schedule_reconnection(disconnected_state, reconnect_callback)
+        
+        # Preserve client connections for reconnection
+        new_state = Map.put(new_state, :client_conns, Map.get(state, :client_conns, %{}))
 
         if new_state.callback_pid do
           MessageHandlers.notify(new_state.callback_pid, {:connection_down, :http, reason})
@@ -1560,16 +1608,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
     state_result = GenServer.call(pid, :get_state)
 
     case state_result do
-      %ConnectionState{} = _state ->
-        {:ok,
-         %WebsockexNova.ClientConn{
+      %ConnectionState{} = state ->
+        client_conn = %WebsockexNova.ClientConn{
            transport: __MODULE__,
            transport_pid: pid,
            stream_ref: stream_ref,
            adapter: Map.get(options, :adapter),
            adapter_state: Map.get(options, :adapter_state),
            callback_pids: Enum.filter([Map.get(options, :callback_pid)], & &1)
-         }}
+        }
+        
+        # Store the client connection in the state for potential reconnection updates
+        updated_state = Map.update(state, :client_conns, %{}, fn conns ->
+          Map.put(conns, make_ref(), client_conn)
+        end)
+        
+        # Update the state with the new client connection
+        GenServer.cast(pid, {:update_state, updated_state})
+        
+        {:ok, client_conn}
 
       _other ->
         GenServer.stop(pid)
@@ -1582,5 +1639,12 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
       nil -> opts
       test_pid -> Map.put(opts, :test_pid, test_pid)
     end
+  end
+
+  # Updates an existing client connection with new transport process and stream reference
+  # This is used internally during reconnection
+  defp update_client_conn(client_conn, new_transport_pid, new_stream_ref) do
+    Logger.debug("[ConnectionWrapper] Updating client connection from PID #{inspect(client_conn.transport_pid)} to #{inspect(new_transport_pid)}")
+    %{client_conn | transport_pid: new_transport_pid, stream_ref: new_stream_ref}
   end
 end

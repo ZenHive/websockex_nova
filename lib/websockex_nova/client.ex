@@ -606,6 +606,12 @@ defmodule WebsockexNova.Client do
 
   @doc """
   Registers a process to receive notifications from the connection.
+  
+  Registered processes will receive messages when connection events occur:
+  - `{:connection_down, protocol, reason}` - When connection is lost
+  - `{:connection_reconnected, updated_conn}` - When connection is automatically reconnected
+                                                (the updated_conn has new transport_pid and stream_ref)
+  - `{:ws_message, message}` - When a WebSocket message is received
 
   ## Parameters
 
@@ -615,6 +621,7 @@ defmodule WebsockexNova.Client do
   ## Returns
 
   * `{:ok, ClientConn.t()}` with updated connection
+  * `{:error, reason}` if registration fails
   """
   @spec register_callback(ClientConn.t(), pid()) :: {:ok, ClientConn.t()}
   def register_callback(%ClientConn{} = conn, pid) when is_pid(pid) do

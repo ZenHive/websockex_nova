@@ -55,6 +55,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
           callback_pid: pid() | nil,
           last_error: term() | nil,
           active_streams: %{reference() => map()},
+          client_conns: %{reference() => struct()},
 
           # Handler module references - should only store the module names, not the state
           handlers: %{
@@ -87,6 +88,7 @@ defmodule WebsockexNova.Gun.ConnectionState do
     :callback_pid,
     :last_error,
     active_streams: %{},
+    client_conns: %{},
 
     # Handler module references only, not state
     handlers: %{}
