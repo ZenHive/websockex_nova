@@ -1,17 +1,21 @@
 defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
-  use ExUnit.Case, async: true
-
-  alias WebsockexNova.Examples.AdapterDeribit
-
   @moduledoc """
   Advanced configuration precedence tests covering complex settings
   like reconnection policies, rate limiting, auth, error handling, etc.
   """
 
+  use ExUnit.Case, async: true
+
+  alias WebsockexNova.Defaults.DefaultAuthHandler
+  alias WebsockexNova.Defaults.DefaultRateLimitHandler
+  alias WebsockexNova.Defaults.DefaultSubscriptionHandler
+  alias WebsockexNova.Examples.AdapterDeribit
+
   describe "advanced configuration precedence" do
     test "reconnection configuration precedence" do
       # Define a client with custom reconnection defaults
       defmodule ReconnectClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
             max_reconnect_attempts: 20,
@@ -28,9 +32,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
           # Three-level merge
-          config = adapter_defaults
-                  |> deep_merge(client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -46,32 +51,44 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
 
       # User overrides some reconnection settings
       user_opts = %{
-        max_reconnect_attempts: 50,    # Override client
-        base_backoff: 10_000,         # Override client
-        custom_reconnect_field: true   # Add new field
+        # Override client
+        max_reconnect_attempts: 50,
+        # Override client
+        base_backoff: 10_000,
+        # Add new field
+        custom_reconnect_field: true
       }
 
       {:ok, config} = ReconnectClient.connect(AdapterDeribit, user_opts)
 
       # Verify complex precedence
-      assert config.max_reconnect_attempts == 50        # User wins
-      assert config.retry == 15                         # Client wins over adapter
-      assert config.backoff_type == :exponential        # Client wins over adapter
-      assert config.base_backoff == 10_000              # User wins
-      assert config.ping_interval == 45_000             # Client wins
-      assert config.custom_reconnect_field == true      # User addition
+      # User wins
+      assert config.max_reconnect_attempts == 50
+      # Client wins over adapter
+      assert config.retry == 15
+      # Client wins over adapter
+      assert config.backoff_type == :exponential
+      # User wins
+      assert config.base_backoff == 10_000
+      # Client wins
+      assert config.ping_interval == 45_000
+      # User addition
+      assert config.custom_reconnect_field == true
 
       # Adapter defaults still present
-      assert config.subscription_timeout == 60          # Client wins over adapter
-      assert config.auth_refresh_threshold == 60        # Adapter default
+      # Client wins over adapter
+      assert config.subscription_timeout == 60
+      # Adapter default
+      assert config.auth_refresh_threshold == 60
     end
 
     test "rate limiting configuration precedence" do
       # Define a client with custom rate limiting
       defmodule RateLimitClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
-            rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
+            rate_limit_handler: DefaultRateLimitHandler,
             rate_limit_opts: %{
               mode: :strict,
               capacity: 200,
@@ -92,8 +109,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
           # Deep merge for nested maps
-          config = deep_merge(adapter_defaults, client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -110,10 +129,13 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       # User fine-tunes rate limiting
       user_opts = %{
         rate_limit_opts: %{
-          capacity: 300,                    # Override
+          # Override
+          capacity: 300,
           cost_map: %{
-            subscription: 5,                # Override
-            custom_operation: 25            # Add new
+            # Override
+            subscription: 5,
+            # Add new
+            custom_operation: 25
           }
         }
       }
@@ -121,22 +143,31 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       {:ok, config} = RateLimitClient.connect(AdapterDeribit, user_opts)
 
       # Check nested configuration precedence
-      assert config.rate_limit_handler == WebsockexNova.Defaults.DefaultRateLimitHandler
-      assert config.rate_limit_opts.mode == :strict           # Client default
-      assert config.rate_limit_opts.capacity == 300           # User override
-      assert config.rate_limit_opts.refill_rate == 20         # Client default
-      assert config.rate_limit_opts.queue_limit == 500        # Client default
+      assert config.rate_limit_handler == DefaultRateLimitHandler
+      # Client default
+      assert config.rate_limit_opts.mode == :strict
+      # User override
+      assert config.rate_limit_opts.capacity == 300
+      # Client default
+      assert config.rate_limit_opts.refill_rate == 20
+      # Client default
+      assert config.rate_limit_opts.queue_limit == 500
 
       # Cost map is partially overridden
-      assert config.rate_limit_opts.cost_map.subscription == 5       # User override
-      assert config.rate_limit_opts.cost_map.auth == 20             # Client default
-      assert config.rate_limit_opts.cost_map.custom_operation == 25 # User addition
-      assert config.rate_limit_opts.cost_map.order == 15            # Client default
+      # User override
+      assert config.rate_limit_opts.cost_map.subscription == 5
+      # Client default
+      assert config.rate_limit_opts.cost_map.auth == 20
+      # User addition
+      assert config.rate_limit_opts.cost_map.custom_operation == 25
+      # Client default
+      assert config.rate_limit_opts.cost_map.order == 15
     end
 
     test "authentication configuration precedence" do
       # Define a client with auth defaults
       defmodule AuthClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
             credentials: %{
@@ -144,7 +175,7 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
               secret: "default_client_secret",
               environment: :test
             },
-            auth_handler: WebsockexNova.Defaults.DefaultAuthHandler,
+            auth_handler: DefaultAuthHandler,
             auth_refresh_threshold: 120,
             auth_auto_refresh: true,
             auth_retry_attempts: 3
@@ -153,9 +184,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_state} = adapter.init([])
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
-          config = adapter_defaults
-                  |> deep_merge(client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -163,7 +195,8 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
         # Deep merge helper (special handling for credentials)
         defp deep_merge(left, right) do
           Map.merge(left, right, fn
-            :credentials, _v1, v2 -> v2  # Credentials are replaced completely
+            # Credentials are replaced completely
+            :credentials, _v1, v2 -> v2
             _k, %{} = v1, %{} = v2 -> deep_merge(v1, v2)
             _k, _v1, v2 -> v2
           end)
@@ -186,19 +219,25 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       # User credentials completely replace defaults
       assert config.credentials.api_key == "real_user_key"
       assert config.credentials.secret == "real_user_secret"
-      refute Map.has_key?(config.credentials, :environment)  # Not in user opts
+      # Not in user opts
+      refute Map.has_key?(config.credentials, :environment)
 
       # Other auth settings
-      assert config.auth_handler == WebsockexNova.Defaults.DefaultAuthHandler
-      assert config.auth_refresh_threshold == 300       # User override
-      assert config.auth_auto_refresh == true           # Client default
-      assert config.auth_retry_attempts == 3            # Client default
-      assert config.custom_auth_field == "user_auth_data"  # User addition
+      assert config.auth_handler == DefaultAuthHandler
+      # User override
+      assert config.auth_refresh_threshold == 300
+      # Client default
+      assert config.auth_auto_refresh == true
+      # Client default
+      assert config.auth_retry_attempts == 3
+      # User addition
+      assert config.custom_auth_field == "user_auth_data"
     end
 
     test "handler configuration precedence" do
       # Define a client with custom handlers
       defmodule HandlerClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
             # Custom handlers at client level
@@ -207,8 +246,8 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
             error_handler: CustomErrorHandler,
             logging_handler: CustomLoggingHandler,
             # Keep some defaults
-            subscription_handler: WebsockexNova.Defaults.DefaultSubscriptionHandler,
-            rate_limit_handler: WebsockexNova.Defaults.DefaultRateLimitHandler,
+            subscription_handler: DefaultSubscriptionHandler,
+            rate_limit_handler: DefaultRateLimitHandler,
             # Handler-specific settings
             logging_opts: %{
               level: :debug,
@@ -220,9 +259,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_state} = adapter.init([])
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
-          config = adapter_defaults
-                  |> deep_merge(client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -242,7 +282,8 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
         logging_handler: UserLoggingHandler,
         metrics_collector: UserMetricsCollector,
         logging_opts: %{
-          level: :warn,  # Override client default
+          # Override client default
+          level: :warn,
           custom_log_field: true
         }
       }
@@ -250,23 +291,33 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       {:ok, config} = HandlerClient.connect(AdapterDeribit, user_opts)
 
       # Verify handler precedence
-      assert config.connection_handler == CustomConnectionHandler    # Client default
-      assert config.message_handler == UserMessageHandler           # User override
-      assert config.error_handler == CustomErrorHandler             # Client default
-      assert config.logging_handler == UserLoggingHandler           # User override
-      assert config.subscription_handler == WebsockexNova.Defaults.DefaultSubscriptionHandler
-      assert config.metrics_collector == UserMetricsCollector       # User addition
+      # Client default
+      assert config.connection_handler == CustomConnectionHandler
+      # User override
+      assert config.message_handler == UserMessageHandler
+      # Client default
+      assert config.error_handler == CustomErrorHandler
+      # User override
+      assert config.logging_handler == UserLoggingHandler
+      assert config.subscription_handler == DefaultSubscriptionHandler
+      # User addition
+      assert config.metrics_collector == UserMetricsCollector
 
       # Handler options
-      assert config.logging_opts.level == :warn                     # User override
-      assert config.logging_opts.format == :json                    # Client default
-      assert config.logging_opts.include_metadata == true           # Client default
-      assert config.logging_opts.custom_log_field == true           # User addition
+      # User override
+      assert config.logging_opts.level == :warn
+      # Client default
+      assert config.logging_opts.format == :json
+      # Client default
+      assert config.logging_opts.include_metadata == true
+      # User addition
+      assert config.logging_opts.custom_log_field == true
     end
 
     test "transport and connection options precedence" do
       # Define a client with transport defaults
       defmodule TransportClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
             transport: :tls,
@@ -275,7 +326,7 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
               cacerts: :public_key.cacerts_get(),
               depth: 3,
               server_name_indication: ~c"client.deribit.com",
-              versions: [:'tlsv1.3', :'tlsv1.2']
+              versions: [:"tlsv1.3", :"tlsv1.2"]
             },
             protocols: [:http2, :http],
             headers: [
@@ -292,8 +343,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
           # Deep merge for nested options
-          config = deep_merge(adapter_defaults, client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -301,7 +354,8 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
         defp deep_merge(left, right) do
           Map.merge(left, right, fn
             _k, %{} = v1, %{} = v2 -> deep_merge(v1, v2)
-            _k, v1, v2 when is_list(v1) and is_list(v2) -> v2  # Replace lists
+            # Replace lists
+            _k, v1, v2 when is_list(v1) and is_list(v2) -> v2
             _k, _v1, v2 -> v2
           end)
         end
@@ -310,44 +364,55 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       # User customizes transport
       user_opts = %{
         transport_opts: %{
-          verify: :verify_none,           # Override for testing
+          # Override for testing
+          verify: :verify_none,
           custom_tls_option: true
         },
         headers: [
-          {"user-agent", "CustomClient/2.0"},  # Replace entire list
+          # Replace entire list
+          {"user-agent", "CustomClient/2.0"},
           {"x-custom-header", "custom-value"}
         ],
         ws_opts: %{
-          max_frame_size: 2_000_000       # Override
+          # Override
+          max_frame_size: 2_000_000
         }
       }
 
       {:ok, config} = TransportClient.connect(AdapterDeribit, user_opts)
 
       # Transport options
-      assert config.transport == :tls                               # Client default
-      assert config.transport_opts.verify == :verify_none           # User override
-      assert config.transport_opts.depth == 3                       # Client default
-      assert config.transport_opts.custom_tls_option == true        # User addition
+      # Client default
+      assert config.transport == :tls
+      # User override
+      assert config.transport_opts.verify == :verify_none
+      # Client default
+      assert config.transport_opts.depth == 3
+      # User addition
+      assert config.transport_opts.custom_tls_option == true
       assert config.transport_opts.server_name_indication == ~c"client.deribit.com"
 
       # Headers completely replaced (not merged)
       assert config.headers == [
-        {"user-agent", "CustomClient/2.0"},
-        {"x-custom-header", "custom-value"}
-      ]
+               {"user-agent", "CustomClient/2.0"},
+               {"x-custom-header", "custom-value"}
+             ]
 
       # WebSocket options
-      assert config.ws_opts.compress == true                        # Client default
-      assert config.ws_opts.max_frame_size == 2_000_000            # User override
+      # Client default
+      assert config.ws_opts.compress == true
+      # User override
+      assert config.ws_opts.max_frame_size == 2_000_000
 
       # Protocols
-      assert config.protocols == [:http2, :http]                    # Client default
+      # Client default
+      assert config.protocols == [:http2, :http]
     end
 
     test "complete configuration with all levels" do
       # Test with all configuration levels
       defmodule CompleteClient do
+        @moduledoc false
         def connect(adapter, user_opts) do
           client_defaults = %{
             # Override adapter defaults
@@ -367,9 +432,10 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
           {:ok, adapter_state} = adapter.init([])
           {:ok, adapter_defaults} = adapter.connection_info(adapter_state)
 
-          config = adapter_defaults
-                  |> deep_merge(client_defaults)
-                  |> deep_merge(user_opts)
+          config =
+            adapter_defaults
+            |> deep_merge(client_defaults)
+            |> deep_merge(user_opts)
 
           {:ok, config}
         end
@@ -396,18 +462,28 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceAdvancedTest do
       {:ok, config} = CompleteClient.connect(AdapterDeribit, user_opts)
 
       # Final precedence verification
-      assert config.host == "production.deribit.com"        # User wins
-      assert config.timeout == 20_000                       # Client wins
-      assert config.max_reconnect_attempts == 25            # Client wins
-      assert config.port == 443                             # Adapter default
-      assert config.client_id == "complete_client_v1"       # Client addition
-      assert config.session_id == "user_session_123"        # User addition
+      # User wins
+      assert config.host == "production.deribit.com"
+      # Client wins
+      assert config.timeout == 20_000
+      # Client wins
+      assert config.max_reconnect_attempts == 25
+      # Adapter default
+      assert config.port == 443
+      # Client addition
+      assert config.client_id == "complete_client_v1"
+      # User addition
+      assert config.session_id == "user_session_123"
 
       # Nested features (with deep merge)
-      assert config.features.debug_mode == true             # User override
-      assert config.features.custom_feature == "enabled"    # User addition
-      assert config.features.auto_heartbeat == true         # Client default preserved
-      assert config.features.auto_resubscribe == true       # Client default preserved
+      # User override
+      assert config.features.debug_mode == true
+      # User addition
+      assert config.features.custom_feature == "enabled"
+      # Client default preserved
+      assert config.features.auto_heartbeat == true
+      # Client default preserved
+      assert config.features.auto_resubscribe == true
     end
   end
 end

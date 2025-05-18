@@ -387,23 +387,27 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
         Enum.map(@test_channels, fn channel ->
           # Determine if this is a raw channel that needs authentication
           needs_auth = String.contains?(channel, ".raw")
-          
+
           # Use the appropriate method based on channel type and authentication status
-          method = if needs_auth && creds_available && updated_conn.adapter_state[:access_token] do
-            "private/subscribe"
-          else
-            "public/subscribe"
-          end
-          
+          method =
+            if needs_auth && creds_available && updated_conn.adapter_state[:access_token] do
+              "private/subscribe"
+            else
+              "public/subscribe"
+            end
+
           # Build the payload
           params = %{"channels" => [channel]}
-          params = if needs_auth && creds_available && updated_conn.adapter_state[:access_token] do
-            Map.put(params, "access_token", updated_conn.adapter_state[:access_token])
-          else
-            params
-          end
-          
+
+          params =
+            if needs_auth && creds_available && updated_conn.adapter_state[:access_token] do
+              Map.put(params, "access_token", updated_conn.adapter_state[:access_token])
+            else
+              params
+            end
+
           req_id = System.unique_integer([:positive])
+
           payload = %{
             "jsonrpc" => "2.0",
             "id" => req_id,
@@ -417,17 +421,19 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
               case msg do
                 {:websockex_nova, {:websocket_frame, _ref, {:text, response_json}}} ->
                   response = Jason.decode!(response_json)
+
                   if response["id"] == req_id do
                     {:ok, response_json}
                   else
                     :skip
                   end
+
                 _ ->
                   :skip
               end
             end
           }
-          
+
           {:ok, response_json} = ClientDeribit.send_json(updated_conn, payload, options)
           response = Jason.decode!(response_json)
           {channel, response}
@@ -436,7 +442,7 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
       # Verify all subscriptions were successful (or failed as expected if not authenticated)
       for {channel, response} <- results do
         needs_auth = String.contains?(channel, ".raw")
-        
+
         if needs_auth && !creds_available do
           # Raw channels without auth should fail with error 13778
           assert response["error"]["code"] == 13_778, "Expected unauthorized error for channel: #{channel}"
@@ -446,6 +452,7 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
           if !response["result"] || response["result"] != [channel] do
             IO.inspect(response, label: "Response for #{channel}")
           end
+
           assert response["result"] == [channel], "Failed to subscribe to channel: #{channel}"
         end
       end

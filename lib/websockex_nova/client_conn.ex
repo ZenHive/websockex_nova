@@ -1,5 +1,4 @@
 defmodule WebsockexNova.ClientConn do
-  @behaviour Access
   @moduledoc """
   Canonical state for a WebSocket client connection.
   All core application/session state is explicit and top-level.
@@ -31,6 +30,8 @@ defmodule WebsockexNova.ClientConn do
     * `:message_handler_settings` - State specific to the message handler
     * `:extras` - Extensible/optional state
   """
+
+  @behaviour Access
 
   @typedoc "WebSocket transport module"
   @type transport :: module()
@@ -87,16 +88,16 @@ defmodule WebsockexNova.ClientConn do
     adapter_state: %{},
     extras: %{}
   ]
-  
+
   @doc """
   Get the current transport_pid for a connection.
-  
+
   This function checks the ConnectionRegistry first using the connection_id.
   If found, it returns the current transport PID. This ensures operations
   work even after reconnection when the transport_pid might have changed.
-  
+
   If the lookup fails, it falls back to the PID stored in the struct.
-  
+
   ## Parameters
     - conn: The ClientConn struct
     
@@ -106,25 +107,26 @@ defmodule WebsockexNova.ClientConn do
   @spec get_current_transport_pid(t()) :: pid()
   def get_current_transport_pid(%__MODULE__{} = conn) do
     case conn.connection_id && WebsockexNova.ConnectionRegistry.get_transport_pid(conn.connection_id) do
-      {:ok, pid} when is_pid(pid) -> 
+      {:ok, pid} when is_pid(pid) ->
         if Process.alive?(pid) do
           pid
         else
           # Process not alive, fall back to stored PID
           conn.transport_pid
         end
-      _ -> 
+
+      _ ->
         # Fall back to the stored PID
         conn.transport_pid
     end
   end
-  
+
   @doc """
   Get the current stream_ref for a connection.
-  
+
   This is used alongside get_current_transport_pid to ensure operations
   use the current stream_ref, which may have changed after reconnection.
-  
+
   ## Parameters
     - conn: The ClientConn struct
     
@@ -140,7 +142,7 @@ defmodule WebsockexNova.ClientConn do
   Implements the Access behaviour to enable bracket access (`conn[:field]`).
 
   Allows retrieving fields from the ClientConn struct using Access syntax:
-  
+
   ## Examples
       
       conn[:adapter]
@@ -161,23 +163,22 @@ defmodule WebsockexNova.ClientConn do
   def fetch(%__MODULE__{} = conn, key) when is_atom(key) do
     Map.fetch(Map.from_struct(conn), key)
   end
+
+  # Try to convert string key to atom if it exists
   def fetch(%__MODULE__{} = conn, key) when is_binary(key) do
-    # Try to convert string key to atom if it exists
-    try do
-      atom_key = String.to_existing_atom(key)
-      Map.fetch(Map.from_struct(conn), atom_key)
-    rescue
-      ArgumentError -> :error
-    end
+    atom_key = String.to_existing_atom(key)
+    Map.fetch(Map.from_struct(conn), atom_key)
+  rescue
+    ArgumentError -> :error
   end
 
   @doc """
   Implements the Access behaviour for updating ClientConn fields.
 
   This enables functions like `Access.get_and_update/3` to work with ClientConn.
-  
+
   ## Examples
-  
+
       {old_value, updated_conn} = Access.get_and_update(conn, :adapter_state, fn current ->
         {current, Map.put(current, :new_key, :new_value)}
       end)
@@ -198,32 +199,32 @@ defmodule WebsockexNova.ClientConn do
   @spec get_and_update(t(), atom() | String.t(), (any() -> {any(), any()} | :pop)) :: {any(), t()}
   def get_and_update(%__MODULE__{} = conn, key, fun) when is_atom(key) and is_function(fun, 1) do
     current = Map.get(conn, key)
-    
+
     case fun.(current) do
       {get_value, update_value} ->
         {get_value, Map.put(conn, key, update_value)}
+
       :pop ->
         {current, conn}
     end
   end
+
+  # Try to convert string key to atom if it exists
   def get_and_update(%__MODULE__{} = conn, key, fun) when is_binary(key) and is_function(fun, 1) do
-    # Try to convert string key to atom if it exists
-    try do
-      atom_key = String.to_existing_atom(key)
-      get_and_update(conn, atom_key, fun)
-    rescue
-      ArgumentError -> {nil, conn}
-    end
+    atom_key = String.to_existing_atom(key)
+    get_and_update(conn, atom_key, fun)
+  rescue
+    ArgumentError -> {nil, conn}
   end
 
   @doc """
   Implements the Access behaviour to pop values from ClientConn fields.
-  
+
   Since ClientConn is a struct with fixed fields, actual removal is not supported.
   For map-type fields, this can clear the value by setting it to an empty map.
-  
+
   ## Examples
-  
+
       {value, updated_conn} = Access.pop(conn, :extras)
       {value, updated_conn} = Access.pop(conn, "extras")
       
@@ -238,26 +239,42 @@ defmodule WebsockexNova.ClientConn do
   @spec pop(t(), atom() | String.t()) :: {any(), t()}
   def pop(%__MODULE__{} = conn, key) when is_atom(key) do
     value = Map.get(conn, key)
-    
+
     # Determine default value based on field type
-    default = case key do
-      :callback_pids -> MapSet.new()
-      k when k in [:connection_info, :rate_limit, :logging, :metrics, :reconnection,
-                   :connection_handler_settings, :auth_handler_settings, 
-                   :subscription_handler_settings, :error_handler_settings,
-                   :message_handler_settings, :adapter_state, :extras] -> %{}
-      _ -> nil
-    end
-    
+    default =
+      case key do
+        :callback_pids ->
+          MapSet.new()
+
+        k
+        when k in [
+               :connection_info,
+               :rate_limit,
+               :logging,
+               :metrics,
+               :reconnection,
+               :connection_handler_settings,
+               :auth_handler_settings,
+               :subscription_handler_settings,
+               :error_handler_settings,
+               :message_handler_settings,
+               :adapter_state,
+               :extras
+             ] ->
+          %{}
+
+        _ ->
+          nil
+      end
+
     {value, Map.put(conn, key, default)}
   end
+
+  # Try to convert string key to atom if it exists
   def pop(%__MODULE__{} = conn, key) when is_binary(key) do
-    # Try to convert string key to atom if it exists
-    try do
-      atom_key = String.to_existing_atom(key)
-      pop(conn, atom_key)
-    rescue
-      ArgumentError -> {nil, conn}
-    end
+    atom_key = String.to_existing_atom(key)
+    pop(conn, atom_key)
+  rescue
+    ArgumentError -> {nil, conn}
   end
 end

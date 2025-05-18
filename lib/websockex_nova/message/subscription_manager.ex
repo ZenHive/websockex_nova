@@ -57,9 +57,9 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   alias WebsockexNova.Behaviors.SubscriptionHandler
 
   @type t :: %__MODULE__{
-            handler: module(),
-            state: map()
-          }
+          handler: module(),
+          state: map()
+        }
 
   defstruct [:handler, state: %{}]
 
@@ -222,11 +222,15 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   def prepare_for_reconnect(%__MODULE__{} = manager) do
     # Get currently active subscriptions and store directly in state
     active = active_subscriptions(manager)
-    
+
     # Store active subscriptions directly in state for recovery
-    updated_state = Map.put(manager.state, :pending_reconnect_subscriptions, 
-      Enum.map(active, fn {_id, sub} -> {sub.channel, sub.params} end))
-    
+    updated_state =
+      Map.put(
+        manager.state,
+        :pending_reconnect_subscriptions,
+        Enum.map(active, fn {_id, sub} -> {sub.channel, sub.params} end)
+      )
+
     {:ok, %{manager | state: updated_state}}
   end
 
@@ -253,17 +257,19 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   def resubscribe_after_reconnect(%__MODULE__{} = manager) do
     # Get pending subscriptions from state
     pending = Map.get(manager.state, :pending_reconnect_subscriptions, [])
-    
+
     # Clean up state by removing pending subscriptions
     cleaned_state = Map.delete(manager.state, :pending_reconnect_subscriptions)
     cleaned_manager = %{manager | state: cleaned_state}
-    
+
     # Simple fold to process subscriptions and collect results
-    Enum.reduce(pending, {[], cleaned_manager}, fn {channel, params}, {results, current_manager} ->
+    pending
+    |> Enum.reduce({[], cleaned_manager}, fn {channel, params}, {results, current_manager} ->
       case subscribe(current_manager, channel, params) do
-        {:ok, id, updated_manager} -> 
+        {:ok, id, updated_manager} ->
           {[{:ok, id, updated_manager} | results], updated_manager}
-        {:error, reason, updated_manager} -> 
+
+        {:error, reason, updated_manager} ->
           {[{:error, reason, updated_manager} | results], updated_manager}
       end
     end)
@@ -311,10 +317,13 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   @spec import_state(t(), map()) :: {:ok, t()}
   def import_state(%__MODULE__{} = manager, exported_state) do
     # Store both subscriptions and pending reconnect subscriptions in state
-    updated_state = manager.state
+    updated_state =
+      manager.state
       |> Map.put(:subscriptions, exported_state.subscriptions)
-      |> Map.put(:pending_reconnect_subscriptions, 
-          Map.get(exported_state, :pending_reconnect_subscriptions, []))
+      |> Map.put(
+        :pending_reconnect_subscriptions,
+        Map.get(exported_state, :pending_reconnect_subscriptions, [])
+      )
 
     {:ok, %{manager | state: updated_state}}
   end

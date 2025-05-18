@@ -608,7 +608,7 @@ defmodule WebsockexNova.Client do
 
   @doc """
   Registers a process to receive notifications from the connection.
-  
+
   Registered processes will receive messages when connection events occur:
   - `{:connection_down, protocol, reason}` - When connection is lost
   - `{:connection_reconnected, updated_conn}` - When connection is automatically reconnected
@@ -733,7 +733,7 @@ defmodule WebsockexNova.Client do
   @spec prepare_transport_options(module(), map()) :: {:ok, map()}
   defp prepare_transport_options(adapter, connection_info) do
     base_opts = Map.get(connection_info, :transport_opts, %{})
-    
+
     # Normalize base_opts: convert keyword list to map if needed
     normalized_opts = normalize_transport_opts(base_opts)
 
@@ -742,7 +742,7 @@ defmodule WebsockexNova.Client do
 
     {:ok, transport_opts}
   end
-  
+
   # Normalize transport options to ensure they are in map format
   @spec normalize_transport_opts(map() | Keyword.t() | nil | any()) :: map()
   defp normalize_transport_opts(opts) when is_map(opts), do: opts

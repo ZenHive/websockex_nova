@@ -36,6 +36,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   @behaviour WebsockexNova.Behaviors.ConnectionHandler
 
   alias WebsockexNova.ClientConn
+
   require Logger
 
   @default_max_reconnect_attempts 5
@@ -75,7 +76,7 @@ defmodule WebsockexNova.Defaults.DefaultConnectionHandler do
   def handle_connect(conn_info, %ClientConn{} = conn) do
     # Get current adapter_state or initialize empty map
     adapter_state = conn.adapter_state || %{}
-    
+
     # Check if this is a reconnection
     if Map.get(conn_info, :reconnected, false) do
       # This is a reconnection - adapters can override this to restore subscriptions

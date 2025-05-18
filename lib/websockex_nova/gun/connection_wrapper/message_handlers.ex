@@ -273,7 +273,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
     # Call behavior callback for connect again, with updated info
     protocol = extract_protocol_from_headers(headers)
     path = Map.get(state.options, :path, "/")
-    
+
     # Check if this is a reconnection
     is_reconnection = Map.get(state, :pending_reconnection, false)
 

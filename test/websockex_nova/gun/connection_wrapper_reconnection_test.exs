@@ -55,11 +55,11 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
         # Simulate reconnection (ConnectionWrapper should reconnect automatically)
         # Wait for reconnection - since our fixed code now automatically upgrades to WebSocket
         assert_connection_status(conn, :websocket_connected, 5000)
-        
+
         # Receive the reconnection message and update conn
         assert_receive {:connection_reconnected, reconnected_conn}, 5000
         conn = reconnected_conn
-        
+
         new_state = ConnectionWrapper.get_state(conn)
         new_gun_pid = new_state.gun_pid
         assert is_pid(new_gun_pid)
@@ -89,52 +89,54 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
     # Create a connection and capture initial state
     {:ok, conn} = ConnectionWrapper.open("localhost", port, @websocket_path, %{callback_pid: self(), transport: :tcp})
     assert_connection_status(conn, :websocket_connected)
-    
+
     # Store original connection information
     original_transport_pid = conn.transport_pid
     original_stream_ref = conn.stream_ref
-    
+
     # Get the current Gun PID so we can kill it to simulate a disconnect
     state = ConnectionWrapper.get_state(conn)
     gun_pid = state.gun_pid
     assert is_pid(gun_pid)
     assert Process.alive?(original_transport_pid)
-    
+
     # Clear the mailbox of any previous messages
     flush_mailbox()
-    
+
     # Force disconnect by killing the Gun process
     Process.exit(gun_pid, :kill)
-    
+
     # Wait for disconnection to be detected
     assert_connection_status(conn, :disconnected, 2000)
-    
+
     # Wait for reconnection
     assert_connection_status(conn, :websocket_connected, 5000)
-    
+
     # Check if we received the reconnection callback
     assert_receive {:connection_reconnected, reconnected_conn}, 5000
-    
+
     # Use the reconnected_conn for further operations since it has the updated references
     # This is critical - we need to use the updated connection object
     conn = reconnected_conn
-    
+
     # Verify reconnected connection has updated stream_ref
-    assert conn.transport_pid == original_transport_pid # transport_pid doesn't change
-    assert conn.stream_ref != original_stream_ref # but stream_ref does change
-    
+    # transport_pid doesn't change
+    assert conn.transport_pid == original_transport_pid
+    # but stream_ref does change
+    assert conn.stream_ref != original_stream_ref
+
     # Get the updated state and verify changes
     updated_state = ConnectionWrapper.get_state(conn)
     new_gun_pid = updated_state.gun_pid
-    
+
     # Verify we have a new Gun PID
     assert is_pid(new_gun_pid)
     assert new_gun_pid != gun_pid
     assert Process.alive?(conn.transport_pid)
-    
+
     # Verify the connection is still usable - send a frame and expect a response
     assert :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "test_after_reconnect"})
-    
+
     # Ensure we clean up
     ConnectionWrapper.close(conn)
   end
@@ -161,7 +163,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
           state = ConnectionWrapper.get_state(conn)
           # Make sure it's initialized properly first
           Process.sleep(@default_delay * 2)
-          
+
           # Clear any existing messages
           flush_mailbox()
 
@@ -174,7 +176,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
 
           # Wait for reconnection - our fixed code now automatically upgrades to WebSocket
           assert_connection_status(conn, :websocket_connected, 5000)
-          
+
           # Receive the reconnection message and update conn
           assert_receive {:connection_reconnected, reconnected_conn}, 5000
           conn = reconnected_conn
@@ -235,7 +237,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
       assert_status_with_timeout(conn, expected_status, timeout, elapsed + sleep_time)
     end
   end
-  
+
   # Helper function to flush all messages from the mailbox
   defp flush_mailbox do
     receive do

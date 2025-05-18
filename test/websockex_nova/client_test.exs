@@ -17,10 +17,11 @@ defmodule WebsockexNova.ClientTest do
 
     @impl true
     def open(host, port, path, opts \\ %{}) do
-      transport_pid = spawn(fn ->
-        receive_loop({host, port, path, opts})
-      end)
-      
+      transport_pid =
+        spawn(fn ->
+          receive_loop({host, port, path, opts})
+        end)
+
       send(self(), {:open_connection, host, port, path, opts})
 
       {:ok,
@@ -33,13 +34,14 @@ defmodule WebsockexNova.ClientTest do
          callback_pids: Enum.filter([Map.get(opts, :callback_pid)], & &1)
        }}
     end
-    
+
     defp receive_loop(conn_info) do
       receive do
         {:get_last_connection, from} ->
           {host, port, path, opts} = conn_info
           send(from, {:last_connection, host, port, path, opts})
           receive_loop(conn_info)
+
         _ ->
           receive_loop(conn_info)
       end
@@ -83,6 +85,7 @@ defmodule WebsockexNova.ClientTest do
         {:get_last_connection, from} ->
           send(from, {:last_connection, state.host, state.port, state.path, state.options})
           {:ok, state}
+
         _ ->
           {:ok, state}
       end
@@ -419,7 +422,7 @@ defmodule WebsockexNova.ClientTest do
       result = Client.close(conn)
       assert result == :ok
     end
-    
+
     test "connect/2 with keyword list transport_opts converts to map" do
       # Test with a keyword list that will cause errors if not converted
       transport_kw_list = [
@@ -427,19 +430,19 @@ defmodule WebsockexNova.ClientTest do
         cacertfile: "/path/to/cert",
         server_name_indication: ~c"example.com"
       ]
-      
+
       options = %{
         host: "example.com",
         port: 443,
         path: "/ws",
         transport_opts: transport_kw_list
       }
-      
+
       # This should not raise - it should convert the keyword list to a map
       assert {:ok, conn} = Client.connect(MockAdapter, options)
       assert is_pid(conn.transport_pid)
     end
-    
+
     test "connect/2 with empty transport_opts defaults to empty map" do
       options = %{
         host: "example.com",
@@ -447,27 +450,28 @@ defmodule WebsockexNova.ClientTest do
         path: "/ws",
         transport_opts: nil
       }
-      
+
       # This should not raise - nil should be converted to empty map  
       assert {:ok, conn} = Client.connect(MockAdapter, options)
       assert is_pid(conn.transport_pid)
     end
-    
+
     test "connect/2 with duplicate keys in keyword list takes last value" do
       # Test edge case where keyword list has duplicate keys
       transport_kw_list = [
         verify: :verify_none,
-        verify: :verify_peer,  # This should override the first value
+        # This should override the first value
+        verify: :verify_peer,
         server_name_indication: ~c"example.com"
       ]
-      
+
       options = %{
         host: "example.com",
         port: 443,
         path: "/ws",
         transport_opts: transport_kw_list
       }
-      
+
       # Should handle duplicate keys gracefully (Map.new takes last value)
       assert {:ok, conn} = Client.connect(MockAdapter, options)
       assert is_pid(conn.transport_pid)

@@ -8,6 +8,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
 
   alias WebsockexNova.Behaviors.AuthHandler
   alias WebsockexNova.Behaviors.ConnectionHandler
+  alias WebsockexNova.Defaults.DefaultMessageHandler
 
   @port 443
   @path "/ws/api/v2"
@@ -77,7 +78,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
       subscription_timeout: 30,
 
       # Message
-      message_handler: WebsockexNova.Defaults.DefaultMessageHandler,
+      message_handler: DefaultMessageHandler,
 
       # Error Handling
       error_handler: WebsockexNova.Defaults.DefaultErrorHandler,
@@ -151,16 +152,18 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   def subscribe(channel, _params, state) do
     # Check if we need authentication for raw channels
     needs_auth = String.contains?(channel, ".raw")
-    
+
     method = if needs_auth && state[:access_token], do: "private/subscribe", else: "public/subscribe"
-    
+
     params = %{"channels" => [channel]}
-    params = if needs_auth && state[:access_token] do
-      Map.put(params, "access_token", state[:access_token])
-    else
-      params
-    end
-    
+
+    params =
+      if needs_auth && state[:access_token] do
+        Map.put(params, "access_token", state[:access_token])
+      else
+        params
+      end
+
     message = %{
       "jsonrpc" => "2.0",
       "id" => System.unique_integer([:positive]),
@@ -170,16 +173,16 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
 
     {:ok, Jason.encode!(message), state}
   end
-  
+
   @impl WebsockexNova.Behaviors.MessageHandler
-  def handle_message(%{"error" => %{"code" => 13778}} = message, state) do
+  def handle_message(%{"error" => %{"code" => 13_778}} = message, state) do
     # Handle "raw_subscriptions_not_available_for_unauthorized" error
     # This means we need to authenticate first
     {:needs_auth, message, state}
   end
-  
+
   def handle_message(message, state) do
     # Let the default handler process other messages
-    WebsockexNova.Defaults.DefaultMessageHandler.handle_message(message, state)
+    DefaultMessageHandler.handle_message(message, state)
   end
 end

@@ -4,9 +4,9 @@ defmodule WebsockexNova.Application do
   @moduledoc false
   use Application
 
+  alias WebsockexNova.ConnectionRegistry
   alias WebsockexNova.Gun.FrameCodec
   alias WebsockexNova.Transport.RateLimiting
-  alias WebsockexNova.ConnectionRegistry
 
   @impl true
   def start(_type, _args) do
@@ -19,7 +19,7 @@ defmodule WebsockexNova.Application do
 
       # Connection registry for maintaining stable references to transport processes
       ConnectionRegistry,
-      
+
       # config :websockex_nova, :rate_limiting,
       #   handler: MyApp.CustomRateLimitHandler,
       #   capacity: 100,
