@@ -35,6 +35,7 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 ## Current Tasks
 | ID | Description | Status | Priority | Assignee | Review Rating |
 | --- | --- | --- | --- | --- | --- |
+| WNX0005 | Prepare library for publication | Planned | Critical | | |
 
 ## Completed Tasks
 | ID | Description | Status | Priority | Assignee | Review Rating |
@@ -50,7 +51,7 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 
 **WNX0003: Fix transport options format validation**
 - **Status**: Completed (2025-01-18)
-- **Implementation**: 
+- **Implementation**:
   - Added `normalize_transport_opts/1` function in `Client` module to convert keyword lists to maps
   - The function handles maps (pass-through), keyword lists (converts to map), and nil/invalid inputs (returns empty map)
   - Minimal change to `prepare_transport_options/2` to normalize options before passing to handlers
@@ -61,10 +62,10 @@ These test files provide comprehensive test coverage of the Deribit adapter func
   - Added edge case test for duplicate keys in keyword lists
   - All existing tests pass without modification
 
-**WNX0004: Enhance subscription preservation** 
-- **Status**: Completed (2025-01-18)
+**WNX0004: Enhance subscription preservation**
+- **Status**: Completed
 - **Implementation**:
-  - Added `reconnected` flag to `handle_connect` callback parameters 
+  - Added `reconnected` flag to `handle_connect` callback parameters
   - Updated message handlers to pass reconnection state during WebSocket upgrade
   - Modified DefaultConnectionHandler to detect and log reconnection events
   - Created example adapter demonstrating subscription preservation using SubscriptionManager
@@ -137,7 +138,7 @@ Document transport options types with examples of both map and keyword list form
 **TypeSpec Verification**:
 Use Dialyzer to verify type compatibility across the transport layer
 
-**Status**: Planned
+**Status**: Completed
 **Priority**: High
 
 ### WNX0004: Enhance subscription preservation during reconnection
@@ -201,5 +202,113 @@ Document subscription-related types with examples of common subscription pattern
 **TypeSpec Verification**:
 Use Dialyzer to verify type consistency in subscription handling code
 
-**Status**: Planned
+**Status**: Completed
 **Priority**: Medium
+
+### WNX0005: Prepare library for publication
+**Description**: Prepare the WebsockexNova library for publication on hex.pm, ensuring all required metadata is present, documentation is complete, and the package meets Hex publishing standards.
+
+**Background**:
+The library has now completed all major functionality tasks and is ready to be packaged for public release. This task ensures that the library meets all quality standards for a professional Elixir package.
+
+**Simplicity Progression Plan**:
+1. Update mix.exs with complete package metadata
+2. Ensure README.md provides clear getting started guide
+3. Generate and review ExDoc documentation
+4. Validate package with mix hex.build
+5. Create CHANGELOG.md for version history
+6. Add LICENSE file if not present
+7. Review and update version number
+
+**Simplicity Principle**:
+Provide minimal but complete documentation that gets users started quickly
+
+**Abstraction Evaluation**:
+- **Challenge**: What documentation is essential vs nice-to-have?
+- **Minimal Solution**: Focus on getting started guide, API reference, and examples
+- **Justification**:
+  1. Users need quick onboarding
+  2. Complete API docs prevent confusion
+  3. Examples demonstrate best practices
+
+**Requirements**:
+- Complete package metadata in mix.exs (description, package info, links)
+- Comprehensive README with installation and usage instructions
+- Generated ExDoc documentation for all public APIs
+- Valid semantic version number
+- LICENSE file (MIT recommended)
+- CHANGELOG.md with version history
+- Pass mix hex.build validation
+
+**Documentation Requirements**:
+- Getting started guide in README
+- API documentation for all public modules
+- Usage examples for common scenarios
+- Configuration options reference
+- Migration guide from original Websockex if applicable
+
+**Package Metadata Requirements**:
+- Name: websockex_nova
+- Description: Clear, concise description
+- Version: Semantic versioning (suggest 0.1.0 for initial release)
+- Links: GitHub repository, documentation
+- Licenses: ["MIT"] or appropriate license
+- Maintainers: List of maintainers
+- Files: Include necessary files, exclude build artifacts
+
+**Quality Checks**:
+- Run mix format to ensure consistent code style
+- Run mix compile --warnings-as-errors
+- Run mix test to ensure all tests pass
+- Run mix dialyzer for type checking
+- Run mix credo for code quality
+- Ensure no compiler warnings
+
+**Pre-publication Checklist**:
+- [ ] mix.exs has complete package metadata
+- [ ] README.md has installation and usage guide
+- [ ] All public APIs are documented
+- [ ] CHANGELOG.md is up to date
+- [ ] LICENSE file exists
+- [ ] Version number is appropriate
+- [ ] mix hex.build runs successfully
+- [ ] mix docs generates without warnings
+- [ ] All tests pass
+- [ ] No compiler warnings
+- [ ] Code is formatted
+
+**ExUnit Test Requirements**:
+- Test that package metadata is complete and valid
+- Test that all documented examples compile and run
+- Test that public API modules are properly documented
+- Test version number format compliance
+
+**Integration Test Scenarios**:
+- Build hex package and verify contents
+- Generate docs and verify no warnings or errors
+- Test installation in a fresh project
+- Verify example code works when copied to new project
+
+**Typespec Requirements**:
+- Ensure all public functions have typespecs
+- Verify typespec completeness for published API
+- Document any opaque types that users may encounter
+- Add specs for any configuration options
+
+**TypeSpec Documentation**:
+Document all public types, especially:
+- Connection options type
+- Adapter behavior types
+- Callback return types
+- Configuration structures
+
+**TypeSpec Verification**:
+- Run Dialyzer on entire codebase
+- Ensure no typespec warnings
+- Verify specs match actual function implementations
+- Check that example code passes Dialyzer
+
+**Status**: Planned
+**Priority**: Critical
+
+**Validation**: ✅ Passed validation
