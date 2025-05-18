@@ -57,6 +57,8 @@ These test files provide comprehensive test coverage of the Deribit adapter func
   - Added tests to verify both keyword list and nil transport_opts are handled correctly
   - Updated the `connect_options` type to accept `map() | Keyword.t() | nil` for transport_opts
   - Added typespecs for `normalize_transport_opts/1` and `prepare_transport_options/2`
+  - Enhanced documentation with examples of both formats
+  - Added edge case test for duplicate keys in keyword lists
   - All existing tests pass without modification
 
 **WNX0004: Enhance subscription preservation** 

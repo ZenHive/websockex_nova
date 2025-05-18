@@ -141,7 +141,8 @@ defmodule WebsockexNova.Client do
   ## Common optional keys
     * :headers - Additional headers (keyword list or map)
     * :timeout - Connection timeout in ms (integer)
-    * :transport_opts - Transport-specific options (map)
+    * :transport_opts - Transport-specific options (map or keyword list)
+      Examples: `%{verify: :verify_peer}` or `[verify: :verify_peer]`
     * :protocols - List of protocols (e.g., [:http])
     * :retry - Number of connection retries (integer or :infinity)
     * :backoff_type - :linear | :exponential | :jittered
@@ -236,7 +237,7 @@ defmodule WebsockexNova.Client do
   * `:port` - Port number of the server (required)
   * `:path` - WebSocket endpoint path (required)
   * `:headers` - Additional headers for the upgrade request (optional)
-  * `:transport_opts` - Transport-specific options (optional)
+  * `:transport_opts` - Transport-specific options as a map or keyword list (optional)
   * `:timeout` - Connection timeout in milliseconds (default: 30,000)
 
   ## Returns

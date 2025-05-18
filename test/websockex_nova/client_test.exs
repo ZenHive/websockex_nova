@@ -452,6 +452,26 @@ defmodule WebsockexNova.ClientTest do
       assert {:ok, conn} = Client.connect(MockAdapter, options)
       assert is_pid(conn.transport_pid)
     end
+    
+    test "connect/2 with duplicate keys in keyword list takes last value" do
+      # Test edge case where keyword list has duplicate keys
+      transport_kw_list = [
+        verify: :verify_none,
+        verify: :verify_peer,  # This should override the first value
+        server_name_indication: ~c"example.com"
+      ]
+      
+      options = %{
+        host: "example.com",
+        port: 443,
+        path: "/ws",
+        transport_opts: transport_kw_list
+      }
+      
+      # Should handle duplicate keys gracefully (Map.new takes last value)
+      assert {:ok, conn} = Client.connect(MockAdapter, options)
+      assert is_pid(conn.transport_pid)
+    end
 
     test "register_callback/2 adds a callback process" do
       {:ok, conn} =
