@@ -13,7 +13,7 @@ defmodule WebsockexNova.Examples.ClientDeribitTest do
       stub = fn _adapter, opts -> {:ok, opts} end
 
       # Patch the Client module for this test
-      original = &WebsockexNova.Client.connect/2
+      _original = &WebsockexNova.Client.connect/2
       :meck.new(WebsockexNova.Client, [:passthrough])
       :meck.expect(WebsockexNova.Client, :connect, stub)
 
