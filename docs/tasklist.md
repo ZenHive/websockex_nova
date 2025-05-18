@@ -47,7 +47,7 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 ## Active Task Details
 
 ### WNX0001: Fix connection tracking during reconnection
-**Description**: When a connection is lost and automatically reconnected, the client's connection object doesn't get updated with the new process information. This leads to errors when attempting to use the connection after reconnection, as it still references the old (dead) process. 
+**Description**: When a connection is lost and automatically reconnected, the client's connection object doesn't get updated with the new process information. This leads to errors when attempting to use the connection after reconnection, as it still references the old (dead) process. Instead of rewriting a lot of code, we will simply use the existing conn that we receive and match it internally to the new process, minimizing code changes while solving the underlying issue.
 
 This bug was discovered in our comprehensive test suite for the Deribit adapter:
 - **Test File**: `test/websockex_nova/examples/adapter_deribit_comprehensive_test.exs`
@@ -59,27 +59,27 @@ This bug was discovered in our comprehensive test suite for the Deribit adapter:
 - **Bug Manifestation**: The test failed with the error: `** (EXIT) no process: the process is not alive or there's no process currently associated with the given name` because the conn.transport_pid still pointed to the original (now dead) process.
 
 **Simplicity Progression Plan**:
-1. Start with minimal changes to track process reference updates during reconnection
-2. Add basic tests to verify process tracking 
-3. Add comprehensive integration tests for real-world verification
-4. Consider advanced notification mechanisms if needed
+1. Modify the reconnection handler to update the existing ClientConn struct with new process references
+2. Keep all other state (adapter_state, subscriptions, etc.) intact to maintain functionality
+3. Add tests to verify the existing conn works after reconnection
+4. Ensure callbacks registered to the old process are re-registered with the new process if needed
 
 **Simplicity Principle**:
-Maintain transparency of process state changes without adding complexity to the client API
+Modify the minimum amount of code necessary to maintain connection identity across reconnects without changing the client API
 
 **Abstraction Evaluation**:
-- **Challenge**: How should we handle process reference updates?
-- **Minimal Solution**: Update the client's connection reference when a process is reconnected
+- **Challenge**: Should we create a new abstraction for tracking connections across reconnects?
+- **Minimal Solution**: Simply update the existing ClientConn struct with new process references
 - **Justification**:
-  1. Current behavior causes client code to fail after reconnection
-  2. Real-world connections often experience disconnects requiring reconnection
-  3. Financial applications need reliable reconnection without client code changes
+  1. The current ClientConn already contains all necessary state
+  2. Client code already uses ClientConn as the connection reference
+  3. No new abstraction is needed; this is a refinement of existing behavior
 
 **Requirements**:
-- Update the ClientConn struct's transport_pid when reconnection occurs
-- Ensure all client operations work with the new process
-- Maintain all existing connection state across reconnection
-- Preserve subscriptions across reconnection
+- Update the ClientConn struct's transport_pid and stream_ref when reconnection occurs
+- Ensure all client operations work with the updated connection
+- Maintain all existing state (adapter_state, subscriptions, etc.) intact
+- Re-register any callbacks with the new process if needed
 - Handle edge cases (multiple rapid reconnects, partial reconnects)
 
 **ExUnit Test Requirements**:
