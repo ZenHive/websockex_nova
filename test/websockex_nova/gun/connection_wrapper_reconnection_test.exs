@@ -16,8 +16,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperReconnectionTest do
   @default_delay 100
 
   setup do
-    {:ok, server_pid} = MockWebSockServer.start_link()
-    port = MockWebSockServer.get_port(server_pid)
+    {:ok, server_pid, port} = MockWebSockServer.start_link()
 
     on_exit(fn ->
       Process.sleep(@default_delay)
