@@ -299,8 +299,6 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
       if creds_available do
         # Authenticate
         auth_result = ClientDeribit.authenticate(conn, credentials)
-        IO.inspect(auth_result, label: "Auth result")
-
         {:ok, updated_conn, json_response} = auth_result
 
         # The raw response is a JSON string, we need to decode it
@@ -448,11 +446,6 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
           assert response["error"]["code"] == 13_778, "Expected unauthorized error for channel: #{channel}"
         else
           # All other cases (public channels or authenticated raw channels) should succeed
-          # Let's add some debug output to see what we're getting
-          if !response["result"] || response["result"] != [channel] do
-            IO.inspect(response, label: "Response for #{channel}")
-          end
-
           assert response["result"] == [channel], "Failed to subscribe to channel: #{channel}"
         end
       end

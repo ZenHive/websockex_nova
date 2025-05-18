@@ -80,7 +80,7 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceSimpleTest do
       assert config.host == "client.example.com"
       # Client wins
       assert config.timeout == 15_000
-      # Client wins  
+      # Client wins
       assert config.log_level == :warn
       # Adapter default
       assert config.port == 443

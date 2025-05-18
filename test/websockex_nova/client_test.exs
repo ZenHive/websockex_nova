@@ -451,7 +451,7 @@ defmodule WebsockexNova.ClientTest do
         transport_opts: nil
       }
 
-      # This should not raise - nil should be converted to empty map  
+      # This should not raise - nil should be converted to empty map
       assert {:ok, conn} = Client.connect(MockAdapter, options)
       assert is_pid(conn.transport_pid)
     end

@@ -29,7 +29,7 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceWorkingTest do
       # Verify precedence
       # User wins
       assert merged.host == "user.deribit.com"
-      # User wins  
+      # User wins
       assert merged.timeout == 25_000
       # User addition
       assert merged.custom_field == "from_user"
@@ -134,7 +134,7 @@ defmodule WebsockexNova.Integration.ConfigPrecedenceWorkingTest do
       smart_user_options = user_options |> Enum.reject(fn {_k, v} -> is_nil(v) end) |> Map.new()
       smart_merged = Map.merge(adapter_defaults, smart_user_options)
 
-      # Adapter default preserved  
+      # Adapter default preserved
       assert smart_merged.host != nil
       # User wins
       assert smart_merged.timeout == 25_000

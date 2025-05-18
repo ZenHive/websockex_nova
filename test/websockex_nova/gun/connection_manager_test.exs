@@ -225,7 +225,7 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
         def classify_error(_, _), do: :transient
       end
 
-      # Start with reconnect_attempts at 1 
+      # Start with reconnect_attempts at 1
       error_handler_state = %{reconnect_attempts: 1}
       handlers = %{error_handler: NoReconnectErrorHandler, error_handler_state: error_handler_state}
 

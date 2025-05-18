@@ -113,7 +113,7 @@ defmodule WebsockexNova.Integration.ClientSubscriptionReconnectionTest do
 
       # Auth Handler - no-op for this test
       def get_auth_config(_, _), do: {:ok, %{enabled: false}}
-      def is_authenticated?(_, _), do: {:ok, true}
+      def authenticated?(_, _), do: {:ok, true}
 
       # Connection Handler
       def ping(conn, state) do
