@@ -35,7 +35,6 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 ## Current Tasks
 | ID | Description | Status | Priority | Assignee | Review Rating |
 | --- | --- | --- | --- | --- | --- |
-| WNX0003 | Fix transport options format validation | Planned | High | | |
 | WNX0004 | Enhance subscription preservation | Planned | Medium | | |
 
 ## Completed Tasks
@@ -43,18 +42,22 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 | --- | --- | --- | --- | --- | --- |
 | WNX0001 | Fix connection tracking during reconnection | Completed | Critical | Executor | 4.5 (2023-10-24) |
 | WNX0002 | Implement Access behavior for ClientConn | Completed | High | Executor | 4.5 |
+| WNX0003 | Fix transport options format validation | Completed | High | Executor | |
 
 ## Active Task Details
 
 ### Implementation Status Check (2025-01-18)
 
 **WNX0003: Fix transport options format validation**
-- **Status**: Not implemented
-- **Findings**: 
-  - The `configure_handlers` function expects a map parameter
-  - No validation or conversion of keyword lists to maps exists
-  - The error described in the bug report would still occur
-  - Transport options are passed directly without normalization
+- **Status**: Completed (2025-01-18)
+- **Implementation**: 
+  - Added `normalize_transport_opts/1` function in `Client` module to convert keyword lists to maps
+  - The function handles maps (pass-through), keyword lists (converts to map), and nil/invalid inputs (returns empty map)
+  - Minimal change to `prepare_transport_options/2` to normalize options before passing to handlers
+  - Added tests to verify both keyword list and nil transport_opts are handled correctly
+  - Updated the `connect_options` type to accept `map() | Keyword.t() | nil` for transport_opts
+  - Added typespecs for `normalize_transport_opts/1` and `prepare_transport_options/2`
+  - All existing tests pass without modification
 
 **WNX0004: Enhance subscription preservation** 
 - **Status**: Partially implemented

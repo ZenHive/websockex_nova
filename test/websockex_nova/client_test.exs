@@ -17,17 +17,32 @@ defmodule WebsockexNova.ClientTest do
 
     @impl true
     def open(host, port, path, opts \\ %{}) do
+      transport_pid = spawn(fn ->
+        receive_loop({host, port, path, opts})
+      end)
+      
       send(self(), {:open_connection, host, port, path, opts})
 
       {:ok,
        %WebsockexNova.ClientConn{
          transport: __MODULE__,
-         transport_pid: self(),
+         transport_pid: transport_pid,
          stream_ref: make_ref(),
          adapter: Map.get(opts, :adapter),
          adapter_state: Map.get(opts, :adapter_state),
          callback_pids: Enum.filter([Map.get(opts, :callback_pid)], & &1)
        }}
+    end
+    
+    defp receive_loop(conn_info) do
+      receive do
+        {:get_last_connection, from} ->
+          {host, port, path, opts} = conn_info
+          send(from, {:last_connection, host, port, path, opts})
+          receive_loop(conn_info)
+        _ ->
+          receive_loop(conn_info)
+      end
     end
 
     @impl true
@@ -63,8 +78,14 @@ defmodule WebsockexNova.ClientTest do
     end
 
     @impl true
-    def process_transport_message(_message, state) do
-      {:ok, state}
+    def process_transport_message(message, state) do
+      case message do
+        {:get_last_connection, from} ->
+          send(from, {:last_connection, state.host, state.port, state.path, state.options})
+          {:ok, state}
+        _ ->
+          {:ok, state}
+      end
     end
 
     @impl true
@@ -397,6 +418,39 @@ defmodule WebsockexNova.ClientTest do
 
       result = Client.close(conn)
       assert result == :ok
+    end
+    
+    test "connect/2 with keyword list transport_opts converts to map" do
+      # Test with a keyword list that will cause errors if not converted
+      transport_kw_list = [
+        verify: :verify_peer,
+        cacertfile: "/path/to/cert",
+        server_name_indication: ~c"example.com"
+      ]
+      
+      options = %{
+        host: "example.com",
+        port: 443,
+        path: "/ws",
+        transport_opts: transport_kw_list
+      }
+      
+      # This should not raise - it should convert the keyword list to a map
+      assert {:ok, conn} = Client.connect(MockAdapter, options)
+      assert is_pid(conn.transport_pid)
+    end
+    
+    test "connect/2 with empty transport_opts defaults to empty map" do
+      options = %{
+        host: "example.com",
+        port: 443,
+        path: "/ws",
+        transport_opts: nil
+      }
+      
+      # This should not raise - nil should be converted to empty map  
+      assert {:ok, conn} = Client.connect(MockAdapter, options)
+      assert is_pid(conn.transport_pid)
     end
 
     test "register_callback/2 adds a callback process" do

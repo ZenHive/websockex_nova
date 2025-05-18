@@ -165,7 +165,7 @@ defmodule WebsockexNova.Client do
           required(:path) => String.t(),
           optional(:headers) => Keyword.t() | map(),
           optional(:timeout) => pos_integer() | nil,
-          optional(:transport_opts) => map() | nil,
+          optional(:transport_opts) => map() | Keyword.t() | nil,
           optional(:protocols) => [atom()],
           optional(:retry) => non_neg_integer() | :infinity,
           optional(:backoff_type) => atom(),
@@ -729,14 +729,24 @@ defmodule WebsockexNova.Client do
   end
 
   # Prepare transport options with handlers configuration
+  @spec prepare_transport_options(module(), map()) :: {:ok, map()}
   defp prepare_transport_options(adapter, connection_info) do
     base_opts = Map.get(connection_info, :transport_opts, %{})
+    
+    # Normalize base_opts: convert keyword list to map if needed
+    normalized_opts = normalize_transport_opts(base_opts)
 
     # Configure handlers based on the adapter
-    transport_opts = Handlers.configure_handlers(adapter, base_opts)
+    transport_opts = Handlers.configure_handlers(adapter, normalized_opts)
 
     {:ok, transport_opts}
   end
+  
+  # Normalize transport options to ensure they are in map format
+  @spec normalize_transport_opts(map() | Keyword.t() | nil | any()) :: map()
+  defp normalize_transport_opts(opts) when is_map(opts), do: opts
+  defp normalize_transport_opts(opts) when is_list(opts), do: Map.new(opts)
+  defp normalize_transport_opts(_), do: %{}
 
   # Get the message handler module
   defp get_message_handler(adapter) do
