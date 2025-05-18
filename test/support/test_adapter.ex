@@ -6,13 +6,12 @@ defmodule WebsockexNova.Test.Support.TestAdapter do
   WebsockexNova client and is designed for use in tests.
   """
 
-  # Implement only the ConnectionHandler behavior to avoid having to implement
-  # all methods from other behaviors for our simple tests
+  # Implement the required behaviors
   @behaviour WebsockexNova.Behaviors.ConnectionHandler
+  @behaviour WebsockexNova.Behaviors.AuthHandler
+  @behaviour WebsockexNova.Behaviors.MessageHandler
 
-  @doc """
-  Initializes the adapter state.
-  """
+  # ConnectionHandler implementations
   @impl WebsockexNova.Behaviors.ConnectionHandler
   def init(options) do
     # Convert to map if it's a keyword list
@@ -21,9 +20,6 @@ defmodule WebsockexNova.Test.Support.TestAdapter do
     {:ok, initial_state}
   end
 
-  @doc """
-  Gets connection information from the options.
-  """
   @impl WebsockexNova.Behaviors.ConnectionHandler
   def connection_info(options) do
     connection_info = %{
@@ -43,140 +39,104 @@ defmodule WebsockexNova.Test.Support.TestAdapter do
     {:ok, connection_info}
   end
 
-  @doc """
-  Encodes a message for sending to the server.
-  """
-  # Helper function for our tests
-  def encode_message(message, _state) do
-    case message do
-      %{type: "subscribe", channel: channel} ->
-        {:ok, "subscribe:#{channel}"}
-
-      %{type: "unsubscribe", channel: channel} ->
-        {:ok, "unsubscribe:#{channel}"}
-
-      %{type: "authenticate"} ->
-        {:ok, "authenticate"}
-
-      %{type: "ping"} ->
-        {:ok, "ping"}
-
-      text when is_binary(text) ->
-        {:ok, text}
-
-      _ ->
-        {:ok, Jason.encode!(message)}
-    end
-  end
-
-  @doc """
-  Decodes a message received from the server.
-  """
-  # Not part of behavior but needed for our tests
-  def decode_message(message, _state) do
-    case message do
-      "pong" ->
-        {:ok, "pong"}
-
-      "subscribed:" <> channel ->
-        {:ok, "subscribed:#{channel}"}
-
-      "unsubscribed:" <> channel ->
-        {:ok, "unsubscribed:#{channel}"}
-
-      "authenticated" ->
-        {:ok, "authenticated"}
-
-      "echo:" <> content ->
-        {:ok, "echo:#{content}"}
-
-      _ ->
-        {:ok, message}
-    end
-  end
-
-  @doc """
-  Creates a subscription request.
-  """
-  # Helper function for our tests
-  def subscription_init(options) do
-    {:ok, Map.get(options, :subscriptions, %{})}
-  end
-
-  @doc """
-  Formats a subscription request.
-  """
-  # Helper function for our tests
-  def format_subscription(channel, _params, state) do
-    {:ok, %{type: "subscribe", channel: channel}, state}
-  end
-
-  @doc """
-  Formats an unsubscription request.
-  """
-  # Helper function for our tests
-  def format_unsubscription(channel, _state) do
-    {:ok, %{type: "unsubscribe", channel: channel}}
-  end
-
-  @doc """
-  Updates the subscription state.
-  """
-  # Helper function for our tests
-  def update_subscription_state(channel, _params, state) do
-    updated_state = Map.update(state, :subscriptions, %{channel => %{id: 1}}, fn subs -> 
-      Map.put(subs, channel, %{id: map_size(subs) + 1})
-    end)
-    {:ok, updated_state}
-  end
-
-  @doc """
-  Formats an authentication request.
-  """
-  # Helper function for our tests
-  def format_auth_request(_credentials, _state) do
-    {:ok, %{type: "authenticate"}}
-  end
-
-  @doc """
-  Updates the authentication state.
-  """
-  # Helper function for our tests
-  def update_auth_state(_response, state) do
-    updated_state = Map.put(state, :auth_status, :authenticated)
-    {:ok, updated_state}
-  end
-  
-  # Implement required callbacks for ConnectionHandler
-  @impl true
+  @impl WebsockexNova.Behaviors.ConnectionHandler
   def handle_connect(_frame, state), do: {:ok, state}
-  @impl true
+
+  @impl WebsockexNova.Behaviors.ConnectionHandler
   def handle_disconnect(_reason, state), do: {:ok, state}
-  @impl true
+
+  @impl WebsockexNova.Behaviors.ConnectionHandler
   def handle_frame(_frame, _meta, state), do: {:ok, state}
-  @impl true
+
+  @impl WebsockexNova.Behaviors.ConnectionHandler
   def handle_timeout(state), do: {:ok, state}
-  @impl true
-  def ping(_state, _stream_ref), do: {:ok, "ping"}
-  @impl true
-  def status(_state, _stream_ref), do: {:ok, :connected}
+
+  @impl WebsockexNova.Behaviors.ConnectionHandler
+  def ping(state, _params), do: {:ok, :pong, state}
   
-  # Implement required callbacks for MessageHandler (used by Client)
+  @impl WebsockexNova.Behaviors.ConnectionHandler
+  def status(_meta, state), do: {:ok, :connected, state}
+
+  # MessageHandler implementations
+  @impl WebsockexNova.Behaviors.MessageHandler
   def message_init(_), do: {:ok, %{}}
+
+  @impl WebsockexNova.Behaviors.MessageHandler
   def message_type(_), do: {:text, "text/plain"}
-  def validate_message(_), do: :ok 
-  def handle_message(_, state), do: {:ok, state}
-  
-  # Implement required callbacks for SubscriptionHandler (used by Client)
-  def subscribe(_, _, state), do: {:ok, state}
-  def unsubscribe(_, state), do: {:ok, state}
-  def find_subscription_by_channel(channel, state), do: {:ok, Map.get(state, :subscriptions, %{})[channel]}
-  def active_subscriptions(state), do: {:ok, Map.get(state, :subscriptions, %{})}
-  def handle_subscription_response(_, state), do: {:ok, state}
-  
-  # Implement required callbacks for AuthHandler (used by Client)
-  def generate_auth_data(_), do: {:ok, %{}}
-  def authenticate(_, _, state), do: {:ok, state}
-  def handle_auth_response(_, state), do: {:ok, state}
+
+  @impl WebsockexNova.Behaviors.MessageHandler
+  def encode_message(data, _state) when is_map(data) do
+    encoded = Jason.encode!(data)
+    {:ok, :text, encoded}
+  end
+  def encode_message(text, _state) when is_binary(text) do
+    {:ok, :text, text}
+  end
+
+  @impl WebsockexNova.Behaviors.MessageHandler
+  def handle_message(message, state) do
+    # Try to decode JSON messages
+    decoded = case Jason.decode(message) do
+      {:ok, data} -> data
+      _ -> message
+    end
+    {:ok, decoded, state}
+  end
+
+  @impl WebsockexNova.Behaviors.MessageHandler
+  def validate_message(_), do: :ok
+
+  # AuthHandler implementations
+  @impl WebsockexNova.Behaviors.AuthHandler
+  def generate_auth_data(%WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    credentials = Map.get(adapter_state, :credentials, %{})
+    auth_data = %{
+      type: "auth",
+      token: Map.get(credentials, :token, "test_token")
+    }
+    
+    {:ok, Jason.encode!(auth_data), conn}
+  end
+
+  @impl WebsockexNova.Behaviors.AuthHandler
+  def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
+    # Handle both parsed JSON and raw string responses
+    IO.puts("TestAdapter handle_auth_response - Raw response: #{inspect(response)}")
+    
+    parsed_response = case response do
+      resp when is_binary(resp) ->
+        case Jason.decode(resp) do
+          {:ok, data} -> 
+            IO.puts("TestAdapter - Parsed JSON: #{inspect(data)}")
+            data
+          _ -> 
+            IO.puts("TestAdapter - Failed to parse JSON, using empty map")
+            %{}
+        end
+      resp when is_map(resp) -> 
+        IO.puts("TestAdapter - Response is already a map: #{inspect(resp)}")
+        resp
+      _ -> 
+        IO.puts("TestAdapter - Unknown response type: #{inspect(response)}")
+        %{}
+    end
+    
+    case parsed_response do
+      %{"type" => "auth_success"} ->
+        IO.puts("TestAdapter - Auth success response detected")
+        updated_state = adapter_state
+          |> Map.put(:auth_status, :authenticated)
+          |> Map.put(:token, Map.get(parsed_response, "token"))
+        {:ok, %{conn | adapter_state: updated_state}}
+      _ ->
+        IO.puts("TestAdapter - Auth failed, response doesn't match expected format")
+        {:error, :auth_failed, conn}
+    end
+  end
+
+  @impl WebsockexNova.Behaviors.AuthHandler
+  def authenticate(conn, _credentials, _options), do: {:ok, conn}
+
+  @impl WebsockexNova.Behaviors.AuthHandler
   def needs_reauthentication?(_), do: false
 end

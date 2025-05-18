@@ -29,6 +29,37 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   require Logger
   
   @default_path "/ws"
+  defp get_tls_options do
+    # Use certificate helper if available
+    if Code.ensure_loaded?(WebsockexNova.Test.Support.CertificateHelper) do
+      # Generate temporary self-signed cert for testing
+      alias WebsockexNova.Test.Support.CertificateHelper
+      {cert_path, key_path} = CertificateHelper.generate_self_signed_certificate()
+      [
+        certfile: cert_path,
+        keyfile: key_path
+      ]
+    else
+      # Fallback to hard-coded test certificates if they exist
+      priv_dir = :code.priv_dir(:websockex_nova)
+      cert_file = Path.join([priv_dir, "test_certs", "server.crt"])
+      key_file = Path.join([priv_dir, "test_certs", "server.key"])
+      
+      if File.exists?(cert_file) and File.exists?(key_file) do
+        [
+          certfile: cert_file,
+          keyfile: key_file
+        ]
+      else
+        # Generate a very basic test cert in memory
+        # This is a simplified version - for production testing use a proper cert generator
+        [
+          cert: "...", # Would need actual cert data
+          key: "..."   # Would need actual key data
+        ]
+      end
+    end
+  end
   
   defmodule WebSocketHandler do
     @behaviour :cowboy_websocket
@@ -84,8 +115,13 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
     end
   end
   
-  def start_link(port \\ 0) do
-    with {:ok, pid} <- GenServer.start_link(__MODULE__, port) do
+  def start_link(options \\ []) do
+    options = case options do
+      opts when is_list(opts) -> opts
+      port when is_integer(port) -> [port: port]
+    end
+    
+    with {:ok, pid} <- GenServer.start_link(__MODULE__, options) do
       actual_port = get_port(pid)
       {:ok, pid, actual_port}
     end
@@ -113,7 +149,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   
   # GenServer callbacks
   
-  def init(port) do
+  def init(options) when is_list(options) do
+    port = Keyword.get(options, :port, 0)
+    protocol = Keyword.get(options, :protocol, :http)
+    
     # Use a unique name for each server instance to avoid conflicts
     server_name = :"mock_websocket_server_#{System.unique_integer([:positive])}"
     
@@ -124,12 +163,41 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
       ]}
     ])
     
-    # Start cowboy
-    {:ok, listener_pid} = :cowboy.start_clear(
-      server_name,
-      [{:port, port}],
-      %{env: %{dispatch: dispatch}}
-    )
+    # Start cowboy based on protocol
+    {:ok, listener_pid} = case protocol do
+      :http ->
+        :cowboy.start_clear(
+          server_name,
+          [{:port, port}],
+          %{env: %{dispatch: dispatch}}
+        )
+      
+      :tls ->
+        # Get TLS options (in test environment, use simple self-signed cert)
+        cert_opts = get_tls_options()
+        :cowboy.start_tls(
+          server_name,
+          [{:port, port} | cert_opts],
+          %{env: %{dispatch: dispatch}}
+        )
+        
+      :http2 ->
+        # HTTP/2 over plain TCP (not common in production)
+        :cowboy.start_clear(
+          server_name,
+          [{:port, port}],
+          %{env: %{dispatch: dispatch}}
+        )
+        
+      :https2 ->
+        # HTTP/2 over TLS
+        cert_opts = get_tls_options()
+        :cowboy.start_tls(
+          server_name,
+          [{:port, port} | cert_opts],
+          %{env: %{dispatch: dispatch}}
+        )
+    end
     
     # Get the actual port (important when using port 0)
     # The return format appears to be {ip_tuple, port_number}

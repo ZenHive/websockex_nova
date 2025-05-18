@@ -156,9 +156,8 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
 
   describe "reconnection delegation to error handler" do
     test "delegates reconnection policy to error handler and updates error handler state" do
-      # Initial error handler state
-      # error_handler_state = %{reconnect_attempts: 1}
-      error_handler_state = struct(WebsockexNova.ClientConn, %{reconnect_attempts: 1})
+      # Initial error handler state - let's use a simple map for testing
+      error_handler_state = %{reconnect_attempts: 1}
       handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
 
       state = %ConnectionState{
@@ -176,11 +175,17 @@ defmodule WebsockexNova.Gun.ConnectionManagerTest do
       assert new_state.status == :reconnecting
       assert_receive {:reconnect_scheduled, 100, 1}
       # The error handler state should be incremented
-      assert new_state.handlers.error_handler_state.reconnect_attempts == 2
+      # Let's check what value we actually have
+      actual_attempts = new_state.handlers.error_handler_state.reconnect_attempts ||
+                        Map.get(new_state.handlers.error_handler_state, :reconnect_attempts)
+      IO.puts("DEBUG: actual_attempts = #{inspect(actual_attempts)}")
+      IO.puts("DEBUG: error_handler_state = #{inspect(new_state.handlers.error_handler_state)}")
+      assert actual_attempts == 2
     end
 
     test "does not schedule reconnection if error handler says no" do
-      error_handler_state = struct(WebsockexNova.ClientConn, %{reconnect_attempts: 3})
+      # Use a simple map for testing
+      error_handler_state = %{reconnect_attempts: 3}
       handlers = %{error_handler: MockErrorHandler, error_handler_state: error_handler_state}
 
       state = %ConnectionState{

@@ -12,7 +12,6 @@ defmodule WebsockexNova.Integration.ClientReconnectionTest do
 
   alias WebsockexNova.Client
   # We need this alias for typespecs
-  alias WebsockexNova.ClientConn
   alias WebsockexNova.Test.Support.MockWebSockServer
   alias WebsockexNova.Test.Support.TestAdapter
 
@@ -21,15 +20,29 @@ defmodule WebsockexNova.Integration.ClientReconnectionTest do
   @reconnect_timeout 5000
 
   setup do
-    {:ok, server_pid} = MockWebSockServer.start_link()
-    port = MockWebSockServer.get_port(server_pid)
+    {:ok, server_pid, port} = MockWebSockServer.start_link()
     
     MockWebSockServer.set_handler(server_pid, fn
       {:text, "ping"} -> {:reply, {:text, "pong"}}
       {:text, "subscribe:" <> channel} -> {:reply, {:text, "subscribed:" <> channel}}
       {:text, "unsubscribe:" <> channel} -> {:reply, {:text, "unsubscribed:" <> channel}}
       {:text, "authenticate"} -> {:reply, {:text, "authenticated"}}
-      {:text, msg} -> {:reply, {:text, "echo:" <> msg}}
+      {:text, msg} ->
+        # Try to parse as JSON for auth messages
+        IO.puts("Mock server received: #{inspect(msg)}")
+        case Jason.decode(msg) do
+          {:ok, %{"type" => "auth"} = _auth_msg} ->
+            # Respond with auth success
+            response = Jason.encode!(%{type: "auth_success", token: "mock_token"})
+            IO.puts("Mock server sending auth success: #{inspect(response)}")
+            {:reply, {:text, response}}
+          {:error, _} ->
+            IO.puts("Mock server echoing non-JSON message")
+            {:reply, {:text, "echo:" <> msg}}
+          _ ->
+            IO.puts("Mock server echoing JSON but not auth")
+            {:reply, {:text, "echo:" <> msg}}
+        end
     end)
 
     on_exit(fn ->
@@ -50,7 +63,8 @@ defmodule WebsockexNova.Integration.ClientReconnectionTest do
     # Verify basic operations work before disconnect
     assert {:ok, _} = Client.send_text(conn, "ping")
     assert {:ok, _} = Client.subscribe(conn, "test_channel")
-    assert {:ok, _} = Client.authenticate(conn, %{}, %{})
+    # Authenticate with test credentials
+    assert {:ok, _} = Client.authenticate(conn, %{token: "test_token"}, %{})
     
     # Force disconnect by stopping the server
     MockWebSockServer.stop(server_pid)
@@ -65,7 +79,22 @@ defmodule WebsockexNova.Integration.ClientReconnectionTest do
       {:text, "subscribe:" <> channel} -> {:reply, {:text, "subscribed:" <> channel}}
       {:text, "unsubscribe:" <> channel} -> {:reply, {:text, "unsubscribed:" <> channel}}
       {:text, "authenticate"} -> {:reply, {:text, "authenticated"}}
-      {:text, msg} -> {:reply, {:text, "echo:" <> msg}}
+      {:text, msg} ->
+        # Try to parse as JSON for auth messages
+        IO.puts("Mock server received: #{inspect(msg)}")
+        case Jason.decode(msg) do
+          {:ok, %{"type" => "auth"} = _auth_msg} ->
+            # Respond with auth success
+            response = Jason.encode!(%{type: "auth_success", token: "mock_token"})
+            IO.puts("Mock server sending auth success: #{inspect(response)}")
+            {:reply, {:text, response}}
+          {:error, _} ->
+            IO.puts("Mock server echoing non-JSON message")
+            {:reply, {:text, "echo:" <> msg}}
+          _ ->
+            IO.puts("Mock server echoing JSON but not auth")
+            {:reply, {:text, "echo:" <> msg}}
+        end
     end)
     
     # Wait for reconnection to complete
@@ -79,7 +108,8 @@ defmodule WebsockexNova.Integration.ClientReconnectionTest do
     # Verify client operations still work with the updated connection
     assert {:ok, _} = Client.send_text(conn, "ping")
     assert {:ok, _} = Client.subscribe(conn, "another_channel")
-    assert {:ok, _} = Client.authenticate(conn, %{}, %{})
+    # Authenticate with test credentials
+    assert {:ok, _} = Client.authenticate(conn, %{token: "test_token"}, %{})
     
     # Verify callback was called
     assert_received {:connection_reconnected, reconnected_conn}
