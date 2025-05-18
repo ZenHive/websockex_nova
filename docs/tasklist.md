@@ -35,7 +35,6 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 ## Current Tasks
 | ID | Description | Status | Priority | Assignee | Review Rating |
 | --- | --- | --- | --- | --- | --- |
-| WNX0004 | Enhance subscription preservation | Planned | Medium | | |
 
 ## Completed Tasks
 | ID | Description | Status | Priority | Assignee | Review Rating |
@@ -43,6 +42,7 @@ These test files provide comprehensive test coverage of the Deribit adapter func
 | WNX0001 | Fix connection tracking during reconnection | Completed | Critical | Executor | 4.5 (2023-10-24) |
 | WNX0002 | Implement Access behavior for ClientConn | Completed | High | Executor | 4.5 |
 | WNX0003 | Fix transport options format validation | Completed | High | Executor | |
+| WNX0004 | Enhance subscription preservation | Completed | Medium | Executor | |
 
 ## Active Task Details
 
@@ -62,12 +62,14 @@ These test files provide comprehensive test coverage of the Deribit adapter func
   - All existing tests pass without modification
 
 **WNX0004: Enhance subscription preservation** 
-- **Status**: Partially implemented
-- **Findings**:
-  - `SubscriptionManager` has `prepare_for_reconnect/1` and `resubscribe_after_reconnect/1` functions
-  - Reconnection logic exists in `ConnectionWrapper`
-  - Missing integration between subscription restoration and reconnection flow
-  - Subscription preservation is not automatically triggered during reconnections
+- **Status**: Completed (2025-01-18)
+- **Implementation**:
+  - Added `reconnected` flag to `handle_connect` callback parameters 
+  - Updated message handlers to pass reconnection state during WebSocket upgrade
+  - Modified DefaultConnectionHandler to detect and log reconnection events
+  - Created example adapter demonstrating subscription preservation using SubscriptionManager
+  - Added telemetry events for subscription restoration tracking
+  - All tests pass - no breaking changes introduced
 
 
 ### WNX0003: Fix transport options format validation

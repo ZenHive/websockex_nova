@@ -46,6 +46,8 @@ defmodule WebsockexNova.Telemetry.TelemetryEvents do
   @message_received [:websockex_nova, :message, :received]
   @error_occurred [:websockex_nova, :error, :occurred]
   @ownership_transfer [:websockex_nova, :connection, :ownership_transfer, :received]
+  @subscription_restored [:websockex_nova, :subscription, :restored]
+  @subscription_restoration_failed [:websockex_nova, :subscription, :restoration_failed]
 
   def connection_open, do: @connection_open
   def connection_close, do: @connection_close
@@ -70,4 +72,37 @@ defmodule WebsockexNova.Telemetry.TelemetryEvents do
   """
   @spec ownership_transfer_received :: list(atom())
   def ownership_transfer_received, do: @ownership_transfer
+
+  @doc """
+  Event emitted when a subscription is successfully restored after reconnection.
+
+  ## Measurements
+
+  * `:duration` - Time taken to restore the subscription in milliseconds
+
+  ## Metadata
+
+  * `:connection_id` - The connection identifier
+  * `:subscription_id` - The subscription identifier
+  * `:channel` - The channel being subscribed to
+  """
+  @spec subscription_restored :: list(atom())
+  def subscription_restored, do: @subscription_restored
+
+  @doc """
+  Event emitted when a subscription restoration fails after reconnection.
+
+  ## Measurements
+
+  * `:duration` - Time taken before failure in milliseconds
+
+  ## Metadata
+
+  * `:connection_id` - The connection identifier
+  * `:subscription_id` - The subscription identifier
+  * `:channel` - The channel that failed to subscribe
+  * `:reason` - The failure reason
+  """
+  @spec subscription_restoration_failed :: list(atom())
+  def subscription_restoration_failed, do: @subscription_restoration_failed
 end

@@ -51,7 +51,7 @@ defmodule WebsockexNova.Transport.RateLimiting do
 
     {:reject, reason} ->
       # Request was rejected
-      Logger.warn("Request rejected: \#{reason}")
+      Logger.warning("Request rejected: \#{reason}")
   end
   ```
   """
