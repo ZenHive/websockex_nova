@@ -143,9 +143,9 @@ defmodule WebsockexNova.Gun.ConnectionManager do
         # We're skipping the reset_reconnect_attempts call to avoid any custom handlers
         # that might change the value beyond our control
         new_error_handler_state = %{reconnect_attempts: 1}
-        
+
         # If we have other state fields, preserve them
-        new_error_handler_state = 
+        new_error_handler_state =
           if is_map(error_handler_state) do
             Map.merge(error_handler_state, new_error_handler_state)
           else
@@ -183,13 +183,13 @@ defmodule WebsockexNova.Gun.ConnectionManager do
     end
   end
 
-  defp reset_reconnect_attempts(error_handler, error_handler_state) do
-    if function_exported?(error_handler, :reset_reconnect_attempts, 1) do
-      error_handler.reset_reconnect_attempts(error_handler_state)
-    else
-      error_handler_state
-    end
-  end
+  # defp reset_reconnect_attempts(error_handler, error_handler_state) do
+  #   if function_exported?(error_handler, :reset_reconnect_attempts, 1) do
+  #     error_handler.reset_reconnect_attempts(error_handler_state)
+  #   else
+  #     error_handler_state
+  #   end
+  # end
 
   @doc """
   Initiates a connection.
