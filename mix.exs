@@ -49,10 +49,17 @@ defmodule WebsockexNova.MixProject do
 
       # Documentation
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
+
+      # Tasks
+      {:task_validator, "~> 0.3.0", only: [:dev, :test], runtime: false},
+
+      # Mocks
       {:mox, "~> 1.0", only: :test},
+
       # Security scanning
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
       {:mix_test_watch, "~> 1.0", only: [:dev, :test], runtime: false},
+
       # Used for mock WebSocket server in tests
       {:cowboy, "~> 2.10", only: :test},
 

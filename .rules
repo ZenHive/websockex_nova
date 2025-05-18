@@ -1,0 +1,632 @@
+# WebsockexNova Rules
+
+## Code Optimization Guidelines
+
+- **All Elixir code files must balance token optimization with readability**
+  - **Module Documentation**: Use concise, structured `@moduledoc` with clear bullet points for key components
+  - **Function Documentation**: Optimize `@doc` blocks with a single-sentence summary followed by structured details
+  - **Code Organization**: Optimize code structure for both machine and human comprehension
+
+  - **DO (Optimized Documentation):**
+    ```elixir
+    @moduledoc """
+    WebSocket client adapter for service-specific implementations.
+
+    - Handles connection formatting and parameter normalization
+    - Provides protocol-specific message encoding/decoding
+    - Supports custom authentication strategies
+    """
+
+    @doc """
+    Creates a client connection with the specified options.
+
+    Validates input, formats connection parameters, and establishes the WebSocket connection.
+    ```
+  - **DON'T (Verbose Documentation):**
+    ```elixir
+    @moduledoc """
+    This module provides an adapter interface for creating service-specific WebSocket client implementations. It handles the connection formatting, parameter normalization, and provides methods for implementing protocol-specific message encoding and decoding. It also supports various authentication strategies and connection parameters.
+    """
+
+    @doc """
+    Creates a new client connection with the specified options. This function validates the input parameters, formats the connection parameters according to the adapter's requirements, and establishes the WebSocket connection with the server. It returns either an ok tuple with the connection or an error tuple with the reason.
+    ```
+
+## WebSocket Adapter Implementation Guidelines
+
+- **Core Principles**:
+  - Adapters should be thin, focused on protocol translation only
+  - Prefer composition over inheritance for behavior customization
+  - Maintain clear separation between transport and business logic
+  - Emit appropriate telemetry events at all critical points
+
+- **Adapter Structure**:
+  - ✅ **DO**: Keep adapters focused on format translation
+    ```elixir
+    defmodule MyApp.CustomAdapter do
+      use WebsockexNova.Adapter
+
+      @impl WebsockexNova.Behaviors.ConnectionHandler
+      def connection_info(opts) do
+        # Only translate between user format and internal format
+        {:ok, %{
+          host: Map.get(opts, :host, "api.example.com"),
+          port: Map.get(opts, :port, 443),
+          path: "/ws/v2",
+          transport: :tls
+        }}
+      end
+
+      @impl WebsockexNova.Behaviors.MessageHandler
+      def encode_message(message) do
+        # Simple translation of message format
+        {:ok, Jason.encode!(%{cmd: message.type, payload: message.data})}
+      end
+    end
+    ```
+
+  - ❌ **DON'T**: Mix business logic into adapters
+    ```elixir
+    # Don't add business logic to adapters
+    defmodule ComplexAdapter do
+      use WebsockexNova.Adapter
+
+      @impl WebsockexNova.Behaviors.MessageHandler
+      def encode_message(message) do
+        # Business logic shouldn't be here
+        message = enrich_with_business_data(message)
+        apply_business_rules(message)
+        store_in_database(message.id, message)
+        
+        {:ok, Jason.encode!(message)}
+      end
+    end
+    ```
+
+## Integration Testing Requirements
+
+- **Core Principles**:
+  - Test with real WebSocket endpoints when possible
+  - Use local test server with `Plug.Cowboy` for controlled testing
+  - Test behavior under realistic conditions (network issues, reconnection)
+  - Document test scenarios thoroughly
+
+- **Test Structure**:
+  - ✅ **DO**: Use controlled local test servers and real-world conditions
+    ```elixir
+    @tag :integration
+    test "reconnects after connection interruption", %{test_server: server} do
+      # Use local WebSocket test server 
+      client_opts = [url: server.url, reconnect: true]
+
+      # Simulate realistic conditions
+      {:ok, client} = WebsockexNova.Client.connect_with_reconnection(client_opts)
+      assert WebsockexNova.Client.connected?(client)
+      
+      # Force disconnect the server side
+      server.disconnect_client(client.id)
+      
+      # Verify client reconnects properly
+      wait_for_reconnection(client)
+      assert WebsockexNova.Client.connected?(client)
+    end
+    ```
+
+- **Test Environment Setup**:
+  - Create proper test helpers in `test/support/`
+  - Use modular test server implementation
+  - Tag integration tests with `@tag :integration`
+  - Structure test cases to cover full client lifecycle
+
+## Client API Design Guidelines
+
+- **Core Principles**:
+  - Public API should follow Elixir conventions of `{:ok, result}` or `{:error, reason}`
+  - Prefer explicit parameters over options maps for primary parameters
+  - Use optional keyword lists for secondary parameters
+  - Support both synchronous and asynchronous operation modes
+
+- **API Structure**:
+  - ✅ **DO**: Use clear, consistent API patterns
+    ```elixir
+    # Primary parameters as explicit args, optional params as keyword list
+    @spec connect(url :: String.t(), opts :: keyword()) :: 
+          {:ok, client()} | {:error, WebsockexNova.error()}
+    
+    # Clear async vs sync patterns
+    @spec send_message(client(), message()) :: {:ok, response()} | {:error, error()}
+    @spec send_message_async(client(), message(), callback()) :: :ok
+    ```
+
+  - ❌ **DON'T**: Mix parameter styles or create inconsistent APIs
+    ```elixir
+    # Don't mix parameter styles
+    def connect(opts_map) when is_map(opts_map), do: # Implementation
+    def send(client, message, callback \\ nil, options \\ []) do # Implementation
+    ```
+
+## Error Handling Architecture
+
+- **Core Principles**:
+  - Use protocol-based approach for all errors
+  - Preserve original error data without transformation
+  - Categorize errors consistently (network, protocol, application)
+  - Provide clear context information for debugging
+
+- **Error Protocol Guidelines**:
+  - ✅ **DO**: Implement proper error protocols
+    ```elixir
+    defimpl WebsockexNova.ErrorProtocol, for: WebsockexNova.Error.ConnectionError do
+      def original(error), do: error.original
+      def context(error), do: error.context
+      def category(error), do: :connection
+    end
+    ```
+
+- **Error Handling Best Practices**:
+  - Always wrap external errors with proper context
+  - Use consistent error tuples with descriptive atoms
+  - Provide specific error handling for reconnection scenarios
+  - Log errors with appropriate severity levels
+
+## Performance Considerations
+
+- **Core Guidelines**:
+  - Start with the simplest implementation that meets requirements
+  - Measure before optimizing
+  - Optimize connection handling over message processing (when needed)
+  - Consider client connection pooling for high-volume applications
+
+- **Connection Management**:
+  - ✅ **DO**: Use proper connection lifecycle management
+    ```elixir
+    # Connection pooling pattern
+    pool_opts = [
+      size: 5,                          # Default pool size
+      max_overflow: 10,                 # Maximum additional connections
+      strategy: :fifo,                  # Connection selection strategy 
+      name: {:local, :websocket_pool}   # Local name
+    ]
+    
+    # Simple pool initialization
+    {:ok, _} = WebsockexNova.Pool.start_link(pool_opts)
+    
+    # Usage pattern 
+    WebsockexNova.Pool.with_conn(:websocket_pool, fn conn ->
+      WebsockexNova.Client.send_message(conn, message)
+    end)
+    ```
+
+## Documentation Requirements
+
+- **Required Documentation Structure**:
+  - `docs/architecture.md`: Component diagrams and design decisions
+  - `docs/client_macro.md`: Usage examples and best practices
+  - `docs/integration_testing.md`: Integration testing patterns
+  - `docs/behaviors.md`: Available behaviors and their purposes
+
+- **Documentation Standards**:
+  - All public modules and functions must have documentation
+  - Use consistent formatting and examples
+  - Include typical usage patterns
+  - Document error scenarios and handling
+
+## Task Management 
+
+- **Task Format in Issues/PRs**:
+  - **ID**: WSN#### (sequential numbering)
+  - **Title**: Concise description of the task
+  - **Description**: Detailed explanation with requirements
+  - **Testing Requirements**: Both unit and integration tests needed
+  - **Acceptance Criteria**: Clear, verifiable criteria
+
+- **Task Workflow**:
+  1. Create issue with detailed description and acceptance criteria
+  2. Implement tests first, then implementation
+  3. Document the changes appropriately
+  4. Create PR with reference to the issue
+  5. Review and ensure all tests pass
+
+## Multi-Adapter Support Guidelines
+
+- **Design Principles**:
+  - Each service/protocol deserves its own adapter
+  - Adapters should handle protocol-specific details only
+  - Common functionality should be extracted to shared modules
+  - Support runtime adapter selection and configuration
+
+- **Service-Specific Client Implementation**:
+  - ✅ **DO**: Create domain-specific clients for clarity
+    ```elixir
+    defmodule MyApp.BinanceClient do
+      use WebsockexNova.ClientMacro, adapter: MyApp.BinanceAdapter
+
+      # Add domain-specific methods
+      def subscribe_to_ticker(conn, symbol, opts \\ []) do
+        channel = "#{symbol}@ticker"
+        subscribe(conn, channel, opts)
+      end
+
+      def subscribe_to_kline(conn, symbol, interval, opts \\ []) do
+        channel = "#{symbol}@kline_#{interval}"
+        subscribe(conn, channel, opts)
+      end
+    end
+    ```
+
+## Telemetry Integration Requirements
+
+- **Required Events**:
+  - Connection lifecycle: `:websockex_nova, [:connection, :opened|:closed|:error]`
+  - Message handling: `:websockex_nova, [:message, :received|:sent|:error]`
+  - Reconnection: `:websockex_nova, [:reconnection, :attempt|:success|:failure]`
+  - Rate limiting: `:websockex_nova, [:rate_limit, :applied|:exceeded]`
+
+- **Measurement Guidelines**:
+  - Include timing information for all operations
+  - Track message sizes for bandwidth monitoring
+  - Count connection attempts and failures
+  - Provide detailed error information in metadata
+
+## Multi-Agent Workflow for Elixir Development
+
+- **Core Roles**:
+  - **Planner**: Analyzes requirements, documents tasks with testable criteria
+  - **Executor**: Implements tasks following TDD principles
+  - **Reviewer**: Conducts thorough code reviews, runs static checks
+
+- **Required Documentation Structure:**
+  - `docs/Architecture.md`: System design, supervision hierarchies, component diagrams
+  - `docs/MVP.md`: Project roadmap and milestones
+  - `docs/TaskList.md`: Structured, human-readable task tracking
+  - `.cursor/scratchpad.md`: Temporary workspace for notes, progress tracking
+
+- **Task Requirements in `docs/TaskList.md`**:
+  ```markdown
+  - ID: WSN001
+  - Description: Implement Adapter.connect to handle X
+  - ExUnit Requirements: Test cases for normal flow, error states
+  - Integration Test Requirements: Real WebSocket endpoint scenarios
+  - Dependencies: Other related modules/tasks
+  - Status: Planned|In Progress|Review|Completed|Blocked
+  - Review Rating: 1-5
+  ```
+
+- **Development Workflow**:
+  - ✅ **DO**: Follow the TDD cycle (tests first, then implementation)
+    ```elixir
+    # First write the test
+    test "handles valid input" do
+      assert {:ok, result} = Adapter.connect(valid_input)
+      assert result.state == :connected
+    end
+
+    # Then implement the function
+    @spec connect(input :: map()) :: {:ok, map()} | {:error, atom()}
+    def connect(input) when is_map(input) do
+      with {:ok, validated} <- validate_input(input),
+           {:ok, conn} <- establish_connection(validated) do
+        {:ok, conn}
+      end
+    end
+    ```
+
+  - ❌ **DON'T**: Implement without tests or task documentation
+    ```elixir
+    # Missing tests, specs, and documentation
+    def connect(input) do
+      # Implementation without validation or proper error handling
+      establish_connection(input)
+    end
+    ```
+
+## WebSocket Connection Architecture
+
+- **Connection Model**:
+  - WebSocket client connections are processes supervised by the library's supervisor tree
+  - Connection processes are monitored, not owned by user code
+  - Failures detected by `Process.monitor/1` and classified by exit reasons
+
+- **Reconnection API Requirements**:
+  - ✅ **DO**: Follow the established reconnection workflow
+    ```elixir
+    # Public API with reconnection capability
+    {:ok, client} = WebsockexNova.Client.connect_with_reconnection(url, [
+      reconnect: [
+        auto_reconnect: true,
+        max_attempts: 5,
+        initial_delay: 1000,
+        on_reconnect: &handle_reconnect/1
+      ]
+    ])
+    ```
+
+  - ❌ **DON'T**: Implement custom reconnection logic outside the framework
+    ```elixir
+    # Don't create custom reconnection loops
+    def custom_reconnect(url, options) do
+      case WebsockexNova.Client.connect(url, options) do
+        {:ok, client} -> {:ok, client}
+        {:error, _} ->
+          Process.sleep(1000)
+          custom_reconnect(url, options)
+      end
+    end
+    ```
+
+- **Error Classification**:
+  - All WebSocket errors must be properly classified through `WebsockexNova.Error.classify/3`
+  - Network errors should be distinguished from protocol/application errors
+  - Error handling must support reconnection decision-making
+
+- **Connection Testing Requirements**:
+  - Tests must reliably simulate network failures
+  - Tests must handle asynchronous reconnection processes
+  - Avoid fixed timing assumptions in tests
+
+  ```elixir
+  # Correct way to test reconnection
+  @tag :integration
+  test "reconnects automatically after network interruption", %{ws_url: ws_url} do
+    client_opts = [url: ws_url, reconnect: true]
+
+    {:ok, client} = WebsockexNova.Client.connect_with_reconnection(client_opts)
+
+    # Verify initial connection works
+    assert WebsockexNova.Client.connected?(client)
+
+    # Simulate network interruption
+    Process.exit(client, :kill)
+
+    # Wait for reconnection
+    wait_for_reconnection(client)
+    assert WebsockexNova.Client.connected?(client)
+  end
+  ```
+
+## Error System Architecture
+
+- **Core Principles**:
+  - Use protocol-based approach for all errors (implement `WebsockexNova.ErrorProtocol`)
+  - Preserve original error data without transformation
+  - Add minimal context information for traceability
+  - Use consistent error creation patterns
+
+- **Error Protocol Requirements**:
+  - ✅ **DO**: Use the `ErrorProtocol` for accessing error information
+    ```elixir
+    def handle_error({:error, error}) do
+      # Get the original untransformed error
+      original = WebsockexNova.ErrorProtocol.original(error)
+
+      # Get context information
+      context = WebsockexNova.ErrorProtocol.context(error)
+
+      # Access context fields
+      operation = Map.get(context, :operation)
+      url = Map.get(context, :url)
+
+      # Take action based on original error
+      case original do
+        {:timeout, duration, _} -> handle_timeout(duration, operation)
+        {:network_error, _, _} -> attempt_reconnection(url)
+        _ -> {:error, :unknown_error}
+      end
+    end
+    ```
+
+  - ❌ **DON'T**: Create custom error transformation logic
+    ```elixir
+    # Don't create custom transformation logic
+    def handle_error({:error, error}) do
+      # This bypasses the standard protocol
+      error_type = determine_error_type(error)
+      error_data = extract_error_data(error)
+
+      # Transforms errors inconsistently
+      case error_type do
+        :timeout -> handle_timeout(error_data)
+        :network -> attempt_reconnection(error_data)
+        _ -> {:error, :unknown_error}
+      end
+    end
+    ```
+
+- **Error Creation Guidelines**:
+  - Create errors using `RawError.new/3` to preserve original data
+  - Include operation name and relevant context information
+  - Use consistent error tuple format `{:error_type, data, message}`
+  - Maintain backward compatibility with `WebsockexNova.Error.classify/3`
+
+## TaskList.md Format Specification
+
+```
+# WebsockexNova Task List
+
+## Integration Test Setup Notes
+[Brief integration testing reminders]
+
+## Simplicity Guidelines for All Tasks
+[Simplicity principles and requirements]
+
+## Current Tasks
+| ID | Description | Status | Priority | Assignee | Review Rating |
+| --- | --- | --- | --- | --- | --- |
+| WSN#### | [Task description] | [Status] | [Priority] | [Assignee] | [Rating] |
+
+## Completed Tasks
+| ID | Description | Status | Priority | Assignee | Review Rating |
+| --- | --- | --- | --- | --- | --- |
+| WSN#### | [Task description] | Completed | [Priority] | [Assignee] | [Rating] |
+
+## Active Task Details
+
+### WSN####: [Task Title]
+**Description**: [Detailed task description]
+**Simplicity Progression Plan**: [Steps for complexity progression]
+**Abstraction Evaluation**: [Abstraction justification]
+**Requirements**: [Functional requirements]
+**ExUnit Test Requirements**: [Unit test requirements]
+**Integration Test Scenarios**: [Integration test requirements]
+**Status**: [Status]
+**Priority**: [Priority]
+
+#### Subtask Structure (for in-progress tasks)
+#### #. [Subtask Title] (WSN####-#)
+**Test-First Approach**: [Test plan]
+**Simplicity Constraints**: [Simplicity guidelines]
+**Implementation**: [Implementation details]
+**Status**: [Status]
+**Review Rating**: [Rating if completed]
+```
+
+- **Required Fields and Values**
+  - **ID Format**: `WNX####` (Regex: `WNX\d{4}`)
+    - Core functionality: WNX0001-WNX0099
+    - Feature enhancements: WNX0100-WNX0199
+    - Documentation: WNX0200-WNX0299
+    - Testing: WNX0300-WNX0399
+
+  - **Status Values**:
+    - `Planned`
+    - `In Progress`
+    - `Review`
+    - `Completed`
+    - `Blocked`
+
+  - **Priority Values**:
+    - `Critical`
+    - `High`
+    - `Medium`
+    - `Low`
+
+  - **Review Rating**:
+    - Format: Number between 1.0-5.0
+    - Optional suffix: `(partial)` for multi-part tasks
+
+- **Task Section Requirements**
+  - Each task must have these sections in order:
+    1. `Description`
+    2. `Simplicity Progression Plan`
+    3. `Simplicity Principle`
+    4. `Abstraction Evaluation`
+    5. `Requirements`
+    6. `ExUnit Test Requirements`
+    7. `Integration Test Scenarios`
+    8. `Typespec Requirements`
+    9. `TypeSpec Documentation`
+    10. `TypeSpec Verification`
+    11. `Status`
+    12. `Priority`
+
+  - **Simplicity Progression Plan Format**:
+    ```
+    **Simplicity Progression Plan**:
+    1. [Start with simplest implementation]
+    2. [Test with real workloads]
+    3. [Add complexity only when necessary]
+    ```
+    
+  - **Simplicity Principle Format**:
+    ```
+    **Simplicity Principle**:
+    [Concise statement of the simplicity principle applied to this task]
+    ```
+
+  - **Abstraction Evaluation Format**:
+    ```
+    **Abstraction Evaluation**:
+    - **Challenge**: [Question about necessary abstraction]
+    - **Minimal Solution**: [Simplest viable solution]
+    - **Justification**: [Numbered list of concrete use cases]
+      1. [Use case 1]
+      2. [Use case 2]
+      3. [Use case 3]
+    ```
+
+- **TypeSpec Format**:
+  - **Typespec Requirements Format**:
+    ```
+    **Typespec Requirements**:
+    - [Requirement 1]
+    - [Requirement 2]
+    - [Requirement 3]
+    ```
+    
+  - **TypeSpec Documentation Format**:
+    ```
+    **TypeSpec Documentation**:
+    [Description of how types should be documented]
+    ```
+    
+  - **TypeSpec Verification Format**:
+    ```
+    **TypeSpec Verification**:
+    [Description of how types should be verified]
+    ```
+
+- **Subtask Structure Requirements**
+  - Each subtask must have:
+    - Heading with number, title, and ID suffix in parentheses
+    - `Description` section (optional)
+    - `Status` section
+    - `Review Rating` section (if completed)
+
+  - **Subtask ID Format**: `WNX####-#` (parent task ID with subtask number)
+
+  - **Test-First Approach Format**:
+    ```
+    **Test-First Approach**:
+    - [Test file path]
+    - [Test method description]
+    - [Test validation approach]
+    ```
+
+- **Validation Rules**
+  - All task IDs must be unique
+  - All current tasks must have detailed entries
+  - All in-progress tasks must have subtasks
+  - All completed subtasks must have review ratings
+  - All sections must use correct heading levels:
+    - `#` for document title
+    - `##` for major sections
+    - `###` for tasks
+    - `####` for subtasks
+
+## Simplicity Guidelines
+
+- **Foundational Principles**:
+  - Code simplicity is a primary feature, not an afterthought
+  - Implement the minimal viable solution first
+  - Each component has a limited "complexity budget"
+  - Create abstractions only with proven value (≥3 concrete examples)
+  - Start simple and add complexity incrementally
+
+- **Module Structure Limits**:
+  - Maximum 5 functions per module initially
+  - Maximum function length of 15 lines
+  - Maximum of 2 levels of function calls for any operation
+  - Prefer pure functions over processes when possible
+
+- **Anti-Patterns to Avoid**:
+  - No premature optimization without performance data
+  - No "just-in-case" code for hypothetical requirements
+  - No abstractions without at least 3 concrete usage examples
+  - No complex macros unless absolutely necessary
+  - No overly clever solutions that prioritize elegance over maintainability
+
+"The elegance comes from doing less, not more. Removing complexity, not adding it!"
+
+## Test File Organization
+
+- **Core Test Directories**:
+  - `test/websockex_nova/` - Unit tests for core functionality
+  - `test/integration/` - Integration tests with real WebSocket endpoints
+  - `test/support/` - Test helpers and mock implementations
+
+- **Testing Guidelines**:
+  - Use real WebSocket servers for integration tests
+  - Create comprehensive test helpers in `test/support/`
+  - Test both success and failure scenarios
+  - Test edge cases like reconnection, authentication failures
+  - Document test approach in code comments
