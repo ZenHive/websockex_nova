@@ -98,6 +98,17 @@ defmodule WebsockexNova.Test.Support.TestAdapter do
     {:ok, Jason.encode!(auth_data), conn}
   end
 
+  # Support plain maps for testing
+  def generate_auth_data(adapter_state) when is_map(adapter_state) do
+    credentials = Map.get(adapter_state, :credentials, %{})
+    auth_data = %{
+      type: "auth",
+      token: Map.get(credentials, :token, "test_token")
+    }
+    
+    {:ok, Jason.encode!(auth_data), adapter_state}
+  end
+
   @impl WebsockexNova.Behaviors.AuthHandler
   def handle_auth_response(response, %WebsockexNova.ClientConn{adapter_state: adapter_state} = conn) do
     # Handle both parsed JSON and raw string responses
@@ -131,6 +142,34 @@ defmodule WebsockexNova.Test.Support.TestAdapter do
       _ ->
         IO.puts("TestAdapter - Auth failed, response doesn't match expected format")
         {:error, :auth_failed, conn}
+    end
+  end
+
+  # Support plain maps for testing
+  def handle_auth_response(response, adapter_state) when is_map(adapter_state) do
+    # Handle both parsed JSON and raw string responses
+    IO.puts("TestAdapter handle_auth_response (map) - Raw response: #{inspect(response)}")
+    
+    parsed_response = case response do
+      resp when is_binary(resp) ->
+        case Jason.decode(resp) do
+          {:ok, data} -> data
+          _ -> %{}
+        end
+      resp when is_map(resp) -> resp
+      _ -> %{}
+    end
+    
+    case parsed_response do
+      %{"type" => "auth_success"} ->
+        IO.puts("TestAdapter - Auth success response detected (map)")
+        updated_state = adapter_state
+          |> Map.put(:auth_status, :authenticated)
+          |> Map.put(:token, Map.get(parsed_response, "token"))
+        {:ok, updated_state}
+      _ ->
+        IO.puts("TestAdapter - Auth failed, response doesn't match expected format (map)")
+        {:error, :auth_failed, adapter_state}
     end
   end
 
