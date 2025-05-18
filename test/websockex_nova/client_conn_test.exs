@@ -67,11 +67,76 @@ defmodule WebsockexNova.ClientConnTest do
     end
   end
   
-  # Mock modules for testing
-  defmodule MockTransport do
-    def get_state(_), do: %{}
-  end
+    describe "Access behavior" do
+      test "fetch/2 returns {:ok, value} for valid keys", %{client_conn: conn} do
+        assert Access.fetch(conn, :transport) == {:ok, MockTransport}
+        assert Access.fetch(conn, :adapter) == {:ok, MockAdapter}
+        assert conn[:transport] == MockTransport
+        assert conn[:adapter] == MockAdapter
+      end
+    
+      test "fetch/2 returns :error for invalid keys", %{client_conn: conn} do
+        assert Access.fetch(conn, :invalid_key) == :error
+        assert conn[:invalid_key] == nil
+      end
+    
+      test "get_and_update/3 updates values", %{client_conn: conn} do
+        # Update adapter_state
+        {old_value, updated_conn} = Access.get_and_update(conn, :adapter_state, fn current ->
+          {current, Map.put(current, :test_key, "test_value")}
+        end)
+      
+        assert old_value == %{}
+        assert updated_conn.adapter_state == %{test_key: "test_value"}
+      
+        # Update extras
+        {old_value, updated_conn} = Access.get_and_update(updated_conn, :extras, fn current ->
+          {current, Map.put(current, :extra_key, "extra_value")}
+        end)
+      
+        assert old_value == %{}
+        assert updated_conn.extras == %{extra_key: "extra_value"}
+      end
+    
+      test "get_and_update/3 with :pop returns current value", %{client_conn: conn} do
+        # Add a value to extras first
+        conn = %{conn | extras: %{test: "value"}}
+      
+        # Use :pop
+        {popped, _updated_conn} = Access.get_and_update(conn, :extras, fn _ -> :pop end)
+      
+        assert popped == %{test: "value"}
+      end
+    
+      test "pop/3 returns value and resets to default", %{client_conn: conn} do
+        # Add values to test popping
+        conn = %{conn | 
+          extras: %{test: "value"},
+          adapter_state: %{adapter: "state"}
+        }
+      
+        # Pop extras
+        {extras, conn_without_extras} = Access.pop(conn, :extras)
+        assert extras == %{test: "value"}
+        assert conn_without_extras.extras == %{}
+      
+        # Pop adapter_state
+        {adapter_state, conn_without_adapter_state} = Access.pop(conn, :adapter_state)
+        assert adapter_state == %{adapter: "state"}
+        assert conn_without_adapter_state.adapter_state == %{}
+      
+        # Pop non-map field
+        {transport, conn_without_transport} = Access.pop(conn, :transport)
+        assert transport == MockTransport
+        assert conn_without_transport.transport == nil
+      end
+    end
   
-  defmodule MockAdapter do
+    # Mock modules for testing
+    defmodule MockTransport do
+      def get_state(_), do: %{}
+    end
+  
+    defmodule MockAdapter do
+    end
   end
-end
