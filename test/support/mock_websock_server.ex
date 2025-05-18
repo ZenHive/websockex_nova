@@ -85,7 +85,10 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   end
   
   def start_link(port \\ 0) do
-    GenServer.start_link(__MODULE__, port)
+    with {:ok, pid} <- GenServer.start_link(__MODULE__, port) do
+      actual_port = get_port(pid)
+      {:ok, pid, actual_port}
+    end
   end
   
   def set_handler(server, handler) when is_function(handler, 1) do

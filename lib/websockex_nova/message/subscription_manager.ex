@@ -57,12 +57,11 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   alias WebsockexNova.Behaviors.SubscriptionHandler
 
   @type t :: %__MODULE__{
-          handler: module(),
-          state: map(),
-          pending_subscriptions: list({SubscriptionHandler.channel(), SubscriptionHandler.params()})
-        }
+            handler: module(),
+            state: map()
+          }
 
-  defstruct [:handler, state: %{}, pending_subscriptions: []]
+  defstruct [:handler, state: %{}]
 
   @doc """
   Creates a new subscription manager with the specified handler module.
@@ -80,8 +79,7 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   def new(handler_module, initial_state \\ %{}) do
     manager = %__MODULE__{
       handler: handler_module,
-      state: initial_state,
-      pending_subscriptions: []
+      state: initial_state
     }
 
     {:ok, manager}
@@ -207,7 +205,7 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   end
 
   @doc """
-  Prepares for reconnection by storing active subscriptions for later resubscription.
+  Prepares for reconnection by storing active subscriptions in state.
 
   This should be called before a reconnection attempt to ensure subscriptions can be
   restored after reconnection.
@@ -222,28 +220,25 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   """
   @spec prepare_for_reconnect(t()) :: {:ok, t()}
   def prepare_for_reconnect(%__MODULE__{} = manager) do
-    # Get currently active subscriptions
+    # Get currently active subscriptions and store directly in state
     active = active_subscriptions(manager)
-
-    # Extract channel and params from each active subscription
-    pending_subscriptions =
-      Enum.map(active, fn {_id, subscription} ->
-        {subscription.channel, subscription.params}
-      end)
-
-    updated_manager = %{manager | pending_subscriptions: pending_subscriptions}
-    {:ok, updated_manager}
+    
+    # Store active subscriptions directly in state for recovery
+    updated_state = Map.put(manager.state, :pending_reconnect_subscriptions, 
+      Enum.map(active, fn {_id, sub} -> {sub.channel, sub.params} end))
+    
+    {:ok, %{manager | state: updated_state}}
   end
 
   @doc """
-  Resubscribes to all pending subscriptions after a successful reconnect.
+  Resubscribes to all stored subscriptions after a successful reconnect.
 
   This should be called after a successful reconnection to restore previously
   active subscriptions.
 
   ## Parameters
 
-  * `manager` - The subscription manager with pending subscriptions
+  * `manager` - The subscription manager with stored subscriptions
 
   ## Returns
 
@@ -256,20 +251,24 @@ defmodule WebsockexNova.Message.SubscriptionManager do
             | {:error, term(), t()}
           )
   def resubscribe_after_reconnect(%__MODULE__{} = manager) do
-    # Resubscribe to each pending subscription and collect results
-    {results, _final_manager} =
-      Enum.map_reduce(manager.pending_subscriptions, %{manager | pending_subscriptions: []}, fn {channel, params},
-                                                                                                acc_manager ->
-        case subscribe(acc_manager, channel, params) do
-          {:ok, subscription_id, updated_manager} ->
-            {{:ok, subscription_id, updated_manager}, updated_manager}
-
-          {:error, reason, updated_manager} ->
-            {{:error, reason, updated_manager}, updated_manager}
-        end
-      end)
-
-    results
+    # Get pending subscriptions from state
+    pending = Map.get(manager.state, :pending_reconnect_subscriptions, [])
+    
+    # Clean up state by removing pending subscriptions
+    cleaned_state = Map.delete(manager.state, :pending_reconnect_subscriptions)
+    cleaned_manager = %{manager | state: cleaned_state}
+    
+    # Simple fold to process subscriptions and collect results
+    Enum.reduce(pending, {[], cleaned_manager}, fn {channel, params}, {results, current_manager} ->
+      case subscribe(current_manager, channel, params) do
+        {:ok, id, updated_manager} -> 
+          {[{:ok, id, updated_manager} | results], updated_manager}
+        {:error, reason, updated_manager} -> 
+          {[{:error, reason, updated_manager} | results], updated_manager}
+      end
+    end)
+    |> elem(0)
+    |> Enum.reverse()
   end
 
   @doc """
@@ -289,10 +288,9 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   @spec export_state(t()) :: map()
   def export_state(%__MODULE__{} = manager) do
     # Export only the parts needed for persistence
-    # We don't export the handler module as that would be set when creating a new manager
     %{
       subscriptions: get_in(manager.state, [:subscriptions]) || %{},
-      pending_subscriptions: manager.pending_subscriptions
+      pending_reconnect_subscriptions: Map.get(manager.state, :pending_reconnect_subscriptions, [])
     }
   end
 
@@ -312,14 +310,12 @@ defmodule WebsockexNova.Message.SubscriptionManager do
   """
   @spec import_state(t(), map()) :: {:ok, t()}
   def import_state(%__MODULE__{} = manager, exported_state) do
-    # Create a new state map with the imported subscriptions
-    updated_state = Map.put(manager.state, :subscriptions, exported_state.subscriptions)
+    # Store both subscriptions and pending reconnect subscriptions in state
+    updated_state = manager.state
+      |> Map.put(:subscriptions, exported_state.subscriptions)
+      |> Map.put(:pending_reconnect_subscriptions, 
+          Map.get(exported_state, :pending_reconnect_subscriptions, []))
 
-    # Update pending subscriptions if provided
-    pending_subscriptions = Map.get(exported_state, :pending_subscriptions, [])
-
-    updated_manager = %{manager | state: updated_state, pending_subscriptions: pending_subscriptions}
-
-    {:ok, updated_manager}
+    {:ok, %{manager | state: updated_state}}
   end
 end

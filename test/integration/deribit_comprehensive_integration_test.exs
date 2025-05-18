@@ -26,12 +26,12 @@ defmodule WebsockexNova.Integration.DeribitComprehensiveIntegrationTest do
     client_secret = System.get_env("DERIBIT_CLIENT_SECRET")
     creds_available = client_id != nil && client_secret != nil
 
-    # Configure TLS for secure connection
-    transport_opts = %{
+    # Configure TLS for secure connection - must be a keyword list, not a map
+    transport_opts = [
       verify: :verify_peer,
       cacerts: :certifi.cacerts(),
       server_name_indication: ~c"test.deribit.com"
-    }
+    ]
 
     # Open raw connection for low-level tests
     {:ok, raw_conn} =

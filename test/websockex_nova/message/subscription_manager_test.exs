@@ -98,7 +98,6 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       {:ok, manager} = SubscriptionManager.new(TestSubscriptionHandler)
       assert manager.handler == TestSubscriptionHandler
       assert manager.state == %{}
-      assert manager.pending_subscriptions == []
     end
 
     test "creates a new manager with custom initial state" do
@@ -106,7 +105,6 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       {:ok, manager} = SubscriptionManager.new(TestSubscriptionHandler, initial_state)
       assert manager.handler == TestSubscriptionHandler
       assert manager.state == initial_state
-      assert manager.pending_subscriptions == []
     end
   end
 
@@ -226,10 +224,11 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
     test "prepares resubscription list for confirmed subscriptions", %{manager: manager, sub1: _sub1} do
       {:ok, updated_manager} = SubscriptionManager.prepare_for_reconnect(manager)
 
-      # The confirmed subscription should be in the pending_subscriptions list
-      assert length(updated_manager.pending_subscriptions) == 1
+      # The confirmed subscription should be in the pending_reconnect_subscriptions list
+      pending_subscriptions = updated_manager.state.pending_reconnect_subscriptions
+      assert length(pending_subscriptions) == 1
 
-      [{channel, params}] = updated_manager.pending_subscriptions
+      [{channel, params}] = pending_subscriptions
       assert channel == "channel1"
       assert params.param == "value1"
     end
@@ -247,8 +246,8 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       # Each result should be a tuple with {:ok, subscription_id, manager}
       [{:ok, new_sub_id, updated_manager}] = resubscribe_results
 
-      # The pending_subscriptions list should now be empty
-      assert updated_manager.pending_subscriptions == []
+      # The pending_reconnect_subscriptions should now be removed from state
+      refute Map.has_key?(updated_manager.state, :pending_reconnect_subscriptions)
 
       # And we should have the new subscription in our state
       assert updated_manager.state.subscriptions[new_sub_id].channel == "channel1"
@@ -267,6 +266,8 @@ defmodule WebsockexNova.Message.SubscriptionManagerTest do
       assert is_map(exported_state)
       assert Map.has_key?(exported_state, :subscriptions)
       assert map_size(exported_state.subscriptions) == 2
+      assert Map.has_key?(exported_state, :pending_reconnect_subscriptions)
+      assert exported_state.pending_reconnect_subscriptions == []
     end
 
     test "can import subscription state" do

@@ -60,7 +60,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       stream_ref = conn.stream_ref
       assert_connection_status(conn, :websocket_connected)
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:text, "Text message"})
-      assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "Text message"}}}, 500
+      assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "echo: Text message"}}}, 500
       binary_data = <<1, 2, 3, 4, 5>>
       :ok = ConnectionWrapper.send_frame(conn, conn.stream_ref, {:binary, binary_data})
       assert_receive {:websockex_nova, {:websocket_frame, ^stream_ref, {:binary, ^binary_data}}}, 500
@@ -199,7 +199,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapperTest do
       :ok = ConnectionWrapper.send_frame(conn, stream_ref, {:text, "Text message"})
 
       assert_receive(
-        {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "Text message"}}},
+        {:websockex_nova, {:websocket_frame, ^stream_ref, {:text, "echo: Text message"}}},
         500
       )
 
