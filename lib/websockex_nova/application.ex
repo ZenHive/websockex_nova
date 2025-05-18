@@ -6,6 +6,7 @@ defmodule WebsockexNova.Application do
 
   alias WebsockexNova.Gun.FrameCodec
   alias WebsockexNova.Transport.RateLimiting
+  alias WebsockexNova.ConnectionRegistry
 
   @impl true
   def start(_type, _args) do
@@ -16,6 +17,9 @@ defmodule WebsockexNova.Application do
       # Starts a worker by calling: WebsockexNova.Worker.start_link(arg)
       # {WebsockexNova.Worker, arg}
 
+      # Connection registry for maintaining stable references to transport processes
+      ConnectionRegistry,
+      
       # config :websockex_nova, :rate_limiting,
       #   handler: MyApp.CustomRateLimitHandler,
       #   capacity: 100,

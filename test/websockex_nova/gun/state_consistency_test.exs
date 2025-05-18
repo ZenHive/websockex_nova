@@ -1,6 +1,7 @@
 defmodule WebsockexNova.Gun.StateConsistencyTest do
   use ExUnit.Case, async: false
 
+  alias Hex.SCM
   alias WebsockexNova.Examples.AdapterDeribit
 
   @tag :integration
@@ -46,7 +47,7 @@ defmodule WebsockexNova.Gun.StateConsistencyTest do
     assert is_map(conn.adapter_state)
 
     # 5. Authenticate (call authenticate/3 and use updated conn)
-    credentials = %{api_key: "Nun7JQukhcNA", secret: "DBKE3EXMRLCIO22CLCFQPO3F6A7DKQ4C"}
+    credentials = %{api_key: System.get_env("DERIBIT_API_KEY"), secret: System.get_env("DERIBIT_SECRET_KEY")}
     {:ok, conn2, _auth_result} = WebsockexNova.Client.authenticate(conn, credentials)
     :timer.sleep(500)
     state2 = :sys.get_state(conn2.transport_pid)

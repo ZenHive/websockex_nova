@@ -359,9 +359,18 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
           base_backoff: 500 # Short delay between attempts
         })
       
-      # Store the original transport PID
+      # Store the original transport PID and connection ID
       original_pid = conn.transport_pid
+      connection_id = conn.connection_id
       Logger.info("Original connection PID: #{inspect(original_pid)}")
+      Logger.info("Connection ID: #{inspect(connection_id)}")
+      
+      # Ensure connection_id is present
+      assert is_reference(connection_id)
+      
+      # Get the dynamic transport_pid - should match the stored one initially
+      dynamic_pid = WebsockexNova.ClientConn.get_current_transport_pid(conn)
+      assert dynamic_pid == original_pid
       
       # Send a basic test message to verify initial connection works
       test_payload = %{
@@ -388,15 +397,17 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
       # Wait for notification about reconnection
       assert_receive {:connection_reconnected, updated_conn}, 15000
       
-      # The conn struct should have been automatically updated by the process
-      assert updated_conn.transport_pid == conn_with_callback.transport_pid
+      # Check that the connection_id remains the same after reconnection
+      assert updated_conn.connection_id == connection_id
+      
+      # Check that the transport_pid has changed
       assert updated_conn.transport_pid != original_pid
       
-      # The original connection reference should now point to the new process
-      refute conn.transport_pid == original_pid
-      assert Process.alive?(conn.transport_pid)
+      # The connection registry should now point to the new process
+      assert WebsockexNova.ClientConn.get_current_transport_pid(conn) == updated_conn.transport_pid
       
-      # Test that the updated connection works by sending a message
+      # Test that the original connection reference works by sending a message
+      # This will use the connection registry to get the current transport_pid
       test_payload2 = %{
         "jsonrpc" => @json_rpc_version,
         "id" => 10000,
@@ -404,7 +415,7 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
         "params" => %{}
       }
       
-      # Use the original conn reference which should now point to the new process
+      # Use the original conn reference which should now use the new process via the registry
       {:ok, response} = ClientDeribit.send_json(conn, test_payload2)
       assert response["id"] == 10000
       assert response["result"]["version"]
@@ -469,6 +480,67 @@ defmodule WebsockexNova.Examples.AdapterDeribitComprehensiveTest do
 
   # Group 5: Configuration Preservation Tests
   describe "config and state preservation" do
+    @tag :integration
+    test "connection_id persists across reconnection and registry updates correctly" do
+      require Logger
+      
+      # Make sure we trap exits for cleaner testing
+      Process.flag(:trap_exit, true)
+      
+      # Connect with parameters specifically for reconnection testing
+      {:ok, conn} =
+        ClientDeribit.connect(%{
+          host: @deribit_host,
+          timeout: 10_000,
+          max_reconnect_attempts: 5,
+          retry: 1,
+          base_backoff: 500
+        })
+      
+      # Verify the connection_id is registered in the registry
+      connection_id = conn.connection_id
+      assert is_reference(connection_id)
+      
+      # Get the original transport_pid from the connection registry
+      {:ok, original_pid_from_registry} = WebsockexNova.ConnectionRegistry.get_transport_pid(connection_id)
+      assert original_pid_from_registry == conn.transport_pid
+      
+      # Register ourselves with the connection to get notifications about reconnection
+      {:ok, _conn_with_callback} = Client.register_callback(conn, self())
+      
+      # Force disconnect by killing the Gun process to simulate network failure
+      state = conn.transport.get_state(conn)
+      gun_pid = state.gun_pid
+      Process.exit(gun_pid, :kill)
+      
+      # Wait for notification about reconnection
+      assert_receive {:connection_reconnected, updated_conn}, 15000
+      
+      # Verify the connection_id stays the same
+      assert updated_conn.connection_id == connection_id
+      
+      # Verify the registry has the updated transport_pid
+      {:ok, new_pid_from_registry} = WebsockexNova.ConnectionRegistry.get_transport_pid(connection_id)
+      assert new_pid_from_registry == updated_conn.transport_pid
+      refute new_pid_from_registry == original_pid_from_registry
+      
+      # Verify the new pid is active
+      assert Process.alive?(new_pid_from_registry)
+      
+      # Test operations using the original conn reference
+      test_payload = %{
+        "jsonrpc" => @json_rpc_version,
+        "id" => 12345,
+        "method" => "public/test",
+        "params" => %{}
+      }
+      
+      # This should transparently use the new transport_pid from the registry
+      {:ok, response} = ClientDeribit.send_json(conn, test_payload)
+      assert response["id"] == 12345
+      assert response["result"]["version"]
+    end
+    
     test "ClientConn struct preserves all connection info" do
       # Define custom options with various types
       custom_opts = %{

@@ -328,7 +328,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   """
   @impl WebsockexNova.Transport
   @spec send_frame(WebsockexNova.ClientConn.t(), reference(), frame() | [frame()]) :: :ok | {:error, term()}
-  def send_frame(%WebsockexNova.ClientConn{transport_pid: pid}, stream_ref, frame) do
+  def send_frame(%WebsockexNova.ClientConn{} = conn, stream_ref, frame) do
+    # Get the current transport_pid from the connection registry
+    pid = WebsockexNova.ClientConn.get_current_transport_pid(conn)
+    
     Logger.debug(
       "[ConnectionWrapper.send_frame/3] Sending frame: #{inspect(frame)} to stream_ref: #{inspect(stream_ref)}"
     )
@@ -1645,18 +1648,25 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
     case state_result do
       %ConnectionState{} = state ->
+        # Create a stable connection ID that persists across reconnections
+        connection_id = make_ref()
+        
         client_conn = %WebsockexNova.ClientConn{
            transport: __MODULE__,
            transport_pid: pid,
            stream_ref: stream_ref,
+           connection_id: connection_id,
            adapter: Map.get(options, :adapter),
            adapter_state: Map.get(options, :adapter_state),
            callback_pids: Enum.filter([Map.get(options, :callback_pid)], & &1)
         }
         
+        # Register the connection ID with the transport PID
+        :ok = WebsockexNova.ConnectionRegistry.register(connection_id, pid)
+        
         # Store the client connection in the state for potential reconnection updates
         updated_state = Map.update(state, :client_conns, %{}, fn conns ->
-          Map.put(conns, make_ref(), client_conn)
+          Map.put(conns, connection_id, client_conn)
         end)
         
         # Update the state with the new client connection
@@ -1681,6 +1691,18 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   # This is used internally during reconnection
   defp update_client_conn(client_conn, new_transport_pid, new_stream_ref) do
     Logger.debug("[ConnectionWrapper] Updating client connection from PID #{inspect(client_conn.transport_pid)} to #{inspect(new_transport_pid)}")
+    
+    # Update the connection registry with the new transport_pid
+    if client_conn.connection_id do
+      case WebsockexNova.ConnectionRegistry.update_transport_pid(client_conn.connection_id, new_transport_pid) do
+        :ok -> 
+          Logger.debug("[ConnectionWrapper] Updated connection registry for #{inspect(client_conn.connection_id)}")
+        {:error, reason} ->
+          Logger.warning("[ConnectionWrapper] Failed to update connection registry: #{inspect(reason)}")
+          # If update fails, try to register again
+          WebsockexNova.ConnectionRegistry.register(client_conn.connection_id, new_transport_pid)
+      end
+    end
     
     # Preserve all existing state while updating only the transport_pid and stream_ref
     # This ensures adapter_state, subscriptions, etc. are maintained

@@ -18,6 +18,7 @@ defmodule WebsockexNova.ClientConn do
     * `:adapter_state` - State maintained by the adapter (stores auth status, auth tokens, credentials, subscriptions, etc.)
     * `:callback_pids` - List of PIDs registered to receive event notifications
     * `:connection_info` - Connection information and initial configuration
+    * `:connection_id` - Stable identifier that persists across reconnections
     * `:rate_limit` - Rate limit configuration
     * `:logging` - Logging configuration
     * `:metrics` - Metrics configuration
@@ -48,6 +49,7 @@ defmodule WebsockexNova.ClientConn do
           adapter: adapter(),
           callback_pids: MapSet.t(pid()),
           connection_info: map(),
+          connection_id: reference(),
           # Handler/feature-specific state
           rate_limit: map(),
           logging: map(),
@@ -69,6 +71,7 @@ defmodule WebsockexNova.ClientConn do
     :transport_pid,
     :stream_ref,
     :adapter,
+    :connection_id,
     callback_pids: MapSet.new(),
     connection_info: %{},
     rate_limit: %{},
@@ -83,4 +86,52 @@ defmodule WebsockexNova.ClientConn do
     adapter_state: %{},
     extras: %{}
   ]
+  
+  @doc """
+  Get the current transport_pid for a connection.
+  
+  This function checks the ConnectionRegistry first using the connection_id.
+  If found, it returns the current transport PID. This ensures operations
+  work even after reconnection when the transport_pid might have changed.
+  
+  If the lookup fails, it falls back to the PID stored in the struct.
+  
+  ## Parameters
+    - conn: The ClientConn struct
+    
+  ## Returns
+    - pid: The current transport process PID
+  """
+  @spec get_current_transport_pid(t()) :: pid()
+  def get_current_transport_pid(%__MODULE__{} = conn) do
+    case conn.connection_id && WebsockexNova.ConnectionRegistry.get_transport_pid(conn.connection_id) do
+      {:ok, pid} when is_pid(pid) -> 
+        if Process.alive?(pid) do
+          pid
+        else
+          # Process not alive, fall back to stored PID
+          conn.transport_pid
+        end
+      _ -> 
+        # Fall back to the stored PID
+        conn.transport_pid
+    end
+  end
+  
+  @doc """
+  Get the current stream_ref for a connection.
+  
+  This is used alongside get_current_transport_pid to ensure operations
+  use the current stream_ref, which may have changed after reconnection.
+  
+  ## Parameters
+    - conn: The ClientConn struct
+    
+  ## Returns
+    - stream_ref: The current stream reference
+  """
+  @spec get_current_stream_ref(t()) :: stream_ref()
+  def get_current_stream_ref(%__MODULE__{} = conn) do
+    conn.stream_ref
+  end
 end

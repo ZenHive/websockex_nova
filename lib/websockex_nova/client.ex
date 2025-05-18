@@ -352,6 +352,7 @@ defmodule WebsockexNova.Client do
   """
   @spec send_frame(ClientConn.t(), WebsockexNova.Transport.frame()) :: :ok | {:error, term()}
   def send_frame(%ClientConn{} = conn, frame) do
+    # Use the dynamic transport_pid resolution through the connection registry
     conn.transport.send_frame(conn, conn.stream_ref, frame)
   end
 
