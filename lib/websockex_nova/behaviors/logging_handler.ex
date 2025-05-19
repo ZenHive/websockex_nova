@@ -91,6 +91,7 @@ defmodule WebsockexNova.Behaviors.LoggingHandler do
       :ok
     end
   end
+  ```
   """
 
   @typedoc "Handler state"

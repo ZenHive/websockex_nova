@@ -46,7 +46,7 @@ defmodule WebsockexNova.Behaviors.MessageHandler do
     @impl true
     def handle_message(%{"type" => "chat_message", "text" => text, "user" => user}, state) do
       # Process a chat message
-      IO.puts("\#{user}: \#{text}")
+      IO.puts(\"\\\#{user}: \\\#{text}\")
 
       # Send an acknowledgment
       {:reply, {:ack, %{message_id: state.last_message_id}}, state}

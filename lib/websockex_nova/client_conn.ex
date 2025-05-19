@@ -155,8 +155,8 @@ defmodule WebsockexNova.ClientConn do
     - key: The field name to access (atom or string)
     
   ## Returns
-    - {:ok, value} if the key exists
-    - :error if the key doesn't exist
+    - `{:ok, value}` if the key exists
+    - `:error` if the key doesn't exist
   """
   @impl Access
   @spec fetch(t(), atom() | String.t()) :: {:ok, any()} | :error

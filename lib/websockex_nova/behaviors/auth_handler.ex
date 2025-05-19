@@ -101,6 +101,7 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
       # Implementation of signature generation
     end
   end
+  ```
   """
 
   @typedoc "Handler state"
@@ -185,8 +186,8 @@ defmodule WebsockexNova.Behaviors.AuthHandler do
   - stream_ref: The stream reference for the WebSocket connection
 
   ## Returns
-  - {:ok, updated_state}: Authentication successful
-  - {:error, reason, updated_state}: Authentication failed
+  - `{:ok, updated_state}`: Authentication successful
+  - `{:error, reason, updated_state}`: Authentication failed
   """
   @callback authenticate(stream_ref :: term(), credentials :: map(), state :: map()) ::
               {:ok, updated_state :: map()}
