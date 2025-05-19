@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-01-19
+### Added
+- Hex.pm publication preparation with proper attribution to original Websockex library
+- Advanced documentation for macros and behaviors (WNX0006)
+
+### Fixed
+- Addressed Credo linting warnings and configured appropriate complexity thresholds
+- Subscription preservation during reconnection (WNX0004)
+- Transport options format validation for keyword lists (WNX0003)
+
+### Changed
+- Code formatting improvements for better readability
+- Standardized import statements and alias usage for consistency
+- Enhanced test cases for clarity and maintainability
+- Library prepared for publication on Hex.pm (WNX0005)
+
+### Documentation
+- Created advanced documentation for ClientMacro and AdapterMacro
+- Added comprehensive behavior system documentation
+- Improved task tracking and project organization
+
+_Last updated: 2025-05-19_
+
+## [0.1.0] - 2025-05-19
 
 ### Added
 - Initial release of WebsockexNova
