@@ -7,27 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Hex.pm publication preparation with proper attribution to original Websockex library
-- Advanced documentation for macros and behaviors (WNX0006)
+_Last updated: 2025-05-22_
+
+## [0.1.1] - 2025-05-22
 
 ### Fixed
-- Addressed Credo linting warnings and configured appropriate complexity thresholds
-- Subscription preservation during reconnection (WNX0004)
-- Transport options format validation for keyword lists (WNX0003)
+- Resolved compiler warnings in tests
+- Removed unused init function in adapter_deribit.ex for cleaner code
+- Enhanced Deribit heartbeat handling with proper test_request response format
+- Improved connection management with ConnectionHandler callbacks
 
 ### Changed
-- Code formatting improvements for better readability
-- Standardized import statements and alias usage for consistency
-- Enhanced test cases for clarity and maintainability
-- Library prepared for publication on Hex.pm (WNX0005)
+- Updated function signatures to ignore unused parameters for better clarity
+- Enhanced test assertions for stream_ref verification in heartbeat responses
+- Refactored adapter_deribit for better connection state management
+- Improved code formatting and readability across multiple files
 
-### Documentation
-- Created advanced documentation for ClientMacro and AdapterMacro
-- Added comprehensive behavior system documentation
-- Improved task tracking and project organization
+### Added
+- Better ConnectionHandler callback implementations in AdapterDeribit
+- Enhanced heartbeat integration test coverage
+- Improved message handler verification in tests
 
-_Last updated: 2025-05-19_
+_Last updated: 2025-05-22_
 
 ## [0.1.0] - 2025-05-19
 
@@ -52,5 +53,6 @@ _Last updated: 2025-05-19_
 - Transport options format validation for keyword lists (WNX0003)
 - Subscription preservation enhancements (WNX0004)
 
-[Unreleased]: https://github.com/ZenHive/websockex_nova/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ZenHive/websockex_nova/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ZenHive/websockex_nova/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/ZenHive/websockex_nova/releases/tag/v0.1.0
