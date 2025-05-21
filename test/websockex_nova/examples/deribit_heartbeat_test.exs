@@ -17,8 +17,8 @@ defmodule WebsockexNova.Examples.DeribitHeartbeatTest do
       # Call the handler directly
       result = AdapterDeribit.handle_frame(:text, test_request, state)
 
-      # Verify that it returns a reply with the correct format
-      assert {:reply, :text, response, _updated_state} = result
+      # Verify that it returns a reply with the correct format (5-tuple with :text_frame)
+      assert {:reply, :text, response, _updated_state, :text_frame} = result
 
       # Decode the response to verify its content
       decoded = Jason.decode!(response)
@@ -45,19 +45,19 @@ defmodule WebsockexNova.Examples.DeribitHeartbeatTest do
 
       # Verify that regular messages are processed normally (no reply)
       assert {:ok, updated_state} = result
-      
+
       # The implementation stores both the raw text and the decoded message
       # so we need to check for both in the messages array
-      assert Enum.any?(updated_state.messages, fn msg -> 
-        case msg do
-          %{"jsonrpc" => "2.0", "id" => 123, "result" => "success"} -> true
-          _ -> false
-        end
-      end)
-      
-      assert Enum.any?(updated_state.messages, fn msg -> 
-        msg == regular_message
-      end)
+      assert Enum.any?(updated_state.messages, fn msg ->
+               case msg do
+                 %{"jsonrpc" => "2.0", "id" => 123, "result" => "success"} -> true
+                 _ -> false
+               end
+             end)
+
+      assert Enum.any?(updated_state.messages, fn msg ->
+               msg == regular_message
+             end)
     end
 
     test "non-text frames are passed through" do

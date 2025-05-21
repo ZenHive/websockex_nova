@@ -52,7 +52,7 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
     }
 
     # Merge any adapter-provided state
-    handler_state = 
+    handler_state =
       if Map.has_key?(opts, :adapter_state) and is_map(opts.adapter_state) do
         # Copy subscriptions from adapter_state if available
         subscriptions = Map.get(opts.adapter_state, :subscriptions, %{})

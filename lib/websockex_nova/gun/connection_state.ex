@@ -230,14 +230,15 @@ defmodule WebsockexNova.Gun.ConnectionState do
   @spec setup_message_handler(t(), module(), map()) :: t()
   def setup_message_handler(state, message_handler, options) do
     # Initialize handler state if the module has a message_init function
-    handler_state = 
+    handler_state =
       if function_exported?(message_handler, :message_init, 1) do
         case message_handler.message_init(options) do
           {:ok, handler_state} -> handler_state
           _ -> %{}
         end
       else
-        %{}  # Default empty state if no init function
+        # Default empty state if no init function
+        %{}
       end
 
     state

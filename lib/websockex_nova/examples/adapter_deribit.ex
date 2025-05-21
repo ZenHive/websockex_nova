@@ -79,7 +79,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
 
       # Message
       message_handler: __MODULE__,
-      
+
       # Connection handler
       connection_handler: __MODULE__,
 
@@ -194,13 +194,14 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   Deribit's heartbeat mechanism, which requires responding to test_request
   frames with a public/test request.
   """
-  @impl WebsockexNova.Behaviors.ConnectionHandler
+  @impl ConnectionHandler
   def handle_frame(:text, frame_data, state) do
     # Store the frame in the message list for debugging if needed
-    updated_state = Map.update(state, :messages, [], fn msgs -> 
-      # Limit messages list to prevent memory growth
-      Enum.take([frame_data | msgs], 50)
-    end)
+    updated_state =
+      Map.update(state, :messages, [], fn msgs ->
+        # Limit messages list to prevent memory growth
+        Enum.take([frame_data | msgs], 50)
+      end)
 
     # First check for heartbeat test_request messages
     case Jason.decode(frame_data) do
@@ -213,25 +214,26 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
           "method" => "public/test",
           "params" => %{}
         }
-        
+
         # Return the response immediately using the proper format
         # Must be {:reply, frame_type, frame_data, updated_state, stream_ref}
         # The stream_ref is needed by the ConnectionWrapper to properly route the response
         # Since we don't have access to the actual stream_ref in the callback,
         # we return :text_frame and the MessageHandlers will use the correct stream_ref
         {:reply, :text, Jason.encode!(test_request), updated_state, :text_frame}
-      
+
       # For normal JSON messages, pass to message handler after storing in state
       {:ok, decoded} ->
         # Add the parsed message to state for access by higher-level components
-        updated_state = Map.update(updated_state, :messages, [], fn msgs -> 
-          # Limit messages list to prevent memory growth
-          Enum.take([decoded | msgs], 50)
-        end)
-        
+        updated_state =
+          Map.update(updated_state, :messages, [], fn msgs ->
+            # Limit messages list to prevent memory growth
+            Enum.take([decoded | msgs], 50)
+          end)
+
         # Normal path - no immediate reply needed
         {:ok, updated_state}
-        
+
       # Handle JSON parsing errors gracefully
       {:error, _} ->
         # Just pass through if we can't parse the JSON
@@ -242,6 +244,44 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   # Handle other types of frames (binary, ping, pong, etc.)
   def handle_frame(_frame_type, _frame_data, state) do
     # Just pass them through
+    {:ok, state}
+  end
+
+  # ConnectionHandler callbacks - required methods
+
+  @impl ConnectionHandler
+  def handle_connect(_conn_info, state) do
+    # Connection established successfully
+    {:ok, state}
+  end
+
+  @impl ConnectionHandler
+  def handle_disconnect(_reason, state) do
+    # Handle disconnection
+    {:ok, state}
+  end
+
+  @impl ConnectionHandler
+  def ping(_stream_ref, state) do
+    # Use default ping implementation
+    {:ok, state}
+  end
+
+  @impl ConnectionHandler
+  def status(_stream_ref, state) do
+    # Return connection status
+    {:ok, :connected, state}
+  end
+
+  @impl ConnectionHandler
+  def init(opts) do
+    # Initialize connection handler state
+    {:ok, opts}
+  end
+
+  @impl ConnectionHandler
+  def handle_timeout(state) do
+    # Handle timeout
     {:ok, state}
   end
 end

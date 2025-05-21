@@ -975,9 +975,13 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
               error_state
             )
         end
+
       # For any other state (:connected, :websocket_connected, etc.), ignore the reconnect attempt
       other_status ->
-        Logger.debug("[ConnectionWrapper] Ignoring reconnection attempt from #{inspect(attempt_source)} - connection is already in state: #{inspect(other_status)}")
+        Logger.debug(
+          "[ConnectionWrapper] Ignoring reconnection attempt from #{inspect(attempt_source)} - connection is already in state: #{inspect(other_status)}"
+        )
+
         {:noreply, state}
     end
   end
@@ -1215,7 +1219,7 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
 
   defp initialize_connection_handler(state, options) do
     handler_module = Map.get(options, :connection_handler) || Map.get(options, :callback_handler)
-    
+
     if handler_module do
       handler_options =
         options
@@ -1223,7 +1227,10 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
         |> Map.put(:connection_wrapper_pid, self())
         |> maybe_put_test_pid(options)
 
-      Logger.debug("[init_conn_handler] handler_module: #{inspect(handler_module)}, handler_options: #{inspect(handler_options)}")
+      Logger.debug(
+        "[init_conn_handler] handler_module: #{inspect(handler_module)}, handler_options: #{inspect(handler_options)}"
+      )
+
       ConnectionState.setup_connection_handler(state, handler_module, handler_options)
     else
       state
