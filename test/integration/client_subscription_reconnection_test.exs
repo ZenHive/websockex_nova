@@ -228,10 +228,10 @@ defmodule WebsockexNova.Integration.ClientSubscriptionReconnectionTest do
       {:ok, conn} = Client.connect(TestReconnectAdapter, opts)
 
       # Subscribe to multiple channels
-      Client.send_message(conn, %{method: "subscribe", params: %{channel: "ticker.btc", opts: %{}}})
+      Client.send_json(conn, %{method: "subscribe", params: %{channel: "ticker.btc", opts: %{}}})
       assert_receive {:subscription_confirmed, _sub_id1}, 1000
 
-      Client.send_message(conn, %{method: "subscribe", params: %{channel: "trades.btc", opts: %{}}})
+      Client.send_json(conn, %{method: "subscribe", params: %{channel: "trades.btc", opts: %{}}})
       assert_receive {:subscription_confirmed, _sub_id2}, 1000
 
       # Force disconnection

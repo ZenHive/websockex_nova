@@ -18,7 +18,7 @@ defmodule WebsockexNova.Defaults.DefaultErrorHandlerTest do
 
       assert {:retry, delay, new_state} = DefaultErrorHandler.handle_error(error, context, state)
       assert is_integer(delay)
-      assert delay > 0
+      assert is_integer(delay) and delay > 0
       assert new_state.adapter_state.last_error == error
       assert new_state.adapter_state.error_context == context
     end
