@@ -45,7 +45,7 @@ defmodule WebsockexNova.Integration.ClientSubscriptionReconnectionTest do
       end
 
       # Message Handler
-      def prepare_frame(message, options, state) do
+      def prepare_frame(message, _options, state) do
         case message do
           %{method: "subscribe", params: %{channel: channel, opts: opts}} ->
             # Use subscription manager to handle subscription
@@ -99,13 +99,15 @@ defmodule WebsockexNova.Integration.ClientSubscriptionReconnectionTest do
       end
 
       # Error Handler
-      def handle_disconnect(reason, conn, state) do
+      def handle_disconnect(_reason, conn, state) do
         # Prepare subscriptions for reconnect
         manager = get_in(state, [:adapter_state, :subscription_manager])
 
         if manager do
           {:ok, updated_manager} = SubscriptionManager.prepare_for_reconnect(manager)
-          state = put_in(state, [:adapter_state, :subscription_manager], updated_manager)
+          put_in(state, [:adapter_state, :subscription_manager], updated_manager)
+        else
+          state
         end
 
         {:reconnect, conn, state}
@@ -145,7 +147,7 @@ defmodule WebsockexNova.Integration.ClientSubscriptionReconnectionTest do
                   # Send the resubscribe frame
                   channel = get_in(updated_manager.state, [:subscriptions, sub_id, :channel])
 
-                  frame_data =
+                  _frame_data =
                     Jason.encode!(%{
                       id: sub_id,
                       method: "subscribe",

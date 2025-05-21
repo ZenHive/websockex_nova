@@ -273,11 +273,6 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
     {:ok, :connected, state}
   end
 
-  @impl ConnectionHandler
-  def init(opts) do
-    # Initialize connection handler state
-    {:ok, opts}
-  end
 
   @impl ConnectionHandler
   def handle_timeout(state) do

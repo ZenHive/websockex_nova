@@ -271,7 +271,7 @@ defmodule WebsockexNova.Examples.DeribitConfigPreservationTest do
 
     test "preserves all config when merging with defaults" do
       # Get default config directly from adapter
-      {:ok, defaults} = AdapterDeribit.connection_info(%{})
+      {:ok, _defaults} = AdapterDeribit.connection_info(%{})
 
       # Create a custom config with some overrides and some new values
       custom_config = %{
