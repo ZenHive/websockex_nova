@@ -228,8 +228,21 @@ defmodule WebsockexNova.Gun.ConnectionState do
   Updated connection state struct
   """
   @spec setup_message_handler(t(), module(), map()) :: t()
-  def setup_message_handler(state, message_handler, _options) do
-    update_handler(state, :message_handler, message_handler)
+  def setup_message_handler(state, message_handler, options) do
+    # Initialize handler state if the module has a message_init function
+    handler_state = 
+      if function_exported?(message_handler, :message_init, 1) do
+        case message_handler.message_init(options) do
+          {:ok, handler_state} -> handler_state
+          _ -> %{}
+        end
+      else
+        %{}  # Default empty state if no init function
+      end
+
+    state
+    |> update_handler(:message_handler, message_handler)
+    |> then(fn s -> %{s | handlers: Map.put(s.handlers, :message_handler_state, handler_state)} end)
   end
 
   @doc """

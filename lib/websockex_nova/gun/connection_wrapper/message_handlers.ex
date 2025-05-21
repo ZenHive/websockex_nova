@@ -378,9 +378,16 @@ defmodule WebsockexNova.Gun.ConnectionWrapper.MessageHandlers do
       {:ok, updated_state} ->
         {:noreply, updated_state}
 
-      {:reply, reply_type, reply_data, updated_state, stream_ref} ->
-        # Send reply frame
+      {:reply, reply_type, reply_data, updated_state, :text_frame} ->
+        # Special case for heartbeat responses and other cases where we don't have
+        # the original stream_ref in the callback but need to respond on the current stream
+        # Use the stream_ref that was passed to this function
         :gun.ws_send(gun_pid, stream_ref, {reply_type, reply_data})
+        {:noreply, updated_state}
+
+      {:reply, reply_type, reply_data, updated_state, response_stream_ref} ->
+        # Send reply frame on the specified stream_ref
+        :gun.ws_send(gun_pid, response_stream_ref, {reply_type, reply_data})
         {:noreply, updated_state}
 
       {:close, code, reason, updated_state, stream_ref} ->

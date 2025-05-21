@@ -41,22 +41,27 @@ defmodule WebsockexNova.Defaults.DefaultMessageHandler do
 
   @impl true
   def message_init(opts \\ %{}) do
-    opts_map = Map.new(opts)
-    # Split known fields and custom fields
-    known_keys = MapSet.new(Map.keys(%WebsockexNova.ClientConn{}))
-    {known, custom} = Enum.split_with(opts_map, fn {k, _v} -> MapSet.member?(known_keys, k) end)
-    known_map = Map.new(known)
-    custom_map = Map.new(custom)
-    conn = struct(WebsockexNova.ClientConn, known_map)
-
-    conn = %{
-      conn
-      | message_handler_settings: Map.merge(conn.message_handler_settings || %{}, custom_map),
-        processed_count: Map.get(opts_map, :processed_count, 0),
-        subscriptions: Map.get(opts_map, :subscriptions, %{})
+    # Use a simple map for message handler state
+    # We just need to track basic information for message handling
+    handler_state = %{
+      processed_count: 0,
+      message_queue: [],
+      last_message_at: nil,
+      subscriptions: %{},
+      settings: Map.get(opts, :message_handler_settings, %{})
     }
 
-    {:ok, conn}
+    # Merge any adapter-provided state
+    handler_state = 
+      if Map.has_key?(opts, :adapter_state) and is_map(opts.adapter_state) do
+        # Copy subscriptions from adapter_state if available
+        subscriptions = Map.get(opts.adapter_state, :subscriptions, %{})
+        Map.put(handler_state, :subscriptions, subscriptions)
+      else
+        handler_state
+      end
+
+    {:ok, handler_state}
   end
 
   @impl true

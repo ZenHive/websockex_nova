@@ -930,44 +930,55 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   def handle_info({:reconnect, attempt_source}, state) do
     Logger.debug("Reconnection attempt initiated by: #{inspect(attempt_source)}")
 
-    case initiate_connection(state) do
-      {:ok, new_state} ->
-        # After reconnection, the connection will be upgraded to websocket
-        # The stream_ref will be set later during the upgrade
-        # For now, store a flag to indicate we need to update client connections after upgrade
-        reconnected_state = Map.put(new_state, :pending_reconnection, true)
+    # Check current connection state to avoid invalid transitions
+    # Only attempt reconnection if the state is :disconnected or :reconnecting
+    # This prevents the race condition where multiple reconnection attempts are triggered
+    # when the connection is already established
+    case state.status do
+      status when status in [:disconnected, :reconnecting, :initialized] ->
+        case initiate_connection(state) do
+          {:ok, new_state} ->
+            # After reconnection, the connection will be upgraded to websocket
+            # The stream_ref will be set later during the upgrade
+            # For now, store a flag to indicate we need to update client connections after upgrade
+            reconnected_state = Map.put(new_state, :pending_reconnection, true)
 
-        # Start the WebSocket upgrade process immediately after reconnection
-        # This ensures we don't get stuck in the :connected state
-        if reconnected_state.gun_pid && Map.get(reconnected_state, :path) do
-          Logger.debug("[ConnectionWrapper] Automatically upgrading reconnected connection to WebSocket")
+            # Start the WebSocket upgrade process immediately after reconnection
+            # This ensures we don't get stuck in the :connected state
+            if reconnected_state.gun_pid && Map.get(reconnected_state, :path) do
+              Logger.debug("[ConnectionWrapper] Automatically upgrading reconnected connection to WebSocket")
 
-          # Use the same original path that was used for the first connection
-          path = reconnected_state.path
-          headers = Map.get(reconnected_state, :headers, [])
+              # Use the same original path that was used for the first connection
+              path = reconnected_state.path
+              headers = Map.get(reconnected_state, :headers, [])
 
-          # Initiate the WebSocket upgrade
-          stream_ref = :gun.ws_upgrade(reconnected_state.gun_pid, path, headers)
+              # Initiate the WebSocket upgrade
+              stream_ref = :gun.ws_upgrade(reconnected_state.gun_pid, path, headers)
 
-          Logger.debug(
-            "[ConnectionWrapper] WebSocket upgrade initiated for reconnection with stream_ref: #{inspect(stream_ref)}"
-          )
+              Logger.debug(
+                "[ConnectionWrapper] WebSocket upgrade initiated for reconnection with stream_ref: #{inspect(stream_ref)}"
+              )
 
-          # Store the stream reference for tracking
-          updated_state = ConnectionState.add_active_stream(reconnected_state, stream_ref, :websocket_upgrade)
-          {:noreply, updated_state}
-        else
-          Logger.warning("[ConnectionWrapper] Cannot upgrade to WebSocket - missing gun_pid or path")
-          {:noreply, reconnected_state}
+              # Store the stream reference for tracking
+              updated_state = ConnectionState.add_active_stream(reconnected_state, stream_ref, :websocket_upgrade)
+              {:noreply, updated_state}
+            else
+              Logger.warning("[ConnectionWrapper] Cannot upgrade to WebSocket - missing gun_pid or path")
+              {:noreply, reconnected_state}
+            end
+
+          {:error, reason, error_state} ->
+            # Use standard error handler with reconnect-specific context
+            ErrorHandler.handle_async_error(
+              nil,
+              {:reconnect_failed, reason, attempt_source},
+              error_state
+            )
         end
-
-      {:error, reason, error_state} ->
-        # Use standard error handler with reconnect-specific context
-        ErrorHandler.handle_async_error(
-          nil,
-          {:reconnect_failed, reason, attempt_source},
-          error_state
-        )
+      # For any other state (:connected, :websocket_connected, etc.), ignore the reconnect attempt
+      other_status ->
+        Logger.debug("[ConnectionWrapper] Ignoring reconnection attempt from #{inspect(attempt_source)} - connection is already in state: #{inspect(other_status)}")
+        {:noreply, state}
     end
   end
 
@@ -1203,19 +1214,19 @@ defmodule WebsockexNova.Gun.ConnectionWrapper do
   end
 
   defp initialize_connection_handler(state, options) do
-    case Map.get(options, :callback_handler) do
-      nil ->
-        state
+    handler_module = Map.get(options, :connection_handler) || Map.get(options, :callback_handler)
+    
+    if handler_module do
+      handler_options =
+        options
+        |> filter_transport_options()
+        |> Map.put(:connection_wrapper_pid, self())
+        |> maybe_put_test_pid(options)
 
-      handler_module when is_atom(handler_module) ->
-        handler_options =
-          options
-          |> filter_transport_options()
-          |> Map.put(:connection_wrapper_pid, self())
-          |> maybe_put_test_pid(options)
-
-        Logger.debug("[init_conn_handler] handler_options: #{inspect(handler_options)}")
-        ConnectionState.setup_connection_handler(state, handler_module, handler_options)
+      Logger.debug("[init_conn_handler] handler_module: #{inspect(handler_module)}, handler_options: #{inspect(handler_options)}")
+      ConnectionState.setup_connection_handler(state, handler_module, handler_options)
+    else
+      state
     end
   end
 

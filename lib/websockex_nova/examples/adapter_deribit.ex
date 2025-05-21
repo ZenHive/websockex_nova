@@ -66,7 +66,7 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
       metrics_collector: nil,
 
       # Authentication
-      auth_handler: WebsockexNova.Defaults.DefaultAuthHandler,
+      auth_handler: __MODULE__,
       credentials: %{
         api_key: System.get_env("DERIBIT_CLIENT_ID"),
         secret: System.get_env("DERIBIT_CLIENT_SECRET")
@@ -74,11 +74,14 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
       auth_refresh_threshold: 60,
 
       # Subscription
-      subscription_handler: WebsockexNova.Defaults.DefaultSubscriptionHandler,
+      subscription_handler: __MODULE__,
       subscription_timeout: 30,
 
       # Message
-      message_handler: DefaultMessageHandler,
+      message_handler: __MODULE__,
+      
+      # Connection handler
+      connection_handler: __MODULE__,
 
       # Error Handling
       error_handler: WebsockexNova.Defaults.DefaultErrorHandler,
@@ -184,5 +187,61 @@ defmodule WebsockexNova.Examples.AdapterDeribit do
   def handle_message(message, state) do
     # Let the default handler process other messages
     DefaultMessageHandler.handle_message(message, state)
+  end
+
+  @doc """
+  Handle WebSocket frames directly. This is crucial for proper handling of
+  Deribit's heartbeat mechanism, which requires responding to test_request
+  frames with a public/test request.
+  """
+  @impl WebsockexNova.Behaviors.ConnectionHandler
+  def handle_frame(:text, frame_data, state) do
+    # Store the frame in the message list for debugging if needed
+    updated_state = Map.update(state, :messages, [], fn msgs -> 
+      # Limit messages list to prevent memory growth
+      Enum.take([frame_data | msgs], 50)
+    end)
+
+    # First check for heartbeat test_request messages
+    case Jason.decode(frame_data) do
+      {:ok, %{"method" => "heartbeat", "params" => %{"type" => "test_request"}}} ->
+        # Generate a response to the heartbeat test_request
+        # This is required by Deribit to maintain the connection
+        test_request = %{
+          "jsonrpc" => "2.0",
+          "id" => System.unique_integer([:positive]),
+          "method" => "public/test",
+          "params" => %{}
+        }
+        
+        # Return the response immediately using the proper format
+        # Must be {:reply, frame_type, frame_data, updated_state, stream_ref}
+        # The stream_ref is needed by the ConnectionWrapper to properly route the response
+        # Since we don't have access to the actual stream_ref in the callback,
+        # we return :text_frame and the MessageHandlers will use the correct stream_ref
+        {:reply, :text, Jason.encode!(test_request), updated_state, :text_frame}
+      
+      # For normal JSON messages, pass to message handler after storing in state
+      {:ok, decoded} ->
+        # Add the parsed message to state for access by higher-level components
+        updated_state = Map.update(updated_state, :messages, [], fn msgs -> 
+          # Limit messages list to prevent memory growth
+          Enum.take([decoded | msgs], 50)
+        end)
+        
+        # Normal path - no immediate reply needed
+        {:ok, updated_state}
+        
+      # Handle JSON parsing errors gracefully
+      {:error, _} ->
+        # Just pass through if we can't parse the JSON
+        {:ok, updated_state}
+    end
+  end
+
+  # Handle other types of frames (binary, ping, pong, etc.)
+  def handle_frame(_frame_type, _frame_data, state) do
+    # Just pass them through
+    {:ok, state}
   end
 end

@@ -163,9 +163,24 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
 
   # Private helper functions
 
-  defp fetch_handler(%{handlers: %{connection_handler: mod, connection_handler_state: st}})
-       when is_atom(mod) and not is_nil(st),
-       do: {:ok, mod, st}
+  # For frame handling, try both connection_handler and message_handler
+  defp fetch_handler(%{handlers: handlers}) do
+    cond do
+      # Try connection_handler first (for connection lifecycle events)
+      is_map_key(handlers, :connection_handler) and is_map_key(handlers, :connection_handler_state) and
+      is_atom(handlers.connection_handler) and not is_nil(handlers.connection_handler_state) ->
+        {:ok, handlers.connection_handler, handlers.connection_handler_state}
+        
+      # Fall back to message_handler if available
+      is_map_key(handlers, :message_handler) and is_map_key(handlers, :message_handler_state) and
+      is_atom(handlers.message_handler) and not is_nil(handlers.message_handler_state) ->
+        {:ok, handlers.message_handler, handlers.message_handler_state}
+        
+      # No suitable handler found
+      true -> 
+        :no_handler
+    end
+  end
 
   defp fetch_handler(_), do: :no_handler
 
@@ -239,6 +254,12 @@ defmodule WebsockexNova.Gun.Helpers.BehaviorHelpers do
       {:ok, {:reply, reply_type, reply_data, new_handler_state}} ->
         updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
         {:ok, {:reply, reply_type, reply_data, updated_state, stream_ref}}
+        
+      # Special case for adapters using the optional 5-element reply tuple with custom stream_ref
+      {:ok, {:reply, reply_type, reply_data, new_handler_state, custom_stream_ref}} ->
+        updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)
+        # Pass through the custom stream_ref (could be :text_frame or an actual stream_ref)
+        {:ok, {:reply, reply_type, reply_data, updated_state, custom_stream_ref}}
 
       {:ok, {:close, code, reason, new_handler_state}} ->
         updated_state = ConnectionState.update_connection_handler_state(state, new_handler_state)

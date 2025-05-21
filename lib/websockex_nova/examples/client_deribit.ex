@@ -58,5 +58,36 @@ defmodule WebsockexNova.Examples.ClientDeribit do
     Client.send_json(conn, payload, opts)
   end
 
+  @doc """
+  Disconnects from the Deribit WebSocket server.
+  """
+  def disconnect(conn) do
+    WebsockexNova.Client.close(conn)
+  end
+
+  @doc """
+  Sets the heartbeat interval for the Deribit connection.
+  The server will send a heartbeat message every `interval` seconds.
+  
+  When the heartbeat is set, the server will send:
+  1. Regular "heartbeat" messages
+  2. Periodic "test_request" messages that require a response
+  
+  The value must be between 10 and 60 seconds for the Deribit API.
+  Setting to 0 disables the heartbeat.
+  """
+  def set_heartbeat(conn, interval, opts \\ nil) do
+    message = %{
+      "jsonrpc" => "2.0",
+      "id" => System.unique_integer([:positive]),
+      "method" => "public/set_heartbeat",
+      "params" => %{
+        "interval" => interval
+      }
+    }
+    
+    Client.send_json(conn, message, opts)
+  end
+  
   # Add more Deribit-specific helpers as needed...
 end
