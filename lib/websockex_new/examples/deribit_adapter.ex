@@ -27,10 +27,46 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
 
   # Define JSON-RPC methods using macro
-  defrpc(:auth_request, "public/auth", doc: "Authenticate with client credentials")
-  defrpc(:subscribe_request, "public/subscribe", doc: "Subscribe to channels")
-  defrpc(:unsubscribe_request, "public/unsubscribe", doc: "Unsubscribe from channels")
-  defrpc(:test_request, "public/test", doc: "Send test/heartbeat response")
+
+  # Authentication & Session
+  defrpc :auth_request, "public/auth", doc: "Authenticate with client credentials"
+  defrpc :test_request, "public/test", doc: "Send test/heartbeat response"
+  defrpc :set_heartbeat, "public/set_heartbeat", doc: "Set heartbeat interval"
+  defrpc :disable_heartbeat, "public/disable_heartbeat", doc: "Disable heartbeat"
+
+  # Subscriptions
+  defrpc :subscribe_request, "public/subscribe", doc: "Subscribe to channels"
+  defrpc :unsubscribe_request, "public/unsubscribe", doc: "Unsubscribe from channels"
+  defrpc :unsubscribe_all, "public/unsubscribe_all", doc: "Unsubscribe from all channels"
+
+  # Market Data
+  defrpc :get_instruments, "public/get_instruments", doc: "Get tradable instruments"
+  defrpc :get_order_book, "public/get_order_book", doc: "Get order book"
+  defrpc :ticker, "public/ticker", doc: "Get ticker information"
+  defrpc :get_book_summary_by_currency, "public/get_book_summary_by_currency", doc: "Get book summary by currency"
+  defrpc :get_book_summary_by_instrument, "public/get_book_summary_by_instrument", doc: "Get book summary by instrument"
+  defrpc :get_index_price, "public/get_index_price", doc: "Get index price"
+
+  # Trading
+  defrpc :buy, "private/buy", doc: "Place buy order"
+  defrpc :sell, "private/sell", doc: "Place sell order"
+  defrpc :cancel, "private/cancel", doc: "Cancel order"
+  defrpc :cancel_all, "private/cancel_all", doc: "Cancel all orders"
+  defrpc :cancel_all_by_instrument, "private/cancel_all_by_instrument", doc: "Cancel all orders by instrument"
+  defrpc :edit, "private/edit", doc: "Edit order"
+  defrpc :get_open_orders, "private/get_open_orders", doc: "Get open orders"
+  defrpc :get_open_orders_by_currency, "private/get_open_orders_by_currency", doc: "Get open orders by currency"
+  defrpc :get_open_orders_by_instrument, "private/get_open_orders_by_instrument", doc: "Get open orders by instrument"
+  defrpc :get_order_state, "private/get_order_state", doc: "Get order state"
+
+  # Account & Wallet
+  defrpc :get_account_summary, "private/get_account_summary", doc: "Get account summary"
+  defrpc :get_positions, "private/get_positions", doc: "Get positions"
+  defrpc :get_position, "private/get_position", doc: "Get specific position"
+
+  # Session Management
+  defrpc :enable_cancel_on_disconnect, "private/enable_cancel_on_disconnect", doc: "Enable cancel on disconnect"
+  defrpc :disable_cancel_on_disconnect, "private/disable_cancel_on_disconnect", doc: "Disable cancel on disconnect"
 
   @doc """
   Connect to Deribit WebSocket API with optional authentication.

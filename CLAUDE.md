@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**WebsockexNew** is a robust WebSocket client library for Elixir, specifically designed for financial APIs (particularly Deribit cryptocurrency trading). It uses Gun transport with a clean 8-module architecture prioritizing simplicity and real-world reliability.
+**WebsockexNew** is a robust WebSocket client library for Elixir, specifically designed for financial APIs (particularly Deribit cryptocurrency trading). Built on Gun transport, it started with 8 foundation modules and is now being enhanced with critical financial infrastructure while maintaining strict simplicity principles.
 
 **Financial Development Principle**: Start simple, add complexity only when necessary based on real data. This is a well-established principle in financial software development, especially for market making.
 
@@ -33,7 +33,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-### Core Modules (8 total)
+### Architecture Evolution
+
+#### Foundation Modules (8 core - complete)
 ```
 lib/websockex_new/
 ├── client.ex              # Main client interface (5 public functions)
@@ -43,6 +45,14 @@ lib/websockex_new/
 ├── reconnection.ex        # Exponential backoff retry logic
 ├── message_handler.ex     # Message parsing and routing
 ├── error_handler.ex       # Error categorization and recovery
+├── json_rpc.ex           # JSON-RPC 2.0 protocol support
+```
+
+#### Enhancement Modules (financial infrastructure - in progress)
+```
+├── heartbeat_manager.ex   # Critical connection health monitoring
+├── correlation_manager.ex # Request/response correlation
+├── rate_limiter.ex        # API rate limit management
 └── examples/
     └── deribit_adapter.ex # Deribit platform integration
 ```
@@ -57,15 +67,15 @@ WebsockexNew.Client.subscribe(client, channels)
 WebsockexNew.Client.get_state(client)
 ```
 
-### Design Principles (Strict Simplicity Constraints)
-- **Maximum 8 modules** in main library
-- **Maximum 5 functions per module**  
+### Core Architecture Principles
+- **Foundation Phase Complete** - 8 core modules established
+- **Enhancement Phase** - Adding critical financial infrastructure
+- **Maximum 5 functions per module** for new modules
 - **Maximum 15 lines per function**
-- **No behaviors** (was 9 in legacy system)
-- **No GenServers** (functional approach preferred)
-- **Real API testing only** - zero mocks policy
-- **Start simple** - implement minimal viable solution first
-- **Add complexity incrementally** - only when proven necessary by real data
+- **No behaviors** unless ≥3 concrete implementations exist
+- **Direct Gun API usage** - no wrapper layers
+- **Functions over processes** - GenServers only when essential
+- **Real API testing only** - zero mocks
 
 ## Code Style Guidelines
 
@@ -240,9 +250,13 @@ end
 - **Start simple and add complexity incrementally**
 - **Prioritize execution and practical operational efficiency**
 
-### Module Structure Limits
-- **Maximum 8 modules total** in main library (already achieved)
-- **Maximum 5 functions per module** initially
+### Module Structure Evolution
+- **Foundation Phase**: 8 core modules (complete)
+- **Enhancement Phase**: Adding critical financial infrastructure
+  - Each new module must demonstrate clear value proposition
+  - Modules added only when proven necessary by real use cases
+  - Maintain strict quality constraints per module
+- **Maximum 5 functions per module** for all modules
 - **Maximum function length of 15 lines**
 - **Maximum of 2 levels of function calls** for any operation
 - **Prefer pure functions over processes** when possible
@@ -312,13 +326,14 @@ Located in `lib/websockex_new/examples/deribit_adapter.ex`
 
 ## Working with the Codebase
 
-### Adding New Features (TDD Approach)
-1. **Write tests first** following TDD principles
-2. **Implement in single module** with max 5 functions
-3. **Add real API tests** (no mocks)
-4. **Update configuration** if needed
-5. **Run `mix check`** to validate all quality gates
-6. **Update documentation**
+### Adding New Features (Enhancement Phase)
+1. **Justify the module** - demonstrate clear need with real use cases
+2. **Write tests first** following TDD principles  
+3. **Implement as new module** with max 5 functions
+4. **Add real API tests** (no mocks)
+5. **Update configuration** if needed
+6. **Run `mix check`** to validate all quality gates
+7. **Update architecture documentation** to include new module
 
 ### Code Quality Standards
 - All public functions must have `@spec` annotations
