@@ -11,8 +11,7 @@ defmodule Mix.Tasks.WebsockexNew.CheckHandlers do
   @handlers [
     {WebsockexNew.Defaults.DefaultConnectionHandler, WebsockexNew.Behaviors.ConnectionHandler, "ConnectionHandler"},
     {WebsockexNew.Defaults.DefaultMessageHandler, WebsockexNew.Behaviors.MessageHandler, "MessageHandler"},
-    {WebsockexNew.Defaults.DefaultSubscriptionHandler, WebsockexNew.Behaviors.SubscriptionHandler,
-     "SubscriptionHandler"},
+    {WebsockexNew.Defaults.DefaultSubscriptionHandler, WebsockexNew.Behaviors.SubscriptionHandler, "SubscriptionHandler"},
     {WebsockexNew.Defaults.DefaultAuthHandler, WebsockexNew.Behaviors.AuthHandler, "AuthHandler"},
     {WebsockexNew.Defaults.DefaultErrorHandler, WebsockexNew.Behaviors.ErrorHandler, "ErrorHandler"},
     {WebsockexNew.Defaults.DefaultRateLimitHandler, WebsockexNew.Behaviors.RateLimitHandler, "RateLimitHandler"},

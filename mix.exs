@@ -96,8 +96,6 @@ defmodule WebsockexNew.MixProject do
       {:certifi, "~> 2.5"},
       {:telemetry, "~> 1.3"},
       {:meck, "~> 0.9", only: :test},
-
-
       {:rename, "~> 0.1.0", only: :dev}
 
       # {:mint_web_socket, "~> 1.0"}
