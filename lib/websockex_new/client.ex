@@ -20,23 +20,32 @@ defmodule WebsockexNew.Client do
           monitor_ref: reference() | nil
         }
 
-  @spec connect(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
-  def connect(url, _opts \\ []) do
-    uri = URI.parse(url)
+  @spec connect(String.t() | WebsockexNew.Config.t(), keyword()) :: {:ok, t()} | {:error, term()}
+  def connect(url_or_config, opts \\ [])
+  
+  def connect(url, opts) when is_binary(url) do
+    case WebsockexNew.Config.new(url, opts) do
+      {:ok, config} -> connect(config, [])
+      error -> error
+    end
+  end
+  
+  def connect(%WebsockexNew.Config{} = config, _opts) do
+    uri = URI.parse(config.url)
     port = uri.port || if uri.scheme == "wss", do: 443, else: 80
 
     case :gun.open(to_charlist(uri.host), port, %{protocols: [:http]}) do
       {:ok, gun_pid} ->
         monitor_ref = Process.monitor(gun_pid)
-        :gun.await_up(gun_pid, 5000)
+        :gun.await_up(gun_pid, config.timeout)
 
-        stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", [])
+        stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", config.headers)
 
         client = %__MODULE__{
           gun_pid: gun_pid,
           stream_ref: stream_ref,
           state: :connecting,
-          url: url,
+          url: config.url,
           monitor_ref: monitor_ref
         }
 
