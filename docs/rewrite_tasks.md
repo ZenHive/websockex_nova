@@ -3,7 +3,7 @@
 ## Current Progress Status
 **Last Updated**: 2025-05-22  
 **Phase**: 3 of 4 (Platform Integration) - **COMPLETED**  
-**Next**: WNX0018 (Real API Testing Infrastructure)
+**Next**: WNX0018 (Real API Testing Infrastructure) and WNX0019 (Deribit Bootstrap Sequence)
 
 ### ✅ Completed Tasks (WNX0010-WNX0017)
 - **WNX0010**: Minimal WebSocket Client - Full Gun-based client with connect/send/close
@@ -352,14 +352,48 @@ test/websockex_new/
 - [ ] **WNX0018e**: Test reconnection scenarios with real network issues
 - [ ] **WNX0018f**: Add rate-limited production API fallback tests
 
+### WNX0019: Deribit Bootstrap Sequence Implementation
+**Priority**: High  
+**Effort**: Medium  
+**Dependencies**: WNX0016
+
+#### Target Implementation
+Implement proper Deribit connection bootstrap sequence following their required flow:
+- Connection with proper configuration
+- Authentication
+- Client introduction via hello
+- Heartbeat setup 
+- Cancel-on-disconnect protection
+- Time synchronization
+
+#### Technical Requirements
+Heartbeats can be used to detect stale connections. When heartbeats have been set up, the API server will send heartbeat messages and test_request messages. Your software should respond to test_request messages by sending a /api/v2/public/test request. If your software fails to do so, the API server will immediately close the connection. If your account is configured to cancel on disconnect, any orders opened over the connection will be cancelled.
+
+#### File Structure
+```
+lib/websockex_new/examples/
+├── deribit_adapter.ex      # Enhanced with bootstrap sequence
+└── deribit_bootstrap.ex    # Bootstrap sequence utilities
+```
+
+#### Subtasks
+- [ ] **WNX0019a**: Implement connection configuration for bootstrap sequence
+- [ ] **WNX0019b**: Add authentication step in bootstrap flow
+- [ ] **WNX0019c**: Implement client hello message exchange
+- [ ] **WNX0019d**: Set up heartbeat configuration and handling
+- [ ] **WNX0019e**: Add cancel-on-disconnect protection setup
+- [ ] **WNX0019f**: Implement time synchronization with Deribit servers
+- [ ] **WNX0019g**: Add test_request message handling with /api/v2/public/test response
+- [ ] **WNX0019h**: Test complete bootstrap sequence with test.deribit.com
+
 ---
 
 ## Phase 4: Migration and Cleanup
 
-### WNX0019: Documentation for New System
+### WNX0020: Documentation for New System
 **Priority**: Medium  
 **Effort**: Small  
-**Dependencies**: WNX0016, WNX0017
+**Dependencies**: WNX0016, WNX0017, WNX0019
 
 #### Target Implementation
 Concise documentation for the new system:
@@ -369,15 +403,15 @@ Concise documentation for the new system:
 - Migration guide from old system
 
 #### Subtasks
-- [ ] **WNX0019a**: Add comprehensive module documentation
-- [ ] **WNX0019b**: Create Deribit integration examples
-- [ ] **WNX0019c**: Document error handling patterns
-- [ ] **WNX0019d**: Write migration guide from WebsockexNova to WebsockexNew
+- [ ] **WNX0020a**: Add comprehensive module documentation
+- [ ] **WNX0020b**: Create Deribit integration examples
+- [ ] **WNX0020c**: Document error handling patterns
+- [ ] **WNX0020d**: Write migration guide from WebsockexNova to WebsockexNew
 
-### WNX0020: System Migration and Rename
+### WNX0021: System Migration and Rename
 **Priority**: Critical  
 **Effort**: Medium  
-**Dependencies**: WNX0018, WNX0019
+**Dependencies**: WNX0018, WNX0020
 
 #### Target Implementation
 Complete migration from old to new system:
@@ -387,12 +421,12 @@ Complete migration from old to new system:
 - Clean git history
 
 #### Subtasks
-- [ ] **WNX0020a**: Backup current system to `lib/websockex_nova_old/`
-- [ ] **WNX0020b**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
-- [ ] **WNX0020c**: Update all module names from `WebsockexNew` → `WebsockexNova`
-- [ ] **WNX0020d**: Update mix.exs and documentation references
-- [ ] **WNX0020e**: Remove old system files (`lib/websockex_nova_old/`)
-- [ ] **WNX0020f**: Update README and CHANGELOG with new architecture
+- [ ] **WNX0021a**: Backup current system to `lib/websockex_nova_old/`
+- [ ] **WNX0021b**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
+- [ ] **WNX0021c**: Update all module names from `WebsockexNew` → `WebsockexNova`
+- [ ] **WNX0021d**: Update mix.exs and documentation references
+- [ ] **WNX0021e**: Remove old system files (`lib/websockex_nova_old/`)
+- [ ] **WNX0021f**: Update README and CHANGELOG with new architecture
 
 ---
 
