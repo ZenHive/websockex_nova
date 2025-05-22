@@ -109,7 +109,7 @@ defmodule WebsockexNew.MessageHandlerTest do
       message = {:gun_ws, conn_pid, stream_ref, invalid_frame}
 
       handler_called = fn result ->
-        assert {:decode_error, _reason} = result
+        assert {:protocol_error, _reason} = result
         send(self(), :handler_called)
       end
 

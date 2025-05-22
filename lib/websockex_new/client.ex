@@ -31,31 +31,56 @@ defmodule WebsockexNew.Client do
   end
 
   def connect(%WebsockexNew.Config{} = config, _opts) do
+    case connect_with_error_handling(config) do
+      {:ok, client} -> {:ok, client}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @spec connect_with_error_handling(WebsockexNew.Config.t()) :: {:ok, t()} | {:error, term()}
+  defp connect_with_error_handling(config) do
     uri = URI.parse(config.url)
     port = uri.port || if uri.scheme == "wss", do: 443, else: 80
 
     case :gun.open(to_charlist(uri.host), port, %{protocols: [:http]}) do
       {:ok, gun_pid} ->
         monitor_ref = Process.monitor(gun_pid)
-        :gun.await_up(gun_pid, config.timeout)
 
-        stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", config.headers)
+        case :gun.await_up(gun_pid, config.timeout) do
+          {:ok, _protocol} ->
+            stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", config.headers)
 
-        client = %__MODULE__{
-          gun_pid: gun_pid,
-          stream_ref: stream_ref,
-          state: :connecting,
-          url: config.url,
-          monitor_ref: monitor_ref
-        }
+            client = %__MODULE__{
+              gun_pid: gun_pid,
+              stream_ref: stream_ref,
+              state: :connecting,
+              url: config.url,
+              monitor_ref: monitor_ref
+            }
 
-        case wait_for_upgrade(client, config.timeout) do
-          {:ok, connected_client} -> {:ok, connected_client}
-          error -> error
+            case wait_for_upgrade(client, config.timeout) do
+              {:ok, connected_client} -> {:ok, connected_client}
+              {:error, reason} -> handle_connection_error(client, reason)
+            end
+
+          {:error, reason} ->
+            Process.demonitor(monitor_ref, [:flush])
+            :gun.close(gun_pid)
+            {:error, reason}
         end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @spec handle_connection_error(t(), term()) :: {:error, term()}
+  defp handle_connection_error(client, reason) do
+    close(client)
+
+    case WebsockexNew.ErrorHandler.handle_error(reason) do
+      :reconnect -> {:error, {:recoverable, reason}}
+      _ -> {:error, reason}
     end
   end
 
@@ -66,9 +91,12 @@ defmodule WebsockexNew.Client do
         {:ok, %{client | state: :connected}}
 
       {:gun_error, ^gun_pid, ^stream_ref, reason} ->
-        {:error, reason}
+        {:error, {:gun_error, gun_pid, stream_ref, reason}}
 
       {:gun_down, ^gun_pid, _, reason, _} ->
+        {:error, {:gun_down, gun_pid, nil, reason, nil}}
+
+      {:DOWN, _ref, :process, ^gun_pid, reason} ->
         {:error, {:connection_down, reason}}
     after
       timeout ->
@@ -101,4 +129,21 @@ defmodule WebsockexNew.Client do
 
   @spec get_state(t()) :: :connecting | :connected | :disconnected
   def get_state(%__MODULE__{state: state}), do: state
+
+  @spec reconnect(t()) :: {:ok, t()} | {:error, term()}
+  def reconnect(%__MODULE__{url: url} = client) do
+    close(client)
+
+    case connect(url) do
+      {:ok, new_client} ->
+        {:ok, new_client}
+
+      {:error, reason} ->
+        if WebsockexNew.ErrorHandler.recoverable?(reason) do
+          {:error, {:recoverable, reason}}
+        else
+          {:error, reason}
+        end
+    end
+  end
 end

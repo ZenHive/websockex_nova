@@ -31,6 +31,17 @@ defmodule WebsockexNew.Config do
   end
 
   @doc """
+  Creates and validates a new configuration, raising on error.
+  """
+  @spec new!(String.t(), keyword()) :: t()
+  def new!(url, opts \\ []) when is_binary(url) do
+    case new(url, opts) do
+      {:ok, config} -> config
+      {:error, reason} -> raise ArgumentError, reason
+    end
+  end
+
+  @doc """
   Validates a configuration struct.
   """
   @spec validate(t()) :: {:ok, t()} | {:error, String.t()}

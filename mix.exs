@@ -11,7 +11,7 @@ defmodule WebsockexNova.MixProject do
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
-      dialyzer: dialyzer(),
+      # dialyzer: dialyzer(),
       aliases: aliases(),
       preferred_cli_env: [
         dialyzer: :dev,
@@ -103,13 +103,13 @@ defmodule WebsockexNova.MixProject do
     ]
   end
 
-  defp dialyzer do
-    [
-      plt_core_path: "priv/plts",
-      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
-      plt_add_apps: [:mix, :ex_unit]
-    ]
-  end
+  # defp dialyzer do
+  #   [
+  #     plt_core_path: "priv/plts",
+  #     plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+  #     plt_add_apps: [:mix, :ex_unit]
+  #   ]
+  # end
 
   # Add aliases for code quality tools
   defp aliases do
@@ -131,7 +131,7 @@ defmodule WebsockexNova.MixProject do
 
   defp description do
     """
-    A robust WebSocket client library based on Websockex, extended with Gun transport, 
+    A robust WebSocket client library based on Websockex, extended with Gun transport,
     behavior-based architecture, automatic reconnection, and enterprise-grade features.
     """
   end

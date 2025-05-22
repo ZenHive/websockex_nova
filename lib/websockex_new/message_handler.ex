@@ -36,9 +36,19 @@ defmodule WebsockexNew.MessageHandler do
         end
 
       {:error, reason} ->
-        error = {:decode_error, reason}
-        handler_fun.(error)
-        {:error, reason}
+        protocol_error = {:error, {:bad_frame, reason}}
+
+        case WebsockexNew.ErrorHandler.handle_error(protocol_error) do
+          :stop ->
+            error = {:protocol_error, reason}
+            handler_fun.(error)
+            {:error, {:protocol_error, reason}}
+
+          _ ->
+            error = {:decode_error, reason}
+            handler_fun.(error)
+            {:error, reason}
+        end
     end
   end
 
@@ -105,6 +115,7 @@ defmodule WebsockexNew.MessageHandler do
       {:message, frame} -> on_message.(frame)
       {:websocket_upgraded, conn_pid, stream_ref} -> on_upgrade.({conn_pid, stream_ref})
       {:decode_error, reason} -> on_error.(reason)
+      {:protocol_error, reason} -> on_error.({:protocol_error, reason})
       {:connection_error, conn_pid, stream_ref, reason} -> on_error.({conn_pid, stream_ref, reason})
       {:connection_down, conn_pid, reason} -> on_down.({conn_pid, reason})
       {:unknown_message, msg} -> on_error.(msg)

@@ -188,12 +188,42 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
     :ok
   end
 
+  defp handle_decoded_message(%{"error" => error} = error_response) do
+    handle_error_message(error, error_response)
+  end
+
   defp handle_decoded_message(%{"params" => %{"channel" => _channel, "data" => _data}} = notification) do
     default_message_handler(notification)
     :ok
   end
 
   defp handle_decoded_message(_message), do: :ok
+
+  defp handle_error_message(%{"code" => code, "message" => message}, full_response) do
+    error_data = {:error, {:api_error, code, message}}
+
+    case WebsockexNew.ErrorHandler.handle_error(error_data) do
+      :stop ->
+        if is_auth_error?(code, message) do
+          default_auth_error_handler({:auth_failed, code, message, full_response})
+        else
+          default_error_handler({:api_error, code, message, full_response})
+        end
+
+      _ ->
+        default_error_handler({:api_error, code, message, full_response})
+    end
+
+    :ok
+  end
+
+  defp is_auth_error?(code, message) do
+    case code do
+      -32_600 -> String.contains?(message, "unauthorized")
+      -32_602 -> String.contains?(message, "invalid_credentials")
+      _ -> false
+    end
+  end
 
   defp default_message_handler(message) do
     IO.puts("Deribit message: #{inspect(message)}")
@@ -205,5 +235,13 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
 
   defp default_auth_handler(auth_result) do
     IO.puts("Authentication result: #{inspect(auth_result)}")
+  end
+
+  defp default_auth_error_handler(auth_error) do
+    IO.puts("Authentication error: #{inspect(auth_error)}")
+  end
+
+  defp default_error_handler(error) do
+    IO.puts("API error: #{inspect(error)}")
   end
 end
