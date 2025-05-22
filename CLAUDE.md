@@ -20,6 +20,21 @@ mix test.watch
 
 # Run integration tests only
 mix test --only integration
+
+# Real API testing commands
+mix test.api                    # Run all real API tests
+mix test.api --deribit         # Run Deribit-specific tests
+mix test.api --performance     # Run performance tests
+mix test.api --stress          # Run stress tests
+
+# Environment management
+mix test.env.health            # Check health of all test environments
+mix test.env.setup deribit_test # Setup specific environment
+mix test.env.list              # List available environments
+
+# Performance benchmarking
+mix test.performance           # Run all performance benchmarks
+mix test.performance --connection --duration 60
 ```
 
 ### Code Quality & Linting
