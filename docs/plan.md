@@ -1,6 +1,6 @@
-# WebsockexNova: Using Gun as Transport Layer
+# WebsockexNew: Using Gun as Transport Layer
 
-This document outlines a comprehensive implementation plan for WebsockexNova to use [:gun](https://github.com/ninenines/gun) as the underlying WebSocket transport layer while building our behavior-based architecture on top.
+This document outlines a comprehensive implementation plan for WebsockexNew to use [:gun](https://github.com/ninenines/gun) as the underlying WebSocket transport layer while building our behavior-based architecture on top.
 
 ## Why Use Gun?
 
@@ -14,7 +14,7 @@ This document outlines a comprehensive implementation plan for WebsockexNova to 
 6. **Flexible Message Handling**: Support for both synchronous and asynchronous message processing
 7. **Monitor-Based Error Handling**: Ability to use process monitors instead of links for more robust error handling
 
-Using Gun allows us to focus on the application-specific aspects of WebsockexNova (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
+Using Gun allows us to focus on the application-specific aspects of WebsockexNew (behaviors, platform integrations) without reinventing the wheel for WebSocket protocol handling.
 
 ## Project Overview
 
@@ -22,8 +22,8 @@ Using Gun allows us to focus on the application-specific aspects of WebsockexNov
 
 ```
 lib/
-├── websockex_nova.ex                # Client API (uses Gun underneath)
-├── websockex_nova/
+├── websockex_new.ex                # Client API (uses Gun underneath)
+├── websockex_new/
     ├── behaviors/                   # Behavior definitions
     │   ├── connection_handler.ex    # How to handle connection lifecycle
     │   ├── message_handler.ex       # How to process messages
@@ -76,7 +76,7 @@ lib/
 
 ```elixir
 # mix.exs
-defmodule WebsockexNova.MixProject do
+defmodule WebsockexNew.MixProject do
   use Mix.Project
 
   # ...
@@ -123,9 +123,9 @@ Implement a robust Gun client adapter with the following features:
 
 Start by defining behavior interfaces with TDD:
 
-# test/websockex_nova/behaviors/connection_handler_test.exs
+# test/websockex_new/behaviors/connection_handler_test.exs
 
-# lib/websockex_nova/behaviors/connection_handler.ex
+# lib/websockex_new/behaviors/connection_handler.ex
 
 #### 1.2 Add Strategy Macros
 
@@ -135,13 +135,13 @@ Start by defining behavior interfaces with TDD:
 
 ### Phase 2: Core Infrastructure (2 weeks)
 
-#### 2.1 Implement WebsockexNova Main Module
+#### 2.1 Implement WebsockexNew Main Module
 
-# lib/websockex_nova.ex
+# lib/websockex_new.ex
 
 #### 2.2 Message Processing
 
-# lib/websockex_nova/message/processor.ex
+# lib/websockex_new/message/processor.ex
 
 ### Phase 3: Platform Integrations (3 weeks)
 
@@ -151,13 +151,13 @@ Start by defining behavior interfaces with TDD:
 
 #### 3.2 Implement Example Platform Integration
 
-# lib/websockex_nova/platform/deribit/adapter.ex
+# lib/websockex_new/platform/deribit/adapter.ex
 
 ### Phase 4: Observability and Testing (2 weeks)
 
 #### 4.1 Enhanced Telemetry
 
-# lib/websockex_nova/telemetry.ex
+# lib/websockex_new/telemetry.ex
 
 #### 4.2 Integration Tests
 

@@ -1,4 +1,4 @@
-# WebsockexNova
+# WebsockexNew
 
 A robust, highly extensible WebSocket client library for Elixir with elegant abstractions for building specialized WebSocket clients.
 
@@ -17,12 +17,12 @@ This library is based on the excellent [Websockex](https://github.com/Azolo/webs
 
 ## Installation
 
-Add `websockex_nova` to your list of dependencies in `mix.exs`:
+Add `websockex_new` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:websockex_nova, "~> 0.1.0"}
+    {:websockex_new, "~> 0.1.0"}
   ]
 end
 ```
@@ -33,7 +33,7 @@ end
 
 ```elixir
 # Connect to a WebSocket server
-{:ok, conn} = WebsockexNova.Client.connect(WebsockexNova.Defaults.DefaultAdapter, %{
+{:ok, conn} = WebsockexNew.Client.connect(WebsockexNew.Defaults.DefaultAdapter, %{
   host: "echo.websocket.org",
   port: 443,
   path: "/",
@@ -41,19 +41,19 @@ end
 })
 
 # Send a message
-{:ok, response} = WebsockexNova.Client.send_text(conn, "Hello, WebSocket!")
+{:ok, response} = WebsockexNew.Client.send_text(conn, "Hello, WebSocket!")
 
 # Close the connection
-WebsockexNova.Client.close(conn)
+WebsockexNew.Client.close(conn)
 ```
 
 ### Using ClientMacro
 
-Create service-specific clients with minimal boilerplate using `WebsockexNova.ClientMacro`:
+Create service-specific clients with minimal boilerplate using `WebsockexNew.ClientMacro`:
 
 ```elixir
 defmodule MyApp.DeribitClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.DeribitAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.DeribitAdapter
 
   # Add domain-specific methods:
   def subscribe_to_trades(conn, instrument, opts \\ nil) do
@@ -74,14 +74,14 @@ end
 
 ### Using AdapterMacro
 
-Create service-specific adapters with minimal boilerplate using `WebsockexNova.Adapter`:
+Create service-specific adapters with minimal boilerplate using `WebsockexNew.Adapter`:
 
 ```elixir
 defmodule MyApp.DeribitAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
 
   # Override only what you need:
-  @impl WebsockexNova.Behaviors.ConnectionHandler
+  @impl WebsockexNew.Behaviors.ConnectionHandler
   def connection_info(opts) do
     defaults = %{
       host: "www.deribit.com",
@@ -93,7 +93,7 @@ defmodule MyApp.DeribitAdapter do
     {:ok, Map.merge(defaults, opts)}
   end
 
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_message(message, state) do
     # Custom message handling...
     {:ok, decoded_message, updated_state}

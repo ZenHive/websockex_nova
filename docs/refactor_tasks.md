@@ -1,7 +1,7 @@
-# WebsockexNova Simplification Refactor Tasks
+# WebsockexNew Simplification Refactor Tasks
 
 ## Project Goal
-Transform WebsockexNova from an over-engineered WebSocket client into a simple, maintainable library that delivers core functionality with minimal complexity. Focus on eliminating unnecessary abstractions, reducing moving parts, and optimizing for developer experience.
+Transform WebsockexNew from an over-engineered WebSocket client into a simple, maintainable library that delivers core functionality with minimal complexity. Focus on eliminating unnecessary abstractions, reducing moving parts, and optimizing for developer experience.
 
 ## Guiding Principles
 - **Simplicity over flexibility**: Remove abstractions without ≥3 concrete implementations
@@ -80,7 +80,7 @@ Transform WebsockexNova from an over-engineered WebSocket client into a simple, 
 
 #### Subtasks
 - [ ] **WNX0003a**: Audit all helper functions and identify duplicates
-- [ ] **WNX0003b**: Merge essential functions into single `lib/websockex_nova/utils.ex`
+- [ ] **WNX0003b**: Merge essential functions into single `lib/websockex_new/utils.ex`
 - [ ] **WNX0003c**: Remove `behavior_helpers.ex` and inline necessary logic
 - [ ] **WNX0003d**: Delete redundant state helper modules
 - [ ] **WNX0003e**: Update all references to use consolidated utilities
@@ -147,7 +147,7 @@ Transform WebsockexNova from an over-engineered WebSocket client into a simple, 
 - Deribit-specific clients mixed with generic client code
 
 #### Target State
-- Single `WebsockexNova.Client` module with clear, simple API
+- Single `WebsockexNew.Client` module with clear, simple API
 - Remove macro system in favor of explicit implementations
 - Move platform-specific code to separate adapter modules
 

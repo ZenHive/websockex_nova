@@ -1,6 +1,6 @@
 # Performance Tuning Guide for Behaviors
 
-This guide covers optimization techniques for WebsockexNova behaviors to achieve maximum performance in production systems.
+This guide covers optimization techniques for WebsockexNew behaviors to achieve maximum performance in production systems.
 
 ## Table of Contents
 1. [Performance Fundamentals](#performance-fundamentals)
@@ -60,8 +60,8 @@ defmodule MyApp.PerformanceMetrics do
     :telemetry.attach_many(
       "performance-metrics",
       [
-        [:websockex_nova, :message, :processed],
-        [:websockex_nova, :connection, :established],
+        [:websockex_new, :message, :processed],
+        [:websockex_new, :connection, :established],
         [:vm, :memory],
         [:vm, :system_counts]
       ],
@@ -70,7 +70,7 @@ defmodule MyApp.PerformanceMetrics do
     )
   end
   
-  defp handle_event([:websockex_nova, :message, :processed], measurements, metadata, _) do
+  defp handle_event([:websockex_new, :message, :processed], measurements, metadata, _) do
     # Track message processing performance
     :prometheus_histogram.observe(
       :message_processing_duration_microseconds,
@@ -88,7 +88,7 @@ Optimize JSON parsing for better performance:
 
 ```elixir
 defmodule MyApp.OptimizedJsonHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   # Pre-compile JSON decoder options
   @decoder_opts [keys: :atoms]
@@ -126,7 +126,7 @@ Handle binary data efficiently:
 
 ```elixir
 defmodule MyApp.BinaryOptimizedHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @impl true
   def handle_binary_frame(<<
@@ -169,7 +169,7 @@ Process messages in batches for better throughput:
 
 ```elixir
 defmodule MyApp.BatchingHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @batch_size 100
   @batch_timeout 50  # milliseconds
@@ -230,7 +230,7 @@ Use efficient data structures for state:
 
 ```elixir
 defmodule MyApp.EfficientStateHandler do
-  use WebsockexNova.Behaviors.ConnectionHandler
+  use WebsockexNew.Behaviors.ConnectionHandler
   
   # Use ETS for large state data
   @impl true
@@ -299,7 +299,7 @@ defmodule MyApp.ImmutableStateOptimizer do
     end
   end
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, %State{} = state) do
     updates = [
       {:touch_activity},
@@ -322,7 +322,7 @@ Process independent messages concurrently:
 
 ```elixir
 defmodule MyApp.ParallelProcessor do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @impl true
   def handle_text_frame(text, state) do
@@ -366,7 +366,7 @@ Use actor model for concurrent processing:
 
 ```elixir
 defmodule MyApp.ActorBasedHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   defmodule MessageProcessor do
     use GenServer
@@ -418,7 +418,7 @@ Minimize memory usage per connection:
 
 ```elixir
 defmodule MyApp.MemoryOptimizedHandler do
-  use WebsockexNova.Behaviors.ConnectionHandler
+  use WebsockexNew.Behaviors.ConnectionHandler
   
   # Use atoms for common strings
   @message_types %{
@@ -481,7 +481,7 @@ Optimize GC for WebSocket connections:
 
 ```elixir
 defmodule MyApp.GCOptimizedClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   
   def connect(opts \\ %{}) do
     # Tune GC for long-lived connections
@@ -510,7 +510,7 @@ Implement connection pooling for better resource usage:
 
 ```elixir
 defmodule MyApp.ConnectionPool do
-  use WebsockexNova.Behaviors.ConnectionHandler
+  use WebsockexNew.Behaviors.ConnectionHandler
   
   defmodule PoolManager do
     use GenServer
@@ -532,7 +532,7 @@ defmodule MyApp.ConnectionPool do
       pool_size = Keyword.get(opts, :size, 10)
       
       connections = for _ <- 1..pool_size do
-        {:ok, conn} = WebsockexNova.Client.connect(MyApp.Adapter, %{})
+        {:ok, conn} = WebsockexNew.Client.connect(MyApp.Adapter, %{})
         conn
       end
       
@@ -563,7 +563,7 @@ Implement frame compression for bandwidth optimization:
 
 ```elixir
 defmodule MyApp.CompressedFrameHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @compression_threshold 1024  # Compress messages larger than 1KB
   
@@ -646,7 +646,7 @@ defmodule MyApp.BehaviorBenchmarks do
     Benchee.run(
       %{
         "default_handler" => fn {_name, msg} ->
-          WebsockexNova.Defaults.MessageHandler.handle_text_frame(msg, state)
+          WebsockexNew.Defaults.MessageHandler.handle_text_frame(msg, state)
         end,
         "optimized_handler" => fn {_name, msg} ->
           MyApp.OptimizedHandler.handle_text_frame(msg, state)
@@ -683,7 +683,7 @@ Optimize for financial trading systems:
 
 ```elixir
 defmodule MyApp.HFTOptimizedHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   # Pre-allocate buffers
   @buffer_size 64 * 1024  # 64KB pre-allocated buffer
@@ -738,7 +738,7 @@ Optimize for constrained IoT environments:
 
 ```elixir
 defmodule MyApp.IoTOptimizedHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   # Minimal state for memory-constrained devices
   defstruct [

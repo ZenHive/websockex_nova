@@ -1,6 +1,6 @@
 # Advanced Macro Usage Guide
 
-This guide covers advanced patterns and techniques for using the WebsockexNova macro system effectively.
+This guide covers advanced patterns and techniques for using the WebsockexNew macro system effectively.
 
 ## Table of Contents
 1. [Macro Composition Patterns](#macro-composition-patterns)
@@ -20,7 +20,7 @@ Create multiple levels of abstraction using composed macros:
 defmodule MyApp.BaseTraderClient do
   defmacro __using__(opts) do
     quote do
-      use WebsockexNova.ClientMacro, unquote(opts)
+      use WebsockexNew.ClientMacro, unquote(opts)
       
       # Common trading functionality
       def execute_trade(conn, order_params) do
@@ -72,7 +72,7 @@ Create clients that can switch between adapters dynamically:
 
 ```elixir
 defmodule MyApp.MultiExchangeClient do
-  use WebsockexNova.ClientMacro, adapter: :dynamic
+  use WebsockexNew.ClientMacro, adapter: :dynamic
   
   # Override the adapter resolution
   defp resolve_adapter(opts) do
@@ -86,7 +86,7 @@ defmodule MyApp.MultiExchangeClient do
   
   def connect(opts \\ %{}) do
     adapter = resolve_adapter(opts)
-    WebsockexNova.Client.connect(adapter, Map.delete(opts, :exchange))
+    WebsockexNew.Client.connect(adapter, Map.delete(opts, :exchange))
   end
   
   # Universal order placement that works across exchanges
@@ -125,7 +125,7 @@ Use compile-time configuration to include/exclude features:
 
 ```elixir
 defmodule MyApp.ConfigurableClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.ProductionAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.ProductionAdapter
   
   # Only include debug features in dev/test environments
   if Mix.env() in [:dev, :test] do
@@ -146,8 +146,8 @@ defmodule MyApp.ConfigurableClient do
       :telemetry.attach_many(
         "#{env.module}-perf",
         [
-          [:websockex_nova, :message, :sent],
-          [:websockex_nova, :message, :received]
+          [:websockex_new, :message, :sent],
+          [:websockex_new, :message, :received]
         ],
         &__MODULE__.handle_telemetry_event/4,
         %{}
@@ -172,7 +172,7 @@ defmodule MyApp.FeatureFlagClient do
     features = Keyword.get(opts, :features, [])
     
     quote do
-      use WebsockexNova.ClientMacro, adapter: unquote(opts[:adapter])
+      use WebsockexNew.ClientMacro, adapter: unquote(opts[:adapter])
       
       # Conditionally include rate limiting
       if :rate_limiting in unquote(features) do
@@ -221,7 +221,7 @@ Implement strategies that can change behavior at runtime:
 
 ```elixir
 defmodule MyApp.StrategyClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.StrategyAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.StrategyAdapter
   
   defstruct [:conn, :strategy]
   
@@ -286,7 +286,7 @@ Test macro-generated code effectively:
 defmodule MyApp.TestableClient do
   defmacro __using__(opts) do
     quote do
-      use WebsockexNova.ClientMacro, unquote(opts)
+      use WebsockexNew.ClientMacro, unquote(opts)
       
       # Make internal functions testable
       @doc false
@@ -339,7 +339,7 @@ defmodule MacroExpansionTest do
   
   test "client macro generates expected functions" do
     defmodule CompileTimeTest do
-      use WebsockexNova.ClientMacro, adapter: TestAdapter
+      use WebsockexNew.ClientMacro, adapter: TestAdapter
     end
     
     # Verify generated functions exist
@@ -350,7 +350,7 @@ defmodule MacroExpansionTest do
   
   test "macro with custom options generates overrides" do
     defmodule CustomOptionsTest do
-      use WebsockexNova.ClientMacro,
+      use WebsockexNew.ClientMacro,
         adapter: TestAdapter,
         default_options: %{custom: true}
         
@@ -376,7 +376,7 @@ defmodule MyApp.OptimizedClient do
     handler_mappings = build_handler_mappings(adapter)
     
     quote do
-      use WebsockexNova.ClientMacro, adapter: unquote(adapter)
+      use WebsockexNew.ClientMacro, adapter: unquote(adapter)
       
       # Use compile-time computed mappings
       @handler_mappings unquote(Macro.escape(handler_mappings))
@@ -411,7 +411,7 @@ Use ETS for shared state in macro-based clients:
 
 ```elixir
 defmodule MyApp.EfficientClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.EfficientAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.EfficientAdapter
   
   @table_name :client_shared_state
   
@@ -482,7 +482,7 @@ defmodule MyApp.DependentClient do
   require MyApp.SharedBehaviors
   require MyApp.CommonValidations
   
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   
   # Import shared functionality
   import MyApp.CommonValidations, only: [validate_order: 1]
@@ -502,17 +502,17 @@ Debug complex macro expansions:
 ```elixir
 defmodule MyApp.DebuggableClient do
   # Use this to see macro expansion
-  require WebsockexNova.ClientMacro
+  require WebsockexNew.ClientMacro
   
   # Uncomment to debug macro expansion
   # IO.puts(Macro.to_string(
   #   quote do
-  #     use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  #     use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   #   end
   #   |> Macro.expand(__ENV__)
   # ))
   
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   
   # Add debug helper
   defmacro debug_expansion(ast) do

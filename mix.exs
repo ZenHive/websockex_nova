@@ -1,11 +1,11 @@
-defmodule WebsockexNova.MixProject do
+defmodule WebsockexNew.MixProject do
   use Mix.Project
 
   @version "0.1.1"
 
   def project do
     [
-      app: :websockex_nova,
+      app: :websockex_new,
       version: @version,
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
@@ -30,13 +30,13 @@ defmodule WebsockexNova.MixProject do
       package: package(),
 
       # Docs
-      name: "WebsockexNova",
-      source_url: "https://github.com/ZenHive/websockex_nova",
-      homepage_url: "https://github.com/ZenHive/websockex_nova",
+      name: "WebsockexNew",
+      source_url: "https://github.com/ZenHive/websockex_new",
+      homepage_url: "https://github.com/ZenHive/websockex_new",
       docs: [
-        main: "WebsockexNova",
+        main: "WebsockexNew",
         extras: ["README.md"],
-        source_url: "https://github.com/ZenHive/websockex_nova",
+        source_url: "https://github.com/ZenHive/websockex_new",
         source_ref: "v#{@version}"
       ]
     ]
@@ -49,8 +49,7 @@ defmodule WebsockexNova.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {WebsockexNova.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
@@ -96,7 +95,11 @@ defmodule WebsockexNova.MixProject do
       {:x509, "~> 0.8", only: :test},
       {:certifi, "~> 2.5"},
       {:telemetry, "~> 1.3"},
-      {:meck, "~> 0.9", only: :test}
+      {:meck, "~> 0.9", only: :test},
+
+
+      {:rename, "~> 0.1.0", only: :dev}
+
       # {:mint_web_socket, "~> 1.0"}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
@@ -138,12 +141,12 @@ defmodule WebsockexNova.MixProject do
 
   defp package do
     [
-      name: "websockex_nova",
+      name: "websockex_new",
       files: ~w(lib .formatter.exs mix.exs README* LICENSE* CHANGELOG*),
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/ZenHive/websockex_nova",
-        "Docs" => "https://hexdocs.pm/websockex_nova"
+        "GitHub" => "https://github.com/ZenHive/websockex_new",
+        "Docs" => "https://hexdocs.pm/websockex_new"
       },
       maintainers: ["ZenHive"]
     ]

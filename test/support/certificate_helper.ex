@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Test.Support.CertificateHelper do
+defmodule WebsockexNew.Test.Support.CertificateHelper do
   @moduledoc """
   Helper for generating self-signed certificates for testing TLS connections.
 

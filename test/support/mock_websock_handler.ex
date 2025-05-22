@@ -1,4 +1,4 @@
-defmodule WebsockexNova.Test.Support.MockWebSockHandler do
+defmodule WebsockexNew.Test.Support.MockWebSockHandler do
   @moduledoc """
   WebSock-based handler for the mock WebSocket server.
 

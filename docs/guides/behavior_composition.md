@@ -1,6 +1,6 @@
 # Behavior Composition Patterns
 
-This guide explores advanced patterns for composing behaviors in WebsockexNova to create flexible, maintainable WebSocket clients.
+This guide explores advanced patterns for composing behaviors in WebsockexNew to create flexible, maintainable WebSocket clients.
 
 ## Table of Contents
 1. [Understanding Behavior Composition](#understanding-behavior-composition)
@@ -13,23 +13,23 @@ This guide explores advanced patterns for composing behaviors in WebsockexNova t
 
 ## Understanding Behavior Composition
 
-WebsockexNova's behavior system allows you to compose functionality from multiple sources:
+WebsockexNew's behavior system allows you to compose functionality from multiple sources:
 
 ```elixir
 # Base structure of behavior composition
 defmodule MyApp.ComposedAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Use default behaviors
-  use WebsockexNova.Defaults.ConnectionHandler
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Defaults.ConnectionHandler
+  use WebsockexNew.Defaults.MessageHandler
   
   # Mix in custom behaviors
   use MyApp.CustomAuthHandler
   use MyApp.EnhancedErrorHandler
   
   # Override specific callbacks
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # Custom implementation with fallback
     case parse_message(text) do
@@ -50,13 +50,13 @@ Layer behaviors to build complex functionality from simple pieces:
 defmodule MyApp.LoggingBehavior do
   defmacro __using__(_opts) do
     quote do
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_text_frame(text, state) do
         Logger.debug("Received: #{inspect(text)}")
         super(text, state)
       end
       
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_binary_frame(binary, state) do
         Logger.debug("Received binary: #{byte_size(binary)} bytes")
         super(binary, state)
@@ -68,7 +68,7 @@ end
 defmodule MyApp.MetricsBehavior do
   defmacro __using__(_opts) do
     quote do
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_text_frame(text, state) do
         :telemetry.execute([:my_app, :message, :received], %{size: byte_size(text)})
         super(text, state)
@@ -78,13 +78,13 @@ defmodule MyApp.MetricsBehavior do
 end
 
 defmodule MyApp.InstrumentedAdapter do
-  use WebsockexNova.Adapter
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Adapter
+  use WebsockexNew.Defaults.MessageHandler
   use MyApp.LoggingBehavior  # Add logging layer
   use MyApp.MetricsBehavior  # Add metrics layer
   
   # Final implementation
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # This will be called after logging and metrics
     process_message(text, state)
@@ -98,7 +98,7 @@ Create hierarchical behavior structures:
 
 ```elixir
 defmodule MyApp.BaseAuthHandler do
-  use WebsockexNova.Behaviors.AuthHandler
+  use WebsockexNew.Behaviors.AuthHandler
   
   @callback validate_credentials(map()) :: {:ok, map()} | {:error, term()}
   @callback build_auth_message(map()) :: map()
@@ -114,7 +114,7 @@ defmodule MyApp.BaseAuthHandler do
   
   defp send_auth_message(state, message) do
     # Common sending logic
-    WebsockexNova.Client.send_json(state.conn, message)
+    WebsockexNew.Client.send_json(state.conn, message)
   end
 end
 
@@ -149,14 +149,14 @@ Include only the behaviors you need:
 
 ```elixir
 defmodule MyApp.SelectiveAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Only include specific default behaviors
-  use WebsockexNova.Defaults.ConnectionHandler
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Defaults.ConnectionHandler
+  use WebsockexNew.Defaults.MessageHandler
   
   # Implement others from scratch
-  @impl WebsockexNova.Behaviors.ErrorHandler
+  @impl WebsockexNew.Behaviors.ErrorHandler
   def handle_error(error, state) do
     # Custom error handling without defaults
     case error do
@@ -166,7 +166,7 @@ defmodule MyApp.SelectiveAdapter do
     end
   end
   
-  @impl WebsockexNova.Behaviors.AuthHandler
+  @impl WebsockexNew.Behaviors.AuthHandler
   def handle_auth(state, credentials) do
     # Custom auth without defaults
     MyApp.AuthService.authenticate(credentials)
@@ -185,15 +185,15 @@ defmodule MyApp.ConfigurableAdapter do
     caching? = Keyword.get(opts, :caching, false)
     
     quote do
-      use WebsockexNova.Adapter
-      use WebsockexNova.Defaults.ConnectionHandler
-      use WebsockexNova.Defaults.MessageHandler
+      use WebsockexNew.Adapter
+      use WebsockexNew.Defaults.ConnectionHandler
+      use WebsockexNew.Defaults.MessageHandler
       
       # Conditionally include behaviors
       if unquote(rate_limiting?) do
         use MyApp.RateLimitingBehavior
       else
-        use WebsockexNova.Defaults.RateLimitHandler
+        use WebsockexNew.Defaults.RateLimitHandler
       end
       
       if unquote(caching?) do
@@ -201,7 +201,7 @@ defmodule MyApp.ConfigurableAdapter do
       end
       
       # Additional implementation
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_text_frame(text, state) do
         result = super(text, state)
         
@@ -237,7 +237,7 @@ defmodule MyApp.DelegatingBehavior do
     quote do
       @delegate_module unquote(delegate_to)
       
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_text_frame(text, state) do
         # Pre-processing
         modified_text = preprocess_text(text)
@@ -266,7 +266,7 @@ end
 
 defmodule MyApp.EncryptedMessageHandler do
   use MyApp.DelegatingBehavior,
-    delegate_to: WebsockexNova.Defaults.MessageHandler
+    delegate_to: WebsockexNew.Defaults.MessageHandler
   
   defp preprocess_text(encrypted_text) do
     {:ok, decrypted} = MyApp.Crypto.decrypt(encrypted_text)
@@ -288,9 +288,9 @@ Select delegation targets at runtime:
 
 ```elixir
 defmodule MyApp.DynamicDelegator do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     handler = select_handler(text, state)
     handler.handle_text_frame(text, state)
@@ -301,7 +301,7 @@ defmodule MyApp.DynamicDelegator do
       {:ok, %{"type" => "market_data"}} -> MyApp.MarketDataHandler
       {:ok, %{"type" => "order"}} -> MyApp.OrderHandler
       {:ok, %{"type" => "account"}} -> MyApp.AccountHandler
-      _ -> WebsockexNova.Defaults.MessageHandler
+      _ -> WebsockexNew.Defaults.MessageHandler
     end
   end
 end
@@ -321,7 +321,7 @@ defmodule MyApp.PipelineBehavior do
     quote do
       @pipeline unquote(pipeline)
       
-      @impl WebsockexNova.Behaviors.MessageHandler
+      @impl WebsockexNew.Behaviors.MessageHandler
       def handle_text_frame(text, state) do
         Enum.reduce(@pipeline, {:ok, text, state}, fn
           behavior, {:ok, current_text, current_state} ->
@@ -352,7 +352,7 @@ defmodule MyApp.TransformBehavior do
 end
 
 defmodule MyApp.PipelinedAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   use MyApp.PipelineBehavior,
     pipeline: [
       MyApp.ValidationBehavior,
@@ -372,7 +372,7 @@ defmodule MyApp.Middleware do
 end
 
 defmodule MyApp.MiddlewareAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   @middleware_stack [
     MyApp.LoggingMiddleware,
@@ -381,7 +381,7 @@ defmodule MyApp.MiddlewareAdapter do
     MyApp.ProcessingMiddleware
   ]
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     request = %{text: text, state: state}
     
@@ -425,7 +425,7 @@ Implement fallback strategies for error scenarios:
 defmodule MyApp.FallbackBehavior do
   defmacro __using__(_opts) do
     quote do
-      @impl WebsockexNova.Behaviors.ErrorHandler
+      @impl WebsockexNew.Behaviors.ErrorHandler
       def handle_error(error, state) do
         primary_result = handle_primary_error(error, state)
         
@@ -455,7 +455,7 @@ defmodule MyApp.FallbackBehavior do
 end
 
 defmodule MyApp.ResilientAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   use MyApp.FallbackBehavior
   
   defp handle_primary_error({:auth_failed, reason}, state) do
@@ -489,7 +489,7 @@ defmodule MyApp.RecoveryChain do
     quote do
       @recovery_strategies unquote(strategies)
       
-      @impl WebsockexNova.Behaviors.ErrorHandler
+      @impl WebsockexNew.Behaviors.ErrorHandler
       def handle_error(error, state) do
         Enum.find_value(@recovery_strategies, {:stop, error, state}, fn strategy ->
           if strategy.can_handle?(error) do
@@ -519,7 +519,7 @@ defmodule MyApp.NetworkErrorRecovery do
 end
 
 defmodule MyApp.RobustAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   use MyApp.RecoveryChain,
     strategies: [
       MyApp.NetworkErrorRecovery,
@@ -568,7 +568,7 @@ defmodule MyApp.AspectBehavior do
 end
 
 defmodule MyApp.TracedAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   use MyApp.AspectBehavior
   
   @before handle_text_frame(text, state) do
@@ -581,7 +581,7 @@ defmodule MyApp.TracedAdapter do
     :telemetry.execute([:my_app, :message, :duration], %{duration: duration})
   end
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # Main implementation
     process_message(text, state)
@@ -599,7 +599,7 @@ defmodule MyApp.BehaviorFactory do
     Module.create(
       Module.concat([MyApp.Generated, "Handler#{:erlang.unique_integer([:positive])}"]),
       quote do
-        use WebsockexNova.Behaviors.MessageHandler
+        use WebsockexNew.Behaviors.MessageHandler
         
         @config unquote(Macro.escape(config))
         
@@ -626,10 +626,10 @@ handler = MyApp.BehaviorFactory.create_handler(%{
 })
 
 defmodule MyApp.DynamicAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   @handler handler
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   defdelegate handle_text_frame(text, state), to: @handler
 end
 ```

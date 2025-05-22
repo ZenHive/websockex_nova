@@ -1,6 +1,6 @@
 # Exporting Metrics for External Systems
 
-WebsockexNova emits [Telemetry](https://hexdocs.pm/telemetry/telemetry.html) events for all connection, message, and error activities. You can export these metrics to external systems such as Prometheus, StatsD, or any Telemetry-compatible backend using the [Telemetry.Metrics](https://hexdocs.pm/telemetry_metrics/) ecosystem.
+WebsockexNew emits [Telemetry](https://hexdocs.pm/telemetry/telemetry.html) events for all connection, message, and error activities. You can export these metrics to external systems such as Prometheus, StatsD, or any Telemetry-compatible backend using the [Telemetry.Metrics](https://hexdocs.pm/telemetry_metrics/) ecosystem.
 
 ---
 
@@ -34,12 +34,12 @@ end
 
 defp metrics do
   [
-    counter("websockex_nova_connection_open_total", event_name: [:websockex_nova, :connection, :open]),
-    counter("websockex_nova_connection_close_total", event_name: [:websockex_nova, :connection, :close]),
-    counter("websockex_nova_message_sent_total", event_name: [:websockex_nova, :message, :sent]),
-    counter("websockex_nova_message_received_total", event_name: [:websockex_nova, :message, :received]),
-    counter("websockex_nova_error_total", event_name: [:websockex_nova, :error, :occurred]),
-    summary("websockex_nova_message_sent_size_bytes", event_name: [:websockex_nova, :message, :sent], measurement: :size)
+    counter("websockex_new_connection_open_total", event_name: [:websockex_new, :connection, :open]),
+    counter("websockex_new_connection_close_total", event_name: [:websockex_new, :connection, :close]),
+    counter("websockex_new_message_sent_total", event_name: [:websockex_new, :message, :sent]),
+    counter("websockex_new_message_received_total", event_name: [:websockex_new, :message, :received]),
+    counter("websockex_new_error_total", event_name: [:websockex_new, :error, :occurred]),
+    summary("websockex_new_message_sent_size_bytes", event_name: [:websockex_new, :message, :sent], measurement: :size)
   ]
 end
 ```
@@ -95,9 +95,9 @@ If you want to process metrics in your own code, you can subscribe to events dir
 ```elixir
 :telemetry.attach(
   "my-websockexnova-listener",
-  [:websockex_nova, :message, :sent],
+  [:websockex_new, :message, :sent],
   fn event, measurements, metadata, _config ->
-    IO.inspect({event, measurements, metadata}, label: "WebsockexNova Telemetry")
+    IO.inspect({event, measurements, metadata}, label: "WebsockexNew Telemetry")
   end,
   nil
 )

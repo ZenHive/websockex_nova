@@ -74,12 +74,12 @@ Integration tests use `test.deribit.com` and require valid API credentials.
 ## High-Level Architecture
 
 ### Project Structure
-WebsockexNova uses a behavior-based architecture with Gun as the underlying WebSocket transport layer. The main components are:
+WebsockexNew uses a behavior-based architecture with Gun as the underlying WebSocket transport layer. The main components are:
 
-- **Behaviors**: Interface definitions for extensibility (`lib/websockex_nova/behaviors/`)
-- **Gun Integration**: WebSocket transport wrapper (`lib/websockex_nova/gun/`)
-- **Client API**: High-level client interface (`lib/websockex_nova/client.ex`)
-- **Adapters**: Platform-specific integrations (`lib/websockex_nova/examples/`)
+- **Behaviors**: Interface definitions for extensibility (`lib/websockex_new/behaviors/`)
+- **Gun Integration**: WebSocket transport wrapper (`lib/websockex_new/gun/`)
+- **Client API**: High-level client interface (`lib/websockex_new/client.ex`)
+- **Adapters**: Platform-specific integrations (`lib/websockex_new/examples/`)
 - **Macros**: ClientMacro and AdapterMacro for rapid development
 
 ### Key Architectural Concepts
@@ -107,7 +107,7 @@ WebsockexNova uses a behavior-based architecture with Gun as the underlying WebS
    - Adapters customize authentication, message formats, etc.
 
 ### Configuration Profiles
-WebsockexNova supports different profiles for varying requirements:
+WebsockexNew supports different profiles for varying requirements:
 - **Financial**: High-frequency trading with aggressive reconnection
 - **Standard**: General-purpose with balanced reliability
 - **Lightweight**: Simple integrations with minimal overhead
@@ -130,8 +130,8 @@ WebsockexNova supports different profiles for varying requirements:
 
 ### TDD Workflow
 1. **Write tests first** - Create comprehensive test cases before implementation
-2. **Implement behaviors** in `lib/websockex_nova/behaviors/`
-3. **Create adapters** in `lib/websockex_nova/examples/` for specific platforms
+2. **Implement behaviors** in `lib/websockex_new/behaviors/`
+3. **Create adapters** in `lib/websockex_new/examples/` for specific platforms
 4. **Write integration tests** using real WebSocket endpoints when possible
 5. **Run quality checks** with `mix check` before committing
 6. **Document** any new behaviors or adapters in the docs/ directory
@@ -144,7 +144,7 @@ WebsockexNova supports different profiles for varying requirements:
 
 ## Critical Code Paths
 
-1. **Connection Establishment**: `WebsockexNova.Client.connect/2`
+1. **Connection Establishment**: `WebsockexNew.Client.connect/2`
 2. **Message Handling**: `ConnectionWrapper` → `MessageHandler` → `SubscriptionHandler`
 3. **Reconnection Flow**: `ConnectionManager` → `ConnectionWrapper` → `ConnectionRegistry`
 4. **Authentication**: `AuthHandler` behavior with platform-specific implementation
@@ -154,7 +154,7 @@ WebsockexNova supports different profiles for varying requirements:
 
 ### Adding a New Platform Adapter
 1. Create adapter module implementing required behaviors
-2. Use `WebsockexNova.Adapter` macro for defaults
+2. Use `WebsockexNew.Adapter` macro for defaults
 3. Override only necessary callbacks
 4. Keep adapters thin - focus on protocol translation only
 5. Add integration tests for the platform using real endpoints

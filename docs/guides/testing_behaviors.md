@@ -1,6 +1,6 @@
 # Testing Custom Behaviors
 
-This guide covers comprehensive testing strategies for WebsockexNova behaviors, ensuring reliable and maintainable custom implementations.
+This guide covers comprehensive testing strategies for WebsockexNew behaviors, ensuring reliable and maintainable custom implementations.
 
 ## Table of Contents
 1. [Testing Fundamentals](#testing-fundamentals)
@@ -23,7 +23,7 @@ defmodule MyApp.CustomMessageHandlerTest do
   use ExUnit.Case, async: true
   
   alias MyApp.CustomMessageHandler
-  alias WebsockexNova.ClientConn
+  alias WebsockexNew.ClientConn
   
   # Test fixtures
   @valid_message ~s({"type": "heartbeat", "timestamp": 123456})
@@ -104,7 +104,7 @@ defmodule MyApp.IsolatedBehaviorTest do
   use ExUnit.Case
   
   defmodule MessageParser do
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNew.Behaviors.MessageHandler
     
     @impl true
     def handle_text_frame(text, state) do
@@ -155,7 +155,7 @@ defmodule MyApp.StateTransitionTest do
   use ExUnit.Case
   
   defmodule StatefulHandler do
-    use WebsockexNova.Behaviors.ConnectionHandler
+    use WebsockexNew.Behaviors.ConnectionHandler
     
     @impl true
     def handle_connect(state, conn, _headers, _options) do
@@ -222,12 +222,12 @@ defmodule MyApp.BehaviorIntegrationTest do
   use ExUnit.Case
   
   defmodule ComposedAdapter do
-    use WebsockexNova.Adapter
+    use WebsockexNew.Adapter
     use MyApp.LoggingBehavior
     use MyApp.RateLimitBehavior
     use MyApp.CachingBehavior
     
-    @impl WebsockexNova.Behaviors.MessageHandler
+    @impl WebsockexNew.Behaviors.MessageHandler
     def handle_text_frame(text, state) do
       # This will go through logging, rate limiting, and caching
       process_message(text, state)
@@ -268,7 +268,7 @@ Test behaviors in a real connection scenario:
 defmodule MyApp.EndToEndBehaviorTest do
   use ExUnit.Case
   
-  alias WebsockexNova.Client
+  alias WebsockexNew.Client
   
   setup do
     # Start test server
@@ -311,7 +311,7 @@ Create mocks for testing behavior interactions:
 ```elixir
 defmodule MyApp.BehaviorMocks do
   defmodule MockMessageHandler do
-    use WebsockexNova.Behaviors.MessageHandler
+    use WebsockexNew.Behaviors.MessageHandler
     
     def handle_text_frame(text, state) do
       send(self(), {:mock_received, text})
@@ -325,7 +325,7 @@ defmodule MyApp.BehaviorMocks do
   end
   
   defmodule MockAuthHandler do
-    use WebsockexNova.Behaviors.AuthHandler
+    use WebsockexNew.Behaviors.AuthHandler
     
     def handle_auth(state, %{token: "valid"} = credentials) do
       send(self(), {:auth_attempt, credentials})
@@ -346,8 +346,8 @@ Set up behavior mocks with Mox:
 
 ```elixir
 # In test_helper.exs
-Mox.defmock(MyApp.MockMessageHandler, for: WebsockexNova.Behaviors.MessageHandler)
-Mox.defmock(MyApp.MockAuthHandler, for: WebsockexNova.Behaviors.AuthHandler)
+Mox.defmock(MyApp.MockMessageHandler, for: WebsockexNew.Behaviors.MessageHandler)
+Mox.defmock(MyApp.MockAuthHandler, for: WebsockexNew.Behaviors.AuthHandler)
 
 # In tests
 defmodule MyApp.MoxBehaviorTest do
@@ -492,9 +492,9 @@ defmodule MyApp.BehaviorContractTest do
   end
   
   test "custom handlers implement required behaviors" do
-    assert_implements_behavior(MyApp.CustomMessageHandler, WebsockexNova.Behaviors.MessageHandler)
-    assert_implements_behavior(MyApp.CustomAuthHandler, WebsockexNova.Behaviors.AuthHandler)
-    assert_implements_behavior(MyApp.CustomErrorHandler, WebsockexNova.Behaviors.ErrorHandler)
+    assert_implements_behavior(MyApp.CustomMessageHandler, WebsockexNew.Behaviors.MessageHandler)
+    assert_implements_behavior(MyApp.CustomAuthHandler, WebsockexNew.Behaviors.AuthHandler)
+    assert_implements_behavior(MyApp.CustomErrorHandler, WebsockexNew.Behaviors.ErrorHandler)
   end
   
   test "behavior callbacks have correct signatures" do
@@ -561,7 +561,7 @@ defmodule MyApp.BehaviorBenchmark do
   test "message processing performance" do
     Benchee.run(%{
       "default_handler" => fn input ->
-        WebsockexNova.Defaults.MessageHandler.handle_text_frame(input, %{})
+        WebsockexNew.Defaults.MessageHandler.handle_text_frame(input, %{})
       end,
       "custom_handler" => fn input ->
         MyApp.OptimizedMessageHandler.handle_text_frame(input, %{})

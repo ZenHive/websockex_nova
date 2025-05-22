@@ -3,7 +3,7 @@ defmodule WebsockexNew.ReconnectionTest do
 
   alias WebsockexNew.Config
   alias WebsockexNew.Reconnection
-  alias WebsockexNova.Test.Support.MockWebSockServer
+  alias WebsockexNew.Test.Support.MockWebSockServer
 
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
 

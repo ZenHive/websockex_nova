@@ -1,6 +1,6 @@
 # Architectural Patterns
 
-This guide explores proven architectural patterns for building scalable, maintainable WebSocket applications with WebsockexNova.
+This guide explores proven architectural patterns for building scalable, maintainable WebSocket applications with WebsockexNew.
 
 ## Table of Contents
 1. [System Architecture Patterns](#system-architecture-patterns)
@@ -27,7 +27,7 @@ defmodule MyApp.Architecture do
   # Layer 1: Connection Layer
   defmodule ConnectionLayer do
     defmodule Gateway do
-      use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+      use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
       
       # Handle raw connection management
       def establish_connection(config) do
@@ -102,7 +102,7 @@ Build WebSocket microservices:
 defmodule MyApp.MicroserviceArchitecture do
   # Gateway Service
   defmodule GatewayService do
-    use WebsockexNova.ClientMacro, adapter: MyApp.GatewayAdapter
+    use WebsockexNew.ClientMacro, adapter: MyApp.GatewayAdapter
     
     def route_message(conn, message) do
       case message["service"] do
@@ -130,7 +130,7 @@ defmodule MyApp.MicroserviceArchitecture do
   
   # Trading Service
   defmodule TradingService do
-    use WebsockexNova.ClientMacro, adapter: MyApp.TradingAdapter
+    use WebsockexNew.ClientMacro, adapter: MyApp.TradingAdapter
     
     def handle_order(conn, order) do
       with {:ok, validated} <- validate_order(order),
@@ -197,7 +197,7 @@ defmodule MyApp.EventDrivenArchitecture do
   
   # Event Handlers
   defmodule OrderEventHandler do
-    use WebsockexNova.Behaviors.MessageHandler
+    use WebsockexNew.Behaviors.MessageHandler
     
     @impl true
     def handle_text_frame(text, state) do
@@ -301,7 +301,7 @@ defmodule MyApp.ConnectionPool do
   @impl true
   def handle_continue(:create_connections, state) do
     connections = for i <- 1..state.size do
-      {:ok, conn} = WebsockexNova.Client.connect(state.adapter, state.config)
+      {:ok, conn} = WebsockexNew.Client.connect(state.adapter, state.config)
       conn
     end
     
@@ -383,7 +383,7 @@ defmodule MyApp.LoadBalancer do
       state.strategy_state
     )
     
-    case WebsockexNova.Client.connect(state.adapter, endpoint) do
+    case WebsockexNew.Client.connect(state.adapter, endpoint) do
       {:ok, conn} ->
         {:reply, {:ok, conn}, %{state | strategy_state: new_state}}
       
@@ -1262,7 +1262,7 @@ Implement secure authentication:
 ```elixir
 defmodule MyApp.SecurityPatterns do
   defmodule TokenAuthentication do
-    use WebsockexNova.Behaviors.AuthHandler
+    use WebsockexNew.Behaviors.AuthHandler
     
     @impl true
     def handle_auth(state, %{token: token}) do
@@ -1364,7 +1364,7 @@ defmodule MyApp.RateLimiting do
   end
   
   defmodule RateLimitHandler do
-    use WebsockexNova.Behaviors.RateLimitHandler
+    use WebsockexNew.Behaviors.RateLimitHandler
     
     @impl true
     def check_rate_limit(state, _action) do
@@ -1531,7 +1531,7 @@ defmodule MyApp.MessageBridge do
     ws_message = transform_kafka_to_ws(message)
     
     # Send via WebSocket
-    WebsockexNova.Client.send_json(state.websocket_conn, ws_message)
+    WebsockexNew.Client.send_json(state.websocket_conn, ws_message)
     
     {:noreply, state}
   end

@@ -1,6 +1,6 @@
-# WebsockexNova Advanced Guides
+# WebsockexNew Advanced Guides
 
-This directory contains advanced documentation for WebsockexNova's macro system and behavior implementations.
+This directory contains advanced documentation for WebsockexNew's macro system and behavior implementations.
 
 ## 📚 Guide Index
 
@@ -23,7 +23,7 @@ This directory contains advanced documentation for WebsockexNova's macro system 
 
 ## 🎯 Quick Start
 
-If you're new to WebsockexNova's advanced features, we recommend reading the guides in this order:
+If you're new to WebsockexNew's advanced features, we recommend reading the guides in this order:
 
 1. Start with [Advanced Macros](advanced_macros.md) to understand the macro system
 2. Learn about [Behavior Composition](behavior_composition.md) for building complex behaviors
@@ -101,6 +101,6 @@ If you need help with any topic:
 
 After reading these guides, you might want to:
 
-- Explore the [examples directory](../../lib/websockex_nova/examples/) for real implementations
+- Explore the [examples directory](../../lib/websockex_new/examples/) for real implementations
 - Review the [test suite](../../test/) for testing patterns
 - Check the [API documentation](../api/) for detailed references

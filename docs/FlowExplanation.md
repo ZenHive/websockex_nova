@@ -1,6 +1,6 @@
-# WebsockexNova Flow Explanation
+# WebsockexNew Flow Explanation
 
-This document provides a comprehensive overview of how WebsockexNova works internally, explaining the data flow, architecture patterns, and key components.
+This document provides a comprehensive overview of how WebsockexNew works internally, explaining the data flow, architecture patterns, and key components.
 
 ## Table of Contents
 1. [High-Level Architecture](#high-level-architecture)
@@ -15,11 +15,11 @@ This document provides a comprehensive overview of how WebsockexNova works inter
 
 ## High-Level Architecture
 
-WebsockexNova follows a layered architecture with clear separation of concerns:
+WebsockexNew follows a layered architecture with clear separation of concerns:
 
 ```
 ┌──────────────────┐
-│   Client API     │  Public interface (WebsockexNova.Client)
+│   Client API     │  Public interface (WebsockexNew.Client)
 ├──────────────────┤
 │  Adapter Layer   │  Platform-specific customization
 ├──────────────────┤
@@ -43,12 +43,12 @@ WebsockexNova follows a layered architecture with clear separation of concerns:
 The actual flow through the system is:
 
 ```
-Your Application → WebsockexNova.Client → Adapter → Gun Transport → External Server
+Your Application → WebsockexNew.Client → Adapter → Gun Transport → External Server
 ```
 
 For example, with Deribit:
-1. **Your Application** calls `WebsockexNova.Client.connect(AdapterDeribit, options)`
-2. **WebsockexNova.Client** (the generic client API) uses the adapter you provide
+1. **Your Application** calls `WebsockexNew.Client.connect(AdapterDeribit, options)`
+2. **WebsockexNew.Client** (the generic client API) uses the adapter you provide
 3. **AdapterDeribit** customizes behavior for Deribit's specific protocol
 4. **Gun Transport** handles the actual WebSocket connection
 5. **Deribit Server** receives/sends WebSocket messages
@@ -73,7 +73,7 @@ Configuration follows a hierarchical precedence model where more specific settin
 
 ```elixir
 # 1. User provides options (highest priority)
-{:ok, conn} = WebsockexNova.Client.connect(AdapterDeribit, %{
+{:ok, conn} = WebsockexNew.Client.connect(AdapterDeribit, %{
   host: "my.deribit.com",  # Overrides adapter default
   timeout: 30_000,         # Overrides adapter default
   log_level: :debug        # Overrides adapter default
@@ -87,7 +87,7 @@ def connection_info(opts) do
     path: "/ws/api/v2",
     timeout: 10_000,
     log_level: :info,
-    auth_handler: WebsockexNova.Defaults.DefaultAuthHandler
+    auth_handler: WebsockexNew.Defaults.DefaultAuthHandler
   }
   
   # Merge with user options (user wins)
@@ -104,7 +104,7 @@ When using a client module created with `ClientMacro`:
 ```elixir
 # ClientDeribit wraps the adapter pattern
 defmodule ClientDeribit do
-  use WebsockexNova.ClientMacro,
+  use WebsockexNew.ClientMacro,
     adapter: AdapterDeribit,
     default_options: %{
       host: "test.deribit.com",
@@ -149,7 +149,7 @@ end
 
 # Client module defaults (higher priority)
 # In ClientDeribit
-use WebsockexNova.ClientMacro,
+use WebsockexNew.ClientMacro,
   default_options: %{
     timeout: 15_000,
     host: "staging.deribit.com"
@@ -321,7 +321,7 @@ Adapters customize behavior for specific platforms:
 
 ```elixir
 defmodule MyAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Override only what you need
   @impl MessageHandler
@@ -402,7 +402,7 @@ sequenceDiagram
 
 ## Reconnection Support
 
-WebsockexNova provides automatic reconnection with state preservation:
+WebsockexNew provides automatic reconnection with state preservation:
 
 ### Connection Registry
 
@@ -485,14 +485,14 @@ Monitor connection lifecycle and performance:
 ```elixir
 # Connection events
 :telemetry.execute(
-  [:websockex_nova, :connection, :open],
+  [:websockex_new, :connection, :open],
   %{duration: 150},
   %{host: "example.com", port: 443}
 )
 
 # Message events
 :telemetry.execute(
-  [:websockex_nova, :message, :received],
+  [:websockex_new, :message, :received],
   %{size: 256},
   %{type: :text, stream_ref: ref}
 )
@@ -504,8 +504,8 @@ Complete example showing Deribit integration:
 
 ```elixir
 # 1. Connect to Deribit
-{:ok, conn} = WebsockexNova.Client.connect(
-  WebsockexNova.Examples.AdapterDeribit,
+{:ok, conn} = WebsockexNew.Client.connect(
+  WebsockexNew.Examples.AdapterDeribit,
   %{
     host: "test.deribit.com",
     port: 443,
@@ -530,13 +530,13 @@ Complete example showing Deribit integration:
 }
 
 # 3. Authenticate
-{:ok, conn, auth_response} = WebsockexNova.Client.authenticate(
+{:ok, conn, auth_response} = WebsockexNew.Client.authenticate(
   conn, 
   conn.adapter_state.credentials
 )
 
 # 4. Subscribe to market data
-{:ok, subscription} = WebsockexNova.Client.subscribe(
+{:ok, subscription} = WebsockexNew.Client.subscribe(
   conn,
   "ticker.BTC-PERPETUAL.raw"
 )

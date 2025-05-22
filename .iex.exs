@@ -1,20 +1,20 @@
-alias WebsockexNova.Client
-alias WebsockexNova.Examples.ClientDeribit
-alias WebsockexNova.Examples.ClientDeribitMacro
+alias WebsockexNew.Client
+alias WebsockexNew.Examples.ClientDeribit
+alias WebsockexNew.Examples.ClientDeribitMacro
 
-# .iex.exs -- WebsockexNova debugging helpers
+# .iex.exs -- WebsockexNew debugging helpers
 
 import IEx.Helpers
 require Logger
 
-# All helpers are now in WebsockexNova.IExHelpers
+# All helpers are now in WebsockexNew.IExHelpers
 
-defmodule WebsockexNova.IExHelpers do
+defmodule WebsockexNew.IExHelpers do
   @moduledoc """
-  IEx helpers for inspecting WebsockexNova connection state.
+  IEx helpers for inspecting WebsockexNew connection state.
 
   Usage in IEx:
-    import WebsockexNova.IExHelpers
+    import WebsockexNew.IExHelpers
     conn, state = get_conn_state(conn)
     print_conn(conn)
     print_adapter(conn)
@@ -32,7 +32,7 @@ defmodule WebsockexNova.IExHelpers do
   # Helper to pretty-print the top-level fields of conn
   # Usage: print_conn(conn)
   def print_conn(conn) do
-    IO.puts("\n=== WebsockexNova.ClientConn (top-level) ===")
+    IO.puts("\n=== WebsockexNew.ClientConn (top-level) ===")
     conn
     |> Map.from_struct()
     |> Enum.reject(fn {k, _v} -> k in [:adapter_state, :connection_handler_settings, :auth_handler_settings, :subscription_handler_settings, :error_handler_settings, :message_handler_settings, :extras] end)
@@ -100,7 +100,7 @@ defmodule WebsockexNova.IExHelpers do
 end
 
 # Make helpers available directly in IEx
-import WebsockexNova.IExHelpers
+import WebsockexNew.IExHelpers
 
 # Usage:
 #   {conn, state} = get_conn_state(conn)

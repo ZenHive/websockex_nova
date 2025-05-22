@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-This guide helps diagnose and resolve common issues when working with WebsockexNova macros and behaviors.
+This guide helps diagnose and resolve common issues when working with WebsockexNew macros and behaviors.
 
 ## Table of Contents
 1. [Common Issues](#common-issues)
@@ -30,7 +30,7 @@ This guide helps diagnose and resolve common issues when working with WebsockexN
 ```elixir
 # Ensure you're using the macro correctly
 defmodule MyApp.Client do
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter  # Check this line
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter  # Check this line
   
   # Your code...
 end
@@ -58,7 +58,7 @@ iex> Code.ensure_loaded(MyApp.Client)
 **Solutions:**
 ```elixir
 defmodule MyApp.CustomHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   # WRONG - missing @impl
   def handle_text_frame(text, state) do
@@ -66,7 +66,7 @@ defmodule MyApp.CustomHandler do
   end
   
   # CORRECT
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # This will be called
   end
@@ -74,7 +74,7 @@ end
 
 # Verify behavior registration
 defmodule MyApp.Adapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Ensure behavior is specified
   def handlers do
@@ -100,7 +100,7 @@ end
 **Solutions:**
 ```elixir
 defmodule MyApp.StatefulHandler do
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # WRONG - state not returned
     Map.put(state, :last_message, text)
@@ -126,7 +126,7 @@ Add debug logging to behaviors:
 defmodule MyApp.DebuggableHandler do
   require Logger
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     Logger.debug("Received: #{inspect(text)}")
     Logger.debug("Current state: #{inspect(state)}")
@@ -162,7 +162,7 @@ iex -S mix
 require IEx
 
 defmodule MyApp.DebugHandler do
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     IEx.pry()  # Execution will pause here
     
@@ -235,7 +235,7 @@ end
 defmodule MyApp.BoundedStateHandler do
   @max_buffer_size 1_000_000  # 1MB
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     new_buffer = state.buffer <> text
     
@@ -252,13 +252,13 @@ end
 
 # 2. Use ETS for large data
 defmodule MyApp.ETSBackedHandler do
-  @impl WebsockexNova.Behaviors.ConnectionHandler
+  @impl WebsockexNew.Behaviors.ConnectionHandler
   def handle_connect(state, conn, _headers, _opts) do
     table = :ets.new(:conn_data, [:set, :public])
     {:ok, Map.put(state, :data_table, table)}
   end
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # Store in ETS instead of state
     :ets.insert(state.data_table, {make_ref(), text})
@@ -278,7 +278,7 @@ end
 ```elixir
 # Profile message handling
 defmodule ProfilingHandler do
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     :timer.tc(fn ->
       actual_processing(text, state)
@@ -306,7 +306,7 @@ defmodule OptimizedJsonHandler do
   # Pre-compile JSON options
   @json_opts [keys: :atoms]
   
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # Use faster JSON library settings
     case Jason.decode(text, @json_opts) do
@@ -318,7 +318,7 @@ end
 
 # 2. Use async processing
 defmodule AsyncHandler do
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # Offload heavy processing
     Task.start(fn ->
@@ -344,7 +344,7 @@ end
 ```elixir
 # Add connection monitoring
 defmodule ConnectionMonitor do
-  use WebsockexNova.Behaviors.ConnectionHandler
+  use WebsockexNew.Behaviors.ConnectionHandler
   
   @impl true
   def handle_connect(state, conn, headers, opts) do
@@ -373,7 +373,7 @@ end
 ```elixir
 # 1. Add keepalive/heartbeat
 defmodule HeartbeatHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @heartbeat_interval 30_000  # 30 seconds
   
@@ -397,7 +397,7 @@ end
 
 # 2. Configure connection options
 defmodule RobustConnection do
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   
   def connect(overrides \\ %{}) do
     opts = Map.merge(%{
@@ -437,7 +437,7 @@ defmodule SecureConnection do
       ]
     ]
     
-    WebsockexNova.Client.connect(MyApp.Adapter, %{
+    WebsockexNew.Client.connect(MyApp.Adapter, %{
       url: url,
       transport_opts: %{
         tls_opts: ssl_opts
@@ -447,7 +447,7 @@ defmodule SecureConnection do
   
   # For self-signed certificates (development only!)
   def connect_insecure(url) do
-    WebsockexNova.Client.connect(MyApp.Adapter, %{
+    WebsockexNew.Client.connect(MyApp.Adapter, %{
       url: url,
       transport_opts: %{
         tls_opts: [verify: :verify_none]
@@ -484,14 +484,14 @@ defmodule BehaviorChecker do
 end
 
 # Usage
-BehaviorChecker.check_callbacks(MyApp.CustomHandler, WebsockexNova.Behaviors.MessageHandler)
+BehaviorChecker.check_callbacks(MyApp.CustomHandler, WebsockexNew.Behaviors.MessageHandler)
 ```
 
 **Solutions:**
 ```elixir
 # Ensure correct callback signatures
 defmodule CorrectHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   # WRONG - missing state parameter
   @impl true
@@ -530,15 +530,15 @@ end
 ```elixir
 # Properly compose behaviors
 defmodule ComposedAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Order matters! Later uses can override earlier ones
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Defaults.MessageHandler
   use MyApp.LoggingBehavior
   use MyApp.MetricsBehavior
   
   # Explicit implementation wins
-  @impl WebsockexNova.Behaviors.MessageHandler
+  @impl WebsockexNew.Behaviors.MessageHandler
   def handle_text_frame(text, state) do
     # This overrides all previous implementations
     Logger.debug("Final handler: #{text}")
@@ -548,7 +548,7 @@ end
 
 # Use delegation for composition
 defmodule DelegatingHandler do
-  use WebsockexNova.Behaviors.MessageHandler
+  use WebsockexNew.Behaviors.MessageHandler
   
   @impl true
   def handle_text_frame(text, state) do
@@ -574,11 +574,11 @@ end
 ```elixir
 # See what code the macro generates
 defmodule MacroDebug do
-  require WebsockexNova.ClientMacro
+  require WebsockexNew.ClientMacro
   
   # Capture macro expansion
   code = quote do
-    use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+    use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   end
   
   expanded = Macro.expand(code, __ENV__)
@@ -761,10 +761,10 @@ defmodule ConnectionRecycler do
     
     new_connections = Enum.reduce(state.connections, %{}, fn {id, conn}, acc ->
       # Close old connection
-      WebsockexNova.Client.close(conn)
+      WebsockexNew.Client.close(conn)
       
       # Create new connection
-      {:ok, new_conn} = WebsockexNova.Client.connect(state.opts)
+      {:ok, new_conn} = WebsockexNew.Client.connect(state.opts)
       Map.put(acc, id, new_conn)
     end)
     
@@ -783,7 +783,7 @@ end
 ### Built-in Diagnostics
 
 ```elixir
-defmodule WebsockexNova.Diagnostics do
+defmodule WebsockexNew.Diagnostics do
   def check_system do
     %{
       behaviors_loaded: check_behaviors(),
@@ -796,10 +796,10 @@ defmodule WebsockexNova.Diagnostics do
   
   defp check_behaviors do
     [
-      WebsockexNova.Behaviors.MessageHandler,
-      WebsockexNova.Behaviors.ConnectionHandler,
-      WebsockexNova.Behaviors.ErrorHandler,
-      WebsockexNova.Behaviors.AuthHandler
+      WebsockexNew.Behaviors.MessageHandler,
+      WebsockexNew.Behaviors.ConnectionHandler,
+      WebsockexNew.Behaviors.ErrorHandler,
+      WebsockexNew.Behaviors.AuthHandler
     ]
     |> Enum.map(fn mod ->
       {mod, Code.ensure_loaded?(mod)}
@@ -813,7 +813,7 @@ defmodule WebsockexNova.Diagnostics do
     |> Enum.filter(fn {mod, _} ->
       Code.ensure_loaded?(mod) and
       function_exported?(mod, :behaviour_info, 1) and
-      mod.behaviour_info(:callbacks) == WebsockexNova.Adapter.behaviour_info(:callbacks)
+      mod.behaviour_info(:callbacks) == WebsockexNew.Adapter.behaviour_info(:callbacks)
     end)
     |> Enum.map(&elem(&1, 0))
   end
@@ -848,9 +848,9 @@ defmodule MyApp.HealthCheck do
   
   defp check_connection_health do
     # Test connection establishment
-    case WebsockexNova.Client.connect(MyApp.Adapter, %{url: "ws://localhost:4000/health"}) do
+    case WebsockexNew.Client.connect(MyApp.Adapter, %{url: "ws://localhost:4000/health"}) do
       {:ok, conn} ->
-        WebsockexNova.Client.close(conn)
+        WebsockexNew.Client.close(conn)
         :ok
       
       {:error, reason} ->

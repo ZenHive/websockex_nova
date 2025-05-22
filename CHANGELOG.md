@@ -33,7 +33,7 @@ _Last updated: 2025-05-22_
 ## [0.1.0] - 2025-05-19
 
 ### Added
-- Initial release of WebsockexNova
+- Initial release of WebsockexNew
 - Behavior-based architecture for WebSocket client functionality
 - Gun transport layer integration for high-performance connections
 - Automatic reconnection support with configurable strategies
@@ -53,6 +53,6 @@ _Last updated: 2025-05-22_
 - Transport options format validation for keyword lists (WNX0003)
 - Subscription preservation enhancements (WNX0004)
 
-[Unreleased]: https://github.com/ZenHive/websockex_nova/compare/v0.1.1...HEAD
-[0.1.1]: https://github.com/ZenHive/websockex_nova/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/ZenHive/websockex_nova/releases/tag/v0.1.0
+[Unreleased]: https://github.com/ZenHive/websockex_new/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/ZenHive/websockex_new/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/ZenHive/websockex_new/releases/tag/v0.1.0

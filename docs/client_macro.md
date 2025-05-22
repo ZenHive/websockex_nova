@@ -1,6 +1,6 @@
 # ClientMacro
 
-The `WebsockexNova.ClientMacro` provides a way to quickly build specialized WebSocket clients with minimal boilerplate code. Similar to the `WebsockexNova.Adapter` macro, it standardizes common functionality while enabling customizations specific to your WebSocket API.
+The `WebsockexNew.ClientMacro` provides a way to quickly build specialized WebSocket clients with minimal boilerplate code. Similar to the `WebsockexNew.Adapter` macro, it standardizes common functionality while enabling customizations specific to your WebSocket API.
 
 ## Benefits
 
@@ -15,7 +15,7 @@ The `WebsockexNova.ClientMacro` provides a way to quickly build specialized WebS
 
 ```elixir
 defmodule MyApp.MyClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.MyAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.MyAdapter
 
   # Add domain-specific methods:
   def subscribe_to_portfolio(conn, account_id, opts \\ nil) do
@@ -29,7 +29,7 @@ end
 
 ```elixir
 defmodule MyApp.MyClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.MyAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.MyAdapter
 
   # Override default options
   defp default_opts do
@@ -48,7 +48,7 @@ end
 
 ```elixir
 defmodule MyApp.MyClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.MyAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.MyAdapter
 
   @doc """
   Subscribe to market data updates for a specific symbol.
@@ -106,7 +106,7 @@ The ClientMacro automatically provides the following methods:
 
 ## Implementation Details
 
-Under the hood, the ClientMacro delegates to the underlying `WebsockexNova.Client` module, which in turn delegates to the specified adapter. The macro ensures your client implementation:
+Under the hood, the ClientMacro delegates to the underlying `WebsockexNew.Client` module, which in turn delegates to the specified adapter. The macro ensures your client implementation:
 
 1. Uses the appropriate adapter for connection and communication
 2. Includes all standard WebSocket operations

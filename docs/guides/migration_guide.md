@@ -1,6 +1,6 @@
 # Migration Guide: From Raw Behaviors to Macros
 
-This guide helps you migrate existing WebsockexNova implementations from raw behavior implementations to the more convenient macro-based approach.
+This guide helps you migrate existing WebsockexNew implementations from raw behavior implementations to the more convenient macro-based approach.
 
 ## Table of Contents
 1. [Why Migrate to Macros](#why-migrate-to-macros)
@@ -29,7 +29,7 @@ Benefits of using macros over raw behaviors:
 
 ```elixir
 defmodule MyApp.OldClient do
-  alias WebsockexNova.Client
+  alias WebsockexNew.Client
   
   def connect(opts \\ %{}) do
     adapter = MyApp.OldAdapter
@@ -63,7 +63,7 @@ end
 
 ```elixir
 defmodule MyApp.NewClient do
-  use WebsockexNova.ClientMacro, 
+  use WebsockexNew.ClientMacro, 
     adapter: MyApp.NewAdapter,
     default_options: %{
       host: "api.example.com",
@@ -86,7 +86,7 @@ end
 ```elixir
 # Old client structure
 defmodule MyApp.TradingClient do
-  alias WebsockexNova.Client
+  alias WebsockexNew.Client
   alias MyApp.TradingAdapter
   
   def connect(opts) do
@@ -126,7 +126,7 @@ end
 
 ```elixir
 defmodule MyApp.TradingClient do
-  use WebsockexNova.ClientMacro, 
+  use WebsockexNew.ClientMacro, 
     adapter: MyApp.TradingAdapter
   
   # Override default options
@@ -177,7 +177,7 @@ end
 ```elixir
 # Old adapter implementation
 defmodule MyApp.OldAdapter do
-  @behaviour WebsockexNova.Adapter
+  @behaviour WebsockexNew.Adapter
   
   def child_spec(config) do
     %{
@@ -230,7 +230,7 @@ end
 
 ```elixir
 defmodule MyApp.NewAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Most methods have sensible defaults
   # Only override what you need
@@ -270,7 +270,7 @@ end
 ```elixir
 # If you had complex initialization
 defmodule MyApp.AdvancedAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   # Override only specific lifecycle hooks
   @impl true
@@ -309,7 +309,7 @@ end
 ```elixir
 # Old behavior implementation
 defmodule MyApp.OldMessageHandler do
-  @behaviour WebsockexNova.Behaviors.MessageHandler
+  @behaviour WebsockexNew.Behaviors.MessageHandler
   
   def handle_text_frame(text, state) do
     case Jason.decode(text) do
@@ -343,7 +343,7 @@ end
 ```elixir
 # New behavior using defaults
 defmodule MyApp.NewMessageHandler do
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Defaults.MessageHandler
   
   # Only override what you need to customize
   @impl true
@@ -379,7 +379,7 @@ end
 defmodule MyApp.MessageHandlerMacro do
   defmacro __using__(opts) do
     quote do
-      use WebsockexNova.Defaults.MessageHandler
+      use WebsockexNew.Defaults.MessageHandler
       
       @json_decoder unquote(opts[:json_decoder] || Jason)
       
@@ -447,7 +447,7 @@ end
 # New test structure
 defmodule MyApp.NewClientTest do
   use ExUnit.Case
-  use WebsockexNova.TestHelper  # Provides test utilities
+  use WebsockexNew.TestHelper  # Provides test utilities
   
   setup do
     # Use test helpers
@@ -483,7 +483,7 @@ end
 
 # New mock setup using macros
 defmodule MyApp.NewMockSetup do
-  use WebsockexNova.MockHelper
+  use WebsockexNew.MockHelper
   
   setup_mock_adapter MyApp.TestAdapter do
     on_connect do
@@ -504,7 +504,7 @@ end
 ```elixir
 # Keep old implementation working
 defmodule MyApp.TransitionalClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.OldAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.OldAdapter
   
   # Delegate to old implementation during transition
   defdelegate old_connect(opts), to: MyApp.OldClient, as: :connect
@@ -532,7 +532,7 @@ end
 ```elixir
 # Run old and new in parallel for comparison
 defmodule MyApp.ParallelClient do
-  use WebsockexNova.ClientMacro, adapter: MyApp.NewAdapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.NewAdapter
   
   def connect(opts \\ %{}) do
     # Connect using both implementations
@@ -560,7 +560,7 @@ end
 ```elixir
 # Final implementation
 defmodule MyApp.Client do
-  use WebsockexNova.ClientMacro, adapter: MyApp.Adapter
+  use WebsockexNew.ClientMacro, adapter: MyApp.Adapter
   
   # All old custom methods migrated
   def place_order(conn, order) do
@@ -600,7 +600,7 @@ end
 
 # New configuration
 defmodule MyApp.NewConfig do
-  use WebsockexNova.ConfigHelper
+  use WebsockexNew.ConfigHelper
   
   # Use macro helpers
   config :adapter, MyApp.NewAdapter
@@ -620,22 +620,22 @@ end
 ```elixir
 # Multiple old behaviors
 defmodule MyApp.OldAuth do
-  @behaviour WebsockexNova.Behaviors.AuthHandler
+  @behaviour WebsockexNew.Behaviors.AuthHandler
   # Implementation
 end
 
 defmodule MyApp.OldError do
-  @behaviour WebsockexNova.Behaviors.ErrorHandler
+  @behaviour WebsockexNew.Behaviors.ErrorHandler
   # Implementation
 end
 
 # Consolidated new behavior
 defmodule MyApp.CombinedHandler do
-  use WebsockexNova.Defaults.AuthHandler
-  use WebsockexNova.Defaults.ErrorHandler
+  use WebsockexNew.Defaults.AuthHandler
+  use WebsockexNew.Defaults.ErrorHandler
   
   # Override specific methods
-  @impl WebsockexNova.Behaviors.AuthHandler
+  @impl WebsockexNew.Behaviors.AuthHandler
   def handle_auth(state, credentials) do
     # Custom auth logic
     super(state, credentials)
@@ -661,7 +661,7 @@ end
 
 # New test pattern
 defmodule NewTest do
-  use WebsockexNova.TestCase  # Includes all helpers
+  use WebsockexNew.TestCase  # Includes all helpers
   
   test "websocket test with helpers" do
     with_mock_server do
@@ -713,7 +713,7 @@ end
 ```elixir
 # Problem: Macro doesn't include a method you need
 defmodule MissingMethod do
-  use WebsockexNova.ClientMacro, adapter: MyAdapter
+  use WebsockexNew.ClientMacro, adapter: MyAdapter
   
   # Need custom method not in macro
   def custom_operation(conn, params) do
@@ -723,8 +723,8 @@ end
 
 # Solution: Use the underlying client
 defmodule CompleteClient do
-  use WebsockexNova.ClientMacro, adapter: MyAdapter
-  alias WebsockexNova.Client
+  use WebsockexNew.ClientMacro, adapter: MyAdapter
+  alias WebsockexNew.Client
   
   def custom_operation(conn, params) do
     # Use Client directly for non-standard operations
@@ -763,7 +763,7 @@ end
 
 # Use in migration
 defmodule MigratingHandler do
-  use WebsockexNova.Defaults.MessageHandler
+  use WebsockexNew.Defaults.MessageHandler
   
   @impl true
   def handle_text_frame(text, state) do

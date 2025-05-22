@@ -1,6 +1,6 @@
-# Medium Refactoring Tasks - Preserving the Best of WebsockexNova
+# Medium Refactoring Tasks - Preserving the Best of WebsockexNew
 
-This document outlines a **moderate refactoring approach** that preserves the proven architectural elements of WebsockexNova while achieving significant simplification. This strikes a balance between the current complexity and a complete rewrite.
+This document outlines a **moderate refactoring approach** that preserves the proven architectural elements of WebsockexNew while achieving significant simplification. This strikes a balance between the current complexity and a complete rewrite.
 
 ## Refactoring Philosophy
 
@@ -17,7 +17,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 **Why:** Proven separation of concerns with real-world validation via Deribit adapter
 
 ### ✅ Adapter Pattern with Macro
-**Keep:** `use WebsockexNova.Adapter` macro system
+**Keep:** `use WebsockexNew.Adapter` macro system
 **Why:** Minimal boilerplate, excellent developer experience, clear override points
 
 ### ✅ ClientConn State Structure
@@ -66,7 +66,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### WNX0020: Simplify Connection Management
 - **Current:** Complex process hierarchy with ConnectionManager, ConnectionWrapper
 - **Target:** Direct Gun process management with behavior callbacks
-- **Files:** `lib/websockex_nova/connection_manager.ex`, `lib/websockex_nova/gun/connection_wrapper.ex`
+- **Files:** `lib/websockex_new/connection_manager.ex`, `lib/websockex_new/gun/connection_wrapper.ex`
 - **Action:** 
   - Keep behavior callback structure
   - Remove intermediate GenServer layers
@@ -82,7 +82,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### WNX0021: Streamline Message Flow
 - **Current:** Message routing through multiple process layers
 - **Target:** Direct message handler invocation with behavior callbacks
-- **Files:** All message routing in `lib/websockex_nova/gun/`
+- **Files:** All message routing in `lib/websockex_new/gun/`
 - **Action:**
   - Keep MessageHandler behavior interface
   - Remove intermediate message queuing
@@ -92,7 +92,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### WNX0022: Simplify Error Handling
 - **Current:** Complex error delegation and recovery systems
 - **Target:** Centralized ErrorHandler with simple retry logic
-- **Files:** `lib/websockex_nova/defaults/default_error_handler.ex`
+- **Files:** `lib/websockex_new/defaults/default_error_handler.ex`
 - **Action:**
   - Keep ErrorHandler behavior interface
   - Simplify reconnection logic to exponential backoff
@@ -123,7 +123,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### WNX0025: Optimize Behavior Helpers
 - **Current:** Complex delegation system in behavior_helpers.ex
 - **Target:** Simplified callback invocation helpers
-- **Files:** `lib/websockex_nova/gun/helpers/behavior_helpers.ex`
+- **Files:** `lib/websockex_new/gun/helpers/behavior_helpers.ex`
 - **Action:**
   - Keep the helper pattern (it's excellent)
   - Simplify callback resolution
@@ -146,7 +146,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### WNX0027: Optimize ClientConn Structure
 - **Current:** ClientConn with complex state management
 - **Target:** Simplified state structure preserving Access behavior
-- **Files:** `lib/websockex_nova/client_conn.ex`
+- **Files:** `lib/websockex_new/client_conn.ex`
 - **Action:**
   - Keep the core ClientConn design (it works well)
   - Remove unused fields
@@ -186,7 +186,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
   - Maintain example quality
 
 #### WNX0031: Refresh Integration Examples
-- **Files:** `lib/websockex_nova/examples/`
+- **Files:** `lib/websockex_new/examples/`
 - **Action:**
   - Update Deribit adapter to use simplified architecture
   - Preserve functionality while reducing complexity
@@ -207,7 +207,7 @@ This document outlines a **moderate refactoring approach** that preserves the pr
 #### Adapter Macro (Unchanged)
 ```elixir
 defmodule MyAdapter do
-  use WebsockexNova.Adapter
+  use WebsockexNew.Adapter
   
   @impl ConnectionHandler
   def connection_info(opts) do
@@ -225,9 +225,9 @@ end
 #### Client API (Enhanced but Compatible)
 ```elixir
 # Preserve current API while adding improvements
-{:ok, conn} = WebsockexNova.Client.connect(MyAdapter, options)
-{:ok, response} = WebsockexNova.Client.send_json(conn, %{type: "subscribe"})
-{:ok, subscription} = WebsockexNova.Client.subscribe(conn, "ticker", %{symbol: "BTC"})
+{:ok, conn} = WebsockexNew.Client.connect(MyAdapter, options)
+{:ok, response} = WebsockexNew.Client.send_json(conn, %{type: "subscribe"})
+{:ok, subscription} = WebsockexNew.Client.subscribe(conn, "ticker", %{symbol: "BTC"})
 ```
 
 #### Behavior Interface (Streamlined)
@@ -278,4 +278,4 @@ end
 - Clear rollback points at each phase boundary
 - Preserved configuration compatibility
 
-This moderate refactoring approach achieves significant simplification while preserving the architectural innovations that make WebsockexNova valuable. The result is a cleaner, more maintainable codebase that retains the flexibility and extensibility that users depend on.
+This moderate refactoring approach achieves significant simplification while preserving the architectural innovations that make WebsockexNew valuable. The result is a cleaner, more maintainable codebase that retains the flexibility and extensibility that users depend on.

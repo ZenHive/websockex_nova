@@ -1,6 +1,6 @@
-defmodule WebsockexNova.Test.Support.MockWebSockServer do
+defmodule WebsockexNew.Test.Support.MockWebSockServer do
   @moduledoc """
-  A simple WebSocket server for testing WebsockexNova clients.
+  A simple WebSocket server for testing WebsockexNew clients.
 
   This server:
   - Starts on a dynamic port by default
@@ -32,9 +32,9 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
   @default_path "/ws"
   defp get_tls_options do
     # Use certificate helper if available
-    if Code.ensure_loaded?(WebsockexNova.Test.Support.CertificateHelper) do
+    if Code.ensure_loaded?(WebsockexNew.Test.Support.CertificateHelper) do
       # Generate temporary self-signed cert for testing
-      alias WebsockexNova.Test.Support.CertificateHelper
+      alias WebsockexNew.Test.Support.CertificateHelper
 
       {cert_path, key_path} = CertificateHelper.generate_self_signed_certificate()
 
@@ -44,7 +44,7 @@ defmodule WebsockexNova.Test.Support.MockWebSockServer do
       ]
     else
       # Fallback to hard-coded test certificates if they exist
-      priv_dir = :code.priv_dir(:websockex_nova)
+      priv_dir = :code.priv_dir(:websockex_new)
       cert_file = Path.join([priv_dir, "test_certs", "server.crt"])
       key_file = Path.join([priv_dir, "test_certs", "server.key"])
 

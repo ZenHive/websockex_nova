@@ -1,10 +1,10 @@
-defmodule WebsockexNova do
+defmodule WebsockexNew do
   @moduledoc """
-  WebsockexNova is a robust WebSocket client library for Elixir with a pluggable adapter architecture.
+  WebsockexNew is a robust WebSocket client library for Elixir with a pluggable adapter architecture.
 
   ## Architecture Overview
 
-  WebsockexNova employs a "thin adapter" architecture that separates concerns through:
+  WebsockexNew employs a "thin adapter" architecture that separates concerns through:
 
   1. **Behavioral Interfaces**: Well-defined behaviors for various aspects of WebSocket handling
   2. **Default Implementations**: Ready-to-use default implementations of these behaviors
@@ -25,20 +25,20 @@ defmodule WebsockexNova do
 
   ```elixir
   # Start a connection to the Echo service
-  {:ok, conn} = WebsockexNova.Connection.start_link(
-    adapter: WebsockexNova.Platform.Echo.Adapter
+  {:ok, conn} = WebsockexNew.Connection.start_link(
+    adapter: WebsockexNew.Platform.Echo.Adapter
   )
 
   # Send a message and get the response
-  {:text, response} = WebsockexNova.Client.send_text(conn, "Hello")
+  {:text, response} = WebsockexNew.Client.send_text(conn, "Hello")
   ```
 
   ## Using with Custom Handlers
 
   ```elixir
   # Start a connection with custom handlers
-  {:ok, conn} = WebsockexNova.Connection.start_link(
-    adapter: WebsockexNova.Platform.Echo.Adapter,
+  {:ok, conn} = WebsockexNew.Connection.start_link(
+    adapter: WebsockexNew.Platform.Echo.Adapter,
     message_handler: MyApp.MessageHandler,
     connection_handler: MyApp.ConnectionHandler
   )
@@ -56,8 +56,8 @@ defmodule WebsockexNova do
 
     def init(opts) do
       # Start the WebSocket connection
-      {:ok, conn} = WebsockexNova.Connection.start_link(
-        adapter: WebsockexNova.Platform.Echo.Adapter
+      {:ok, conn} = WebsockexNew.Connection.start_link(
+        adapter: WebsockexNew.Platform.Echo.Adapter
       )
 
       {:ok, %{conn: conn}}
@@ -70,7 +70,7 @@ defmodule WebsockexNova do
 
     # Callbacks
     def handle_call({:send, message}, _from, %{conn: conn} = state) do
-      result = WebsockexNova.Client.send_text(conn, message)
+      result = WebsockexNew.Client.send_text(conn, message)
       {:reply, result, state}
     end
   end
@@ -79,11 +79,11 @@ defmodule WebsockexNova do
   ## Implementing Custom Handlers
 
   Each aspect of WebSocket communication can be customized by implementing one of
-  the behaviors in `WebsockexNova.Behaviors`:
+  the behaviors in `WebsockexNew.Behaviors`:
 
   ```elixir
   defmodule MyApp.MessageHandler do
-    @behaviour WebsockexNova.Behaviors.MessageHandler
+    @behaviour WebsockexNew.Behaviors.MessageHandler
 
     @impl true
     def init(opts) do
@@ -101,11 +101,11 @@ defmodule WebsockexNova do
 
   ## Creating a Platform Adapter
 
-  To support a new WebSocket service, implement the `WebsockexNova.Platform.Adapter` behavior:
+  To support a new WebSocket service, implement the `WebsockexNew.Platform.Adapter` behavior:
 
   ```elixir
   defmodule MyApp.CustomAdapter do
-    use WebsockexNova.Platform.Adapter,
+    use WebsockexNew.Platform.Adapter,
       default_host: "api.example.com",
       default_port: 443,
       default_path: "/websocket"
@@ -155,6 +155,6 @@ defmodule WebsockexNova do
   * `LoggingHandler`: Provide logging functionality
   * `MetricsCollector`: Collect metrics about WebSocket operations
 
-  Each behavior has a corresponding default implementation in the `WebsockexNova.Defaults` namespace.
+  Each behavior has a corresponding default implementation in the `WebsockexNew.Defaults` namespace.
   """
 end

@@ -1,4 +1,4 @@
-# WebsockexNova Complete Rewrite Tasks
+# WebsockexNew Complete Rewrite Tasks
 
 ## Current Progress Status
 **Last Updated**: 2025-05-22  
@@ -25,7 +25,7 @@
 
 ### 🎯 Priority Changed: Migration First
 **WNX0022**: System Migration and Rename - **NOW PRIORITY #1**
-- Eliminates confusion between websockex_new (7 modules) and WebsockexNova (56 modules)
+- Eliminates confusion between websockex_new (7 modules) and WebsockexNew (56 modules)
 - Cleaner development environment for implementing remaining features
 - Safer implementation of WNX0018-WNX0021 on clean foundation
 - websockex_new foundation is proven with 93 passing tests
@@ -33,7 +33,7 @@
 ---
 
 ## Project Goal
-Completely rewrite WebsockexNova as a simple, maintainable WebSocket client that delivers core functionality with minimal complexity. Build from scratch in `lib/websockex_new/` using Gun as the transport layer, following strict simplicity principles from day one.
+Completely rewrite WebsockexNew as a simple, maintainable WebSocket client that delivers core functionality with minimal complexity. Build from scratch in `lib/websockex_new/` using Gun as the transport layer, following strict simplicity principles from day one.
 
 ## Why Rewrite Instead of Refactor
 - **Current state**: 56 modules, 9 behaviors, 1,737-line connection wrapper
@@ -45,7 +45,7 @@ Completely rewrite WebsockexNova as a simple, maintainable WebSocket client that
 ## Development Strategy
 - **New namespace**: Build in `lib/websockex_new/` to avoid conflicts
 - **Parallel development**: Keep existing system running while rewriting
-- **Final migration**: Rename `websockex_new` → `websockex_nova` when complete
+- **Final migration**: Rename `websockex_new` → `websockex_new` when complete
 - **Clean cutover**: Replace old system entirely, no hybrid approach
 
 ## Core Architecture Principles
@@ -332,7 +332,7 @@ lib/websockex_new/
 
 #### Target Implementation
 Comprehensive test suite for `websockex_new` module using real APIs and existing infrastructure:
-- **IMPORTANT**: Tests must be in `test/websockex_new/` directory, completely separate from WebsockexNova tests
+- **IMPORTANT**: Tests must be in `test/websockex_new/` directory, completely separate from WebsockexNew tests
 - Leverage existing `MockWebSockServer` in `test/support/` for controlled testing
 - test.deribit.com integration tests for real API validation
 - Connection lifecycle testing with proper test isolation
@@ -351,7 +351,7 @@ test/websockex_new/
 ```
 
 #### Implementation Notes
-**MOVED AFTER WNX0022**: This task will be much easier after migration cleanup eliminates the confusion between websockex_new and WebsockexNova systems. The existing `test/support/` infrastructure (MockWebSockServer, etc.) that we currently use for WebsockexNova tests will be reused for the migrated system.
+**MOVED AFTER WNX0022**: This task will be much easier after migration cleanup eliminates the confusion between websockex_new and WebsockexNew systems. The existing `test/support/` infrastructure (MockWebSockServer, etc.) that we currently use for WebsockexNew tests will be reused for the migrated system.
 
 #### Test Strategy (Post-Migration)
 - Real API testing with test.deribit.com as primary validation
@@ -456,7 +456,7 @@ Concise documentation for the new system:
 - [ ] **WNX0021a**: Add comprehensive module documentation
 - [ ] **WNX0021b**: Create Deribit integration examples
 - [ ] **WNX0021c**: Document error handling patterns
-- [ ] **WNX0021d**: Write migration guide from WebsockexNova to WebsockexNew
+- [ ] **WNX0021d**: Write migration guide from WebsockexNew to WebsockexNew
 
 ### WNX0022: System Migration and Cleanup
 **Priority**: Critical - **MOVED TO PRIORITY #1**  
@@ -483,9 +483,9 @@ docs/                           → Keep updated documentation
 LICENSE, .formatter.exs, .gitignore → Keep unchanged
 ```
 
-**Files to DELETE (old WebsockexNova system):**
+**Files to DELETE (old WebsockexNew system):**
 ```
-lib/websockex_nova/             → DELETE ENTIRE DIRECTORY
+lib/websockex_new/             → DELETE ENTIRE DIRECTORY
 ├── application.ex              → DELETE (56 modules total)
 ├── behaviors/                  → DELETE (9 behavior modules)
 ├── client.ex                   → DELETE (complex client)
@@ -497,7 +497,7 @@ lib/websockex_nova/             → DELETE ENTIRE DIRECTORY
 ├── telemetry/                  → DELETE (telemetry system)
 └── transport/                  → DELETE (transport abstraction)
 
-test/websockex_nova/            → DELETE ENTIRE DIRECTORY
+test/websockex_new/            → DELETE ENTIRE DIRECTORY
 ├── auth/                       → DELETE
 ├── behaviors/                  → DELETE (behavior tests)
 ├── client_conn_*.exs          → DELETE
@@ -528,8 +528,8 @@ test/test_helper.exs           → Keep and update for new system
 
 #### Simplified Migration Steps
 - [ ] **WNX0022a**: Create backup branch with current state
-- [ ] **WNX0022b**: Delete entire `lib/websockex_nova/` directory (56 modules) 
-- [ ] **WNX0022c**: Delete entire `test/websockex_nova/` directory
+- [ ] **WNX0022b**: Delete entire `lib/websockex_new/` directory (56 modules) 
+- [ ] **WNX0022c**: Delete entire `test/websockex_new/` directory
 - [ ] **WNX0022d**: Install and run `rename` tool to update project metadata (mix.exs, README.md)
 - [ ] **WNX0022e**: Update mix.exs dependencies (remove unused behavior deps)
 - [ ] **WNX0022f**: Verify all tests pass with cleaned structure
@@ -540,8 +540,8 @@ test/test_helper.exs           → Keep and update for new system
 # Install rename tool
 mix archive.install hex rename
 
-# Rename project from websockex_nova to websockex_new
-mix rename websockex_nova websockex_new
+# Rename project from websockex_new to websockex_new
+mix rename websockex_new websockex_new
 ```
 
 **Result**: Clean codebase with `WebsockexNew` namespace as the permanent, modern implementation.

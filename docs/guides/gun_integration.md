@@ -1,6 +1,6 @@
 # Gun Integration Guide
 
-This guide covers the integration of the [Gun](https://github.com/ninenines/gun) HTTP/WebSocket client in WebsockexNova, focusing on connection management, process monitoring, and ownership transfer.
+This guide covers the integration of the [Gun](https://github.com/ninenines/gun) HTTP/WebSocket client in WebsockexNew, focusing on connection management, process monitoring, and ownership transfer.
 
 ## Table of Contents
 
@@ -12,22 +12,22 @@ This guide covers the integration of the [Gun](https://github.com/ninenines/gun)
 
 ## Overview
 
-WebsockexNova uses Gun as its underlying transport layer for WebSocket connections. Gun, developed by the creators of Cowboy, provides robust HTTP and WebSocket protocol implementation with features like:
+WebsockexNew uses Gun as its underlying transport layer for WebSocket connections. Gun, developed by the creators of Cowboy, provides robust HTTP and WebSocket protocol implementation with features like:
 
 - HTTP/1.1, HTTP/2, and WebSocket support
 - Automatic reconnection capabilities
 - Comprehensive TLS options
 - Message streaming and multiplexing
 
-The `WebsockexNova.Gun.ConnectionWrapper` module encapsulates Gun's functionality, providing a simplified interface while handling the complexities of connection management, message routing, and process lifecycle.
+The `WebsockexNew.Gun.ConnectionWrapper` module encapsulates Gun's functionality, providing a simplified interface while handling the complexities of connection management, message routing, and process lifecycle.
 
 ## Process Monitoring vs. Linking
 
 Gun gives developers the choice between using process links and monitors for tracking connection processes:
 
-### Why WebsockexNova Uses Monitors
+### Why WebsockexNew Uses Monitors
 
-WebsockexNova uses Erlang's process monitoring (`Process.monitor/1`) instead of process linking for tracking Gun connections for several reasons:
+WebsockexNew uses Erlang's process monitoring (`Process.monitor/1`) instead of process linking for tracking Gun connections for several reasons:
 
 1. **Resilience**: If a Gun process crashes, the monitoring process receives a message rather than crashing itself
 2. **Control**: More granular control over error handling and recovery
@@ -59,7 +59,7 @@ Gun provides "await" functions that synchronously wait for specific messages:
 - `gun:await/2,3` - Wait for a response to a specific request
 - `gun:await_body/2,3` - Wait for the complete body of a response
 
-These functions can potentially block indefinitely if the expected message never arrives. To prevent this, WebsockexNova always uses the versions that accept a monitor reference:
+These functions can potentially block indefinitely if the expected message never arrives. To prevent this, WebsockexNew always uses the versions that accept a monitor reference:
 
 ```elixir
 # Creating a monitor for the Gun process
@@ -87,7 +87,7 @@ Gun uses an owner-based message routing system. Only the "owner" process (typica
 
 ### Transferring Ownership
 
-In WebsockexNova, we implement a robust ownership transfer mechanism:
+In WebsockexNew, we implement a robust ownership transfer mechanism:
 
 ```elixir
 # From the current owner process
@@ -143,7 +143,7 @@ end
 
 ## Best Practices
 
-When working with Gun connections in WebsockexNova:
+When working with Gun connections in WebsockexNew:
 
 1. **Always use monitors instead of links**
 
@@ -176,4 +176,4 @@ When working with Gun connections in WebsockexNova:
 
 - [Gun Documentation](https://ninenines.eu/docs/en/gun/2.2/guide/)
 - [Erlang Process Monitoring](https://www.erlang.org/doc/reference_manual/processes.html#monitors)
-- [WebsockexNova Connection Management](../architecture.md#connection-state-management)
+- [WebsockexNew Connection Management](../architecture.md#connection-state-management)

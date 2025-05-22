@@ -1,6 +1,6 @@
-# WebsockexNova Implementation Tasks
+# WebsockexNew Implementation Tasks
 
-This document outlines the prioritized tasks for implementing WebsockexNova with Gun as the transport layer, following Test-Driven Development principles.
+This document outlines the prioritized tasks for implementing WebsockexNew with Gun as the transport layer, following Test-Driven Development principles.
 
 ## Format
 
@@ -381,7 +381,7 @@ Tasks follow this format:
 - **Name**: Update Client Response Matching and Filtering
 - **Description**: Refactor the client's `wait_for_response/2` to robustly match only relevant user responses, filtering out non-user messages (such as server banners). Optionally, allow a custom matcher/filter function to be passed in for advanced use cases. Update documentation and add tests for these scenarios.
 - **Acceptance Criteria**:
-  - `wait_for_response/2` matches the message format sent by the connection process (e.g., `{:websockex_nova, {:websocket_frame, stream_ref, {:text, response}}}`)
+  - `wait_for_response/2` matches the message format sent by the connection process (e.g., `{:websockex_new, {:websocket_frame, stream_ref, {:text, response}}}`)
   - Non-user messages (e.g., server banners) are filtered out
   - Optionally, a custom matcher/filter can be provided
   - Documentation and usage examples are updated
@@ -532,10 +532,10 @@ Tasks follow this format:
 - **Dependencies**: T3.4, T4.4
 - **Status**: DONE
 - **Progress**:
-  - [x] Telemetry event design and documentation complete (`lib/websockex_nova/telemetry/telemetry_events.ex`)
-  - [x] MetricsCollector behavior defined (`lib/websockex_nova/behaviors/metrics_collector.ex`)
-  - [x] DefaultMetricsCollector implemented and tested (`lib/websockex_nova/defaults/default_metrics_collector.ex`)
-  - [x] Tests for event emission and aggregation (`test/websockex_nova/defaults/default_metrics_collector_test.exs`)
+  - [x] Telemetry event design and documentation complete (`lib/websockex_new/telemetry/telemetry_events.ex`)
+  - [x] MetricsCollector behavior defined (`lib/websockex_new/behaviors/metrics_collector.ex`)
+  - [x] DefaultMetricsCollector implemented and tested (`lib/websockex_new/defaults/default_metrics_collector.ex`)
+  - [x] Tests for event emission and aggregation (`test/websockex_new/defaults/default_metrics_collector_test.exs`)
   - [x] Telemetry emission integration into core modules (next step)
   - [x] Documentation and guides update
 - **Code Review Rating** Rating: 5/5
@@ -915,7 +915,7 @@ Tasks follow this format:
   - Type specifications
   - Examples
   - All doc tests passing
-  - **Client API (`WebsockexNova.Client`) is documented as the primary interface for users, with examples for all major functions.**
+  - **Client API (`WebsockexNew.Client`) is documented as the primary interface for users, with examples for all major functions.**
 - **Priority**: P1
 - **Effort**: 2
 - **Dependencies**: T7.1, T3.4, T4.4, T4.10
@@ -943,7 +943,7 @@ Tasks follow this format:
   - Platform integration guide
   - Authentication guide
   - Advanced features guide
-  - **All guides use `WebsockexNova.Client` as the recommended interface for sending messages, subscribing, authenticating, etc.**
+  - **All guides use `WebsockexNew.Client` as the recommended interface for sending messages, subscribing, authenticating, etc.**
 - **Priority**: P2
 - **Effort**: 2
 - **Dependencies**: T6.4
@@ -969,7 +969,7 @@ Tasks follow this format:
 - **Name**: Implement ergonomic client API
 - **Description**: Provide a user-friendly, documented API for interacting with platform adapter connections. This module should encapsulate the internal message protocol and expose clear, well-documented functions for common operations such as sending messages, subscribing, authenticating, and querying connection status. The API should be adapter-agnostic and extensible, serving as the primary interface for end users.
 - **Acceptance Criteria**:
-  - `WebsockexNova.Client` module is implemented with the following functions (at minimum):
+  - `WebsockexNew.Client` module is implemented with the following functions (at minimum):
     - `send_text/2,3` — Send a text message and receive a reply or timeout.
     - `send_json/2,3` — Send a map as JSON and receive a reply or timeout.
     - `subscribe/3,4` — Subscribe to a channel/topic (if supported by the adapter).
@@ -1246,7 +1246,7 @@ Tasks follow this format:
     - Test state transitions and invariants (e.g., after authentication, reconnection, etc.).
   - All acceptance criteria must be covered by automated tests.
 
-- **Description:** Refactor the codebase to ensure that the `options` map in `WebsockexNova.Gun.ConnectionState` contains only transport configuration (e.g., host, port, path, ws_opts, protocols, transport_opts, etc.). All session, authentication, subscription, and handler state must be canonical in `ClientConn` (and, if needed, in `adapter_state` inside `ClientConn`). Remove any copying or storage of session/auth/subscription state in `ConnectionState.options`.
+- **Description:** Refactor the codebase to ensure that the `options` map in `WebsockexNew.Gun.ConnectionState` contains only transport configuration (e.g., host, port, path, ws_opts, protocols, transport_opts, etc.). All session, authentication, subscription, and handler state must be canonical in `ClientConn` (and, if needed, in `adapter_state` inside `ClientConn`). Remove any copying or storage of session/auth/subscription state in `ConnectionState.options`.
 - **Rationale:** Prevents state divergence and duplication, which can lead to subtle, production-impacting bugs. Enforces a single source of truth for all user/session state, improving maintainability and reliability.
 - **Risks:** Refactor may require changes to how state is passed to the transport layer and how handler/adapters access session state. All tests must be updated to reflect the new state boundaries. No downward compatibility is required, but production safety is paramount.
 - **Acceptance Criteria:**
@@ -1290,7 +1290,7 @@ Audit and fix all test failures and warnings resulting from the STATE refactor, 
 
 ### Acceptance Criteria
 
-- All tests in `test/websockex_nova/gun/` pass.
+- All tests in `test/websockex_new/gun/` pass.
 - No session/auth/subscription state is present in `ConnectionState.options`.
 - All handler modules and state are correctly initialized and invoked.
 - All warnings about missing behavior callbacks are resolved.

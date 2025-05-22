@@ -1,4 +1,4 @@
-# WebsockexNova Task List
+# WebsockexNew Task List
 
 ## Integration Test Setup Notes
 - Use test.deribit.com for external testing
@@ -7,7 +7,7 @@
 - Always test with real endpoints, no mocking for integration tests
 
 ## Test Files Created for Deribit Adapter
-1. `test/websockex_nova/examples/adapter_deribit_comprehensive_test.exs`
+1. `test/websockex_new/examples/adapter_deribit_comprehensive_test.exs`
    - Comprehensive tests for adapter functionality
    - Configuration preservation tests
    - Authentication tests
@@ -19,7 +19,7 @@
    - Subscription tests
    - Authentication tests
 
-3. `test/websockex_nova/examples/deribit_config_preservation_test.exs`
+3. `test/websockex_new/examples/deribit_config_preservation_test.exs`
    - Focused tests for configuration preservation
    - Tests for custom options
    - Tests for nested configuration structures
@@ -89,7 +89,7 @@ This issue was discovered during integration testing:
      ]
      ```
   2. Attempted to pass these to the connection function
-- **Bug Manifestation**: The tests failed with the error: `** (FunctionClauseError) no function clause matching in WebsockexNova.Client.Handlers.configure_handlers/2`
+- **Bug Manifestation**: The tests failed with the error: `** (FunctionClauseError) no function clause matching in WebsockexNew.Client.Handlers.configure_handlers/2`
 - **Resolution**: We had to convert the transport_opts to a map to make the tests pass:
   ```elixir
   transport_opts = %{
@@ -146,7 +146,7 @@ Use Dialyzer to verify type compatibility across the transport layer
 **Description**: While the library attempts to preserve subscriptions across reconnection, the tests revealed that it's difficult to verify this functionality due to issues with connection tracking. After fixing the connection tracking issue, subscription preservation needs to be thoroughly tested and potentially enhanced.
 
 This issue was discovered during our comprehensive testing:
-- **Test File**: `test/websockex_nova/examples/adapter_deribit_comprehensive_test.exs`
+- **Test File**: `test/websockex_new/examples/adapter_deribit_comprehensive_test.exs`
 - **Test Method**: We created a test called `preserves subscriptions across reconnects` that:
   1. Connected to the Deribit test server
   2. Subscribed to multiple channels (ticker, trades)
@@ -207,7 +207,7 @@ Use Dialyzer to verify type consistency in subscription handling code
 **Priority**: Medium
 
 ### WNX0005: Prepare library for publication
-**Description**: Prepare the WebsockexNova library for publication on hex.pm, ensuring all required metadata is present, documentation is complete, and the package meets Hex publishing standards.
+**Description**: Prepare the WebsockexNew library for publication on hex.pm, ensuring all required metadata is present, documentation is complete, and the package meets Hex publishing standards.
 
 **Background**:
 The library has now completed all major functionality tasks and is ready to be packaged for public release. This task ensures that the library meets all quality standards for a professional Elixir package.
@@ -249,7 +249,7 @@ Provide minimal but complete documentation that gets users started quickly
 - Migration guide from original Websockex if applicable
 
 **Package Metadata Requirements**:
-- Name: websockex_nova
+- Name: websockex_new
 - Description: Clear, concise description
 - Version: Semantic versioning (suggest 0.1.0 for initial release)
 - Links: GitHub repository, documentation
@@ -341,7 +341,7 @@ Document all public types, especially:
 **Validation**: ✅ Passed validation
 
 ### WNX0006: Create advanced documentation for macros and behaviors
-**Description**: Create comprehensive, advanced documentation that goes beyond basic usage to cover advanced patterns, best practices, and architectural guidance for the WebsockexNova macro system and behavior implementations.
+**Description**: Create comprehensive, advanced documentation that goes beyond basic usage to cover advanced patterns, best practices, and architectural guidance for the WebsockexNew macro system and behavior implementations.
 
 **Background**:
 While the basic documentation is complete, users need more advanced guidance on:
