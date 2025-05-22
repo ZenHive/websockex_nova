@@ -9,6 +9,8 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   - Heartbeat responses
   """
 
+  use WebsockexNew.JsonRpc
+
   alias WebsockexNew.Client
   alias WebsockexNew.MessageHandler
 
@@ -23,6 +25,12 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
         }
 
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
+
+  # Define JSON-RPC methods using macro
+  defrpc(:auth_request, "public/auth", doc: "Authenticate with client credentials")
+  defrpc(:subscribe_request, "public/subscribe", doc: "Subscribe to channels")
+  defrpc(:unsubscribe_request, "public/unsubscribe", doc: "Unsubscribe from channels")
+  defrpc(:test_request, "public/test", doc: "Send test/heartbeat response")
 
   @doc """
   Connect to Deribit WebSocket API with optional authentication.
@@ -57,19 +65,14 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   def authenticate(%__MODULE__{client_id: nil}), do: {:error, :missing_credentials}
 
   def authenticate(%__MODULE__{client: client, client_id: client_id, client_secret: client_secret} = adapter) do
-    auth_message =
-      Jason.encode!(%{
-        jsonrpc: "2.0",
-        id: :erlang.unique_integer([:positive]),
-        method: "public/auth",
-        params: %{
-          grant_type: "client_credentials",
-          client_id: client_id,
-          client_secret: client_secret
-        }
+    {:ok, request} =
+      auth_request(%{
+        grant_type: "client_credentials",
+        client_id: client_id,
+        client_secret: client_secret
       })
 
-    case Client.send_message(client, auth_message) do
+    case Client.send_message(client, Jason.encode!(request)) do
       :ok ->
         {:ok, %{adapter | authenticated: true}}
 
@@ -83,17 +86,9 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   """
   @spec subscribe(t(), list(String.t())) :: {:ok, t()} | {:error, term()}
   def subscribe(%__MODULE__{client: client, subscriptions: subs} = adapter, channels) when is_list(channels) do
-    subscription_message =
-      Jason.encode!(%{
-        jsonrpc: "2.0",
-        id: :erlang.unique_integer([:positive]),
-        method: "public/subscribe",
-        params: %{
-          channels: channels
-        }
-      })
+    {:ok, request} = subscribe_request(%{channels: channels})
 
-    case Client.send_message(client, subscription_message) do
+    case Client.send_message(client, Jason.encode!(request)) do
       :ok ->
         new_subs = Enum.reduce(channels, subs, &MapSet.put(&2, &1))
         {:ok, %{adapter | subscriptions: new_subs}}
@@ -108,17 +103,9 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   """
   @spec unsubscribe(t(), list(String.t())) :: {:ok, t()} | {:error, term()}
   def unsubscribe(%__MODULE__{client: client, subscriptions: subs} = adapter, channels) when is_list(channels) do
-    unsubscription_message =
-      Jason.encode!(%{
-        jsonrpc: "2.0",
-        id: :erlang.unique_integer([:positive]),
-        method: "public/unsubscribe",
-        params: %{
-          channels: channels
-        }
-      })
+    {:ok, request} = unsubscribe_request(%{channels: channels})
 
-    case Client.send_message(client, unsubscription_message) do
+    case Client.send_message(client, Jason.encode!(request)) do
       :ok ->
         new_subs = Enum.reduce(channels, subs, &MapSet.delete(&2, &1))
         {:ok, %{adapter | subscriptions: new_subs}}
@@ -135,14 +122,8 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   def handle_message({:text, message}) do
     case Jason.decode(message) do
       {:ok, %{"method" => "heartbeat", "params" => %{"type" => "test_request"}}} ->
-        response =
-          Jason.encode!(%{
-            jsonrpc: "2.0",
-            method: "public/test",
-            params: %{}
-          })
-
-        {:response, response}
+        {:ok, request} = test_request()
+        {:response, Jason.encode!(request)}
 
       {:ok, decoded} ->
         handle_decoded_message(decoded)
@@ -204,7 +185,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
 
     case WebsockexNew.ErrorHandler.handle_error(error_data) do
       :stop ->
-        if is_auth_error?(code, message) do
+        if auth_error?(code, message) do
           default_auth_error_handler({:auth_failed, code, message, full_response})
         else
           default_error_handler({:api_error, code, message, full_response})
@@ -217,7 +198,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
     :ok
   end
 
-  defp is_auth_error?(code, message) do
+  defp auth_error?(code, message) do
     case code do
       -32_600 -> String.contains?(message, "unauthorized")
       -32_602 -> String.contains?(message, "invalid_credentials")
