@@ -458,28 +458,29 @@ Concise documentation for the new system:
 - [ ] **WNX0021c**: Document error handling patterns
 - [ ] **WNX0021d**: Write migration guide from WebsockexNova to WebsockexNew
 
-### WNX0022: System Migration and Rename
+### WNX0022: System Migration and Cleanup
 **Priority**: Critical - **MOVED TO PRIORITY #1**  
-**Effort**: Medium  
+**Effort**: Small (simplified approach)  
 **Dependencies**: None (websockex_new system is complete and tested)
 
 #### Target Implementation
-Complete migration from old to new system with clear file management:
+**SIMPLIFIED APPROACH**: Keep `WebsockexNew` namespace and use project rename tool for metadata only
+
+#### Strategy Benefits
+- **Zero module renaming risk** - all working code stays exactly as-is
+- **90% less complexity** - no mass find/replace operations across codebase
+- **Safe project updates** - use proven `rename` tool for mix.exs/README/docs
+- **"New" becomes permanent identity** - semantically appropriate for modern implementation
 
 #### File Management Strategy
 
-**Files to KEEP (migrate to new system):**
+**Files to KEEP (no renaming needed):**
 ```
-lib/websockex_new/              → lib/websockex_nova/
-test/websockex_new/             → test/websockex_nova/
+lib/websockex_new/              → Keep as-is (WebsockexNew namespace permanent)
+test/websockex_new/             → Keep as-is (no module changes needed)
 test/support/                   → Keep existing test infrastructure
 docs/                           → Keep updated documentation
-mix.exs                         → Update with new dependencies only
-README.md                       → Update with new architecture
-CHANGELOG.md                    → Update with migration notes
-LICENSE                         → Keep unchanged
-.formatter.exs                  → Keep unchanged
-.gitignore                      → Keep unchanged
+LICENSE, .formatter.exs, .gitignore → Keep unchanged
 ```
 
 **Files to DELETE (old WebsockexNova system):**
@@ -523,19 +524,27 @@ test/support/gun_monitor.ex     → Keep if used by new system
 test/test_helper.exs           → Keep and update for new system
 ```
 
-**Important**: The new websockex_new system already uses some of the `test/support/` infrastructure, so this migration preserves that working relationship.
+**Important**: WebsockexNew system already uses some of the `test/support/` infrastructure, so this cleanup preserves that working relationship.
 
-#### Migration Steps
+#### Simplified Migration Steps
 - [ ] **WNX0022a**: Create backup branch with current state
-- [ ] **WNX0022b**: Delete entire `lib/websockex_nova/` directory (56 modules)
-- [ ] **WNX0022c**: Delete entire `test/websockex_nova/` directory 
-- [ ] **WNX0022d**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
-- [ ] **WNX0022e**: Rename `test/websockex_new/` → `test/websockex_nova/`
-- [ ] **WNX0022f**: Update all module names from `WebsockexNew` → `WebsockexNova`
-- [ ] **WNX0022g**: Update mix.exs dependencies (remove unused behavior deps)
-- [ ] **WNX0022h**: Update documentation and examples
-- [ ] **WNX0022i**: Verify all tests pass with new structure
-- [ ] **WNX0022j**: Update README with simplified architecture (7 modules vs 56)
+- [ ] **WNX0022b**: Delete entire `lib/websockex_nova/` directory (56 modules) 
+- [ ] **WNX0022c**: Delete entire `test/websockex_nova/` directory
+- [ ] **WNX0022d**: Install and run `rename` tool to update project metadata (mix.exs, README.md)
+- [ ] **WNX0022e**: Update mix.exs dependencies (remove unused behavior deps)
+- [ ] **WNX0022f**: Verify all tests pass with cleaned structure
+- [ ] **WNX0022g**: Update README with simplified architecture (7 modules vs 56)
+
+#### Rename Tool Usage
+```bash
+# Install rename tool
+mix archive.install hex rename
+
+# Rename project from websockex_nova to websockex_new
+mix rename websockex_nova websockex_new
+```
+
+**Result**: Clean codebase with `WebsockexNew` namespace as the permanent, modern implementation.
 
 ---
 
@@ -543,7 +552,7 @@ test/test_helper.exs           → Keep and update for new system
 
 ### Final Module Structure (7 modules maximum)
 ```
-lib/websockex_nova/
+lib/websockex_new/
 ├── client.ex              # Main client interface (5 functions)
 ├── config.ex              # Configuration struct and validation
 ├── frame.ex               # WebSocket frame encoding/decoding  
@@ -558,18 +567,18 @@ lib/websockex_nova/
 ### Public API (5 functions only)
 ```elixir
 # Core client interface - everything users need
-WebsockexNova.Client.connect(url, opts)
-WebsockexNova.Client.send(client, message)
-WebsockexNova.Client.close(client)
-WebsockexNova.Client.subscribe(client, channels)
-WebsockexNova.Client.get_state(client)
+WebsockexNew.Client.connect(url, opts)
+WebsockexNew.Client.send(client, message)
+WebsockexNew.Client.close(client)
+WebsockexNew.Client.subscribe(client, channels)
+WebsockexNew.Client.get_state(client)
 ```
 
 ### Development Workflow
-1. **Phase 1-3**: Build complete new system in `lib/websockex_new/`
-2. **Test extensively**: Validate against real APIs throughout development
-3. **Phase 4**: Migrate by renaming directories and updating references
-4. **Clean cutover**: Remove old system entirely
+1. **Phase 1-3**: Build complete new system in `lib/websockex_new/` ✅ COMPLETED
+2. **Test extensively**: Validate against real APIs throughout development ✅ COMPLETED
+3. **Phase 4**: Clean cutover - remove old system, keep `WebsockexNew` namespace
+4. **Project rename**: Use rename tool for project metadata only
 
 ## Success Metrics
 
@@ -592,11 +601,11 @@ WebsockexNova.Client.get_state(client)
 ## Implementation Strategy
 
 ### Development Approach
-1. **Parallel development** - Build in `lib/websockex_new/` without disrupting current system
-2. **Build incrementally** - Each task produces working, tested code
-3. **Real API first** - Every feature tested against test.deribit.com
-4. **Document as you go** - Write docs with each module
-5. **Clean migration** - Complete rename at the end
+1. **Parallel development** - Build in `lib/websockex_new/` without disrupting current system ✅ COMPLETED
+2. **Build incrementally** - Each task produces working, tested code ✅ COMPLETED
+3. **Real API first** - Every feature tested against test.deribit.com ✅ COMPLETED
+4. **Document as you go** - Write docs with each module ✅ COMPLETED
+5. **Clean migration** - Remove old system, keep new namespace permanent
 
 ### Quality Gates
 - **Each module**: Maximum 5 functions, 15 lines per function
@@ -605,10 +614,10 @@ WebsockexNova.Client.get_state(client)
 - **Each commit**: Maintains working system end-to-end
 
 ### Timeline
-- **Week 1**: Core client (WNX0010-0012) - Basic connect/send/close
-- **Week 2**: Connection management (WNX0013-0015) - Reconnection and messaging
-- **Week 3**: Integration (WNX0016-0018) - Deribit adapter and testing
-- **Final phase**: Migration and cleanup (WNX0019-0020)
+- **Week 1**: Core client (WNX0010-0012) - Basic connect/send/close ✅ COMPLETED
+- **Week 2**: Connection management (WNX0013-0015) - Reconnection and messaging ✅ COMPLETED
+- **Week 3**: Integration (WNX0016-0017) - Deribit adapter and error handling ✅ COMPLETED
+- **Current phase**: Migration cleanup (WNX0022) then remaining features (WNX0018-0021)
 
 ## Migration Benefits
 
@@ -627,6 +636,6 @@ WebsockexNova.Client.get_state(client)
 
 ## Notes
 
-This rewrite prioritizes **shipping a working system quickly** over architectural perfection. The development in `lib/websockex_new/` allows for safe, parallel development while maintaining the existing system.
+This rewrite prioritizes **shipping a working system quickly** over architectural perfection. The development in `lib/websockex_new/` allowed for safe, parallel development while maintaining the existing system.
 
-**Key philosophy**: Build the minimum system that solves real problems, then migrate cleanly. The namespace approach provides safety and flexibility during development.
+**Key philosophy**: Build the minimum system that solves real problems, then clean cutover. The namespace approach provided safety during development, and `WebsockexNew` becomes the permanent, modern identity.
