@@ -324,33 +324,41 @@ lib/websockex_new/
 ### WNX0018: Real API Testing Infrastructure
 **Priority**: Critical  
 **Effort**: Medium  
-**Dependencies**: WNX0016
+**Dependencies**: None
 
 #### Target Implementation
-Comprehensive test suite using only real APIs:
-- test.deribit.com integration tests (with rate limiting)
-- Connection lifecycle testing
+Comprehensive test suite for `websockex_new` module using real APIs and existing infrastructure:
+- **IMPORTANT**: Tests must be in `test/websockex_new/` directory, completely separate from WebsockexNova tests
+- Leverage existing `MockWebSockServer` in `test/support/` for controlled testing
+- test.deribit.com integration tests for real API validation
+- Connection lifecycle testing with proper test isolation
 - Error scenario testing (network drops, auth failures)
-- Zero mock implementations
+- Zero new mock implementations - reuse existing infrastructure
 
 #### File Structure
 ```
 test/websockex_new/
-├── client_test.exs
 ├── integration/
-│   ├── deribit_test.exs
-│   └── connection_test.exs
-└── support/
-    └── test_helpers.ex
+│   ├── deribit_real_api_test.exs          # Real API tests only
+│   └── mock_server_test.exs               # Uses existing MockWebSockServer
+├── support/
+│   └── websockex_new_helpers.ex           # Helpers specific to websockex_new
+└── websockex_new_client_test.exs          # Core client functionality
 ```
 
+#### Critical Notes
+- **Separation**: All websockex_new tests MUST be isolated from WebsockexNova tests
+- **Reuse**: Use existing `MockWebSockServer` infrastructure instead of creating new servers
+- **Real APIs**: Primary focus on test.deribit.com for authentic integration testing
+- **No Duplication**: Don't duplicate existing test infrastructure
+
 #### Subtasks
-- [ ] **WNX0018a**: Create `test/websockex_new/` directory structure
-- [ ] **WNX0018b**: Set up test.deribit.com integration test suite
-- [ ] **WNX0018c**: Add real API authentication for tests
-- [ ] **WNX0018d**: Test connection lifecycle (connect, subscribe, disconnect)
-- [ ] **WNX0018e**: Test reconnection scenarios with real network issues
-- [ ] **WNX0018f**: Add rate-limited production API fallback tests
+- [ ] **WNX0018a**: Create `test/websockex_new/support/websockex_new_helpers.ex` with real API utilities
+- [ ] **WNX0018b**: Create integration test using existing MockWebSockServer for controlled scenarios
+- [ ] **WNX0018c**: Set up test.deribit.com integration test suite for websockex_new module
+- [ ] **WNX0018d**: Add test configuration and authentication handling for real APIs
+- [ ] **WNX0018e**: Test connection lifecycle (connect, authenticate, subscribe, disconnect)
+- [ ] **WNX0018f**: Test reconnection scenarios and error handling with real endpoints
 
 ### WNX0019: Deribit Bootstrap Sequence Implementation
 **Priority**: High  
@@ -452,19 +460,76 @@ Concise documentation for the new system:
 **Dependencies**: WNX0018, WNX0021
 
 #### Target Implementation
-Complete migration from old to new system:
-- Rename `websockex_new` → `websockex_nova`
-- Remove old system entirely
-- Update all references and documentation
-- Clean git history
+Complete migration from old to new system with clear file management:
 
-#### Subtasks
-- [ ] **WNX0022a**: Backup current system to `lib/websockex_nova_old/`
-- [ ] **WNX0022b**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
-- [ ] **WNX0022c**: Update all module names from `WebsockexNew` → `WebsockexNova`
-- [ ] **WNX0022d**: Update mix.exs and documentation references
-- [ ] **WNX0022e**: Remove old system files (`lib/websockex_nova_old/`)
-- [ ] **WNX0022f**: Update README and CHANGELOG with new architecture
+#### File Management Strategy
+
+**Files to KEEP (migrate to new system):**
+```
+lib/websockex_new/              → lib/websockex_nova/
+test/websockex_new/             → test/websockex_nova/
+test/support/                   → Keep existing test infrastructure
+docs/                           → Keep updated documentation
+mix.exs                         → Update with new dependencies only
+README.md                       → Update with new architecture
+CHANGELOG.md                    → Update with migration notes
+LICENSE                         → Keep unchanged
+.formatter.exs                  → Keep unchanged
+.gitignore                      → Keep unchanged
+```
+
+**Files to DELETE (old WebsockexNova system):**
+```
+lib/websockex_nova/             → DELETE ENTIRE DIRECTORY
+├── application.ex              → DELETE (56 modules total)
+├── behaviors/                  → DELETE (9 behavior modules)
+├── client.ex                   → DELETE (complex client)
+├── defaults/                   → DELETE (7 default implementations)
+├── examples/                   → DELETE (Deribit adapter)
+├── gun/                        → DELETE (Gun transport layer - 15 modules)
+├── helpers/                    → DELETE (state helpers)
+├── message/                    → DELETE (message handling)
+├── telemetry/                  → DELETE (telemetry system)
+└── transport/                  → DELETE (transport abstraction)
+
+test/websockex_nova/            → DELETE ENTIRE DIRECTORY
+├── auth/                       → DELETE
+├── behaviors/                  → DELETE (behavior tests)
+├── client_conn_*.exs          → DELETE
+├── client_macro_test.exs      → DELETE
+├── client_test.exs            → DELETE
+├── connection_registry_test.exs → DELETE
+├── defaults/                   → DELETE (default handler tests)
+├── examples/                   → DELETE (adapter tests)
+├── gun/                        → DELETE (Gun transport tests)
+├── handler_invoker_test.exs   → DELETE
+├── helpers/                    → DELETE
+├── message/                    → DELETE
+├── telemetry/                  → DELETE
+├── transport/                  → DELETE
+└── transport_test.exs         → DELETE
+```
+
+**Test Files to KEEP:**
+```
+test/integration/               → Keep real API integration tests
+test/support/mock_websock_*     → Keep existing mock infrastructure
+test/support/certificate_helper.ex → Keep certificate helpers
+test/support/gun_monitor.ex     → Keep if used by new system
+test/test_helper.exs           → Keep and update for new system
+```
+
+#### Migration Steps
+- [ ] **WNX0022a**: Create backup branch with current state
+- [ ] **WNX0022b**: Delete entire `lib/websockex_nova/` directory (56 modules)
+- [ ] **WNX0022c**: Delete entire `test/websockex_nova/` directory 
+- [ ] **WNX0022d**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
+- [ ] **WNX0022e**: Rename `test/websockex_new/` → `test/websockex_nova/`
+- [ ] **WNX0022f**: Update all module names from `WebsockexNew` → `WebsockexNova`
+- [ ] **WNX0022g**: Update mix.exs dependencies (remove unused behavior deps)
+- [ ] **WNX0022h**: Update documentation and examples
+- [ ] **WNX0022i**: Verify all tests pass with new structure
+- [ ] **WNX0022j**: Update README with simplified architecture (7 modules vs 56)
 
 ---
 
