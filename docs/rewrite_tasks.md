@@ -328,8 +328,7 @@ lib/websockex_new/
 
 #### Target Implementation
 Comprehensive test suite using only real APIs:
-- Primary: test.deribit.com integration tests
-- Fallback: Production API tests with rate limiting
+- test.deribit.com integration tests (with rate limiting)
 - Connection lifecycle testing
 - Error scenario testing (network drops, auth failures)
 - Zero mock implementations

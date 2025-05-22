@@ -15,7 +15,7 @@ defmodule WebsockexNew.ErrorIntegrationTest do
       assert {:error, reason} = Client.connect(@invalid_url)
 
       {category, _} = ErrorHandler.categorize_error(reason)
-      assert category in [:connection_error, :timeout_error]
+      assert category == :recoverable
 
       # Test that we can at least handle the error properly
       result = ErrorHandler.handle_error(reason)
@@ -126,7 +126,7 @@ defmodule WebsockexNew.ErrorIntegrationTest do
     test "ErrorHandler categorizes frame errors correctly" do
       frame_error = {:error, {:bad_frame, :invalid_opcode}}
 
-      assert {:protocol_error, ^frame_error} = ErrorHandler.categorize_error(frame_error)
+      assert {:fatal, ^frame_error} = ErrorHandler.categorize_error(frame_error)
       assert ErrorHandler.handle_error(frame_error) == :stop
       refute ErrorHandler.recoverable?(frame_error)
     end

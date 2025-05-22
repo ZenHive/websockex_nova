@@ -12,35 +12,33 @@ defmodule WebsockexNew.ErrorHandler do
   """
 
   @doc """
-  Categorizes errors into common types for easier handling.
+  Categorizes errors into recoverable vs non-recoverable types.
 
   Returns the raw error unchanged to preserve all original information.
   """
-  @spec categorize_error(term()) ::
-          {:connection_error | :protocol_error | :auth_error | :timeout_error | :unknown_error, term()}
+  @spec categorize_error(term()) :: {:recoverable | :fatal, term()}
   def categorize_error(error) do
     case error do
-      # Connection errors from Gun
-      {:error, :econnrefused} -> {:connection_error, error}
-      {:error, :timeout} -> {:timeout_error, error}
-      :timeout -> {:timeout_error, {:error, error}}
-      {:error, :nxdomain} -> {:connection_error, error}
-      {:error, {:tls_alert, _}} -> {:connection_error, error}
-      {:error, :enotfound} -> {:connection_error, error}
-      {:error, :ehostunreach} -> {:connection_error, error}
-      {:error, :enetunreach} -> {:connection_error, error}
-      {:gun_down, _, _, reason, _} -> {:connection_error, {:gun_down, reason}}
-      {:gun_error, _, _, reason} -> {:connection_error, {:gun_error, reason}}
-      # Protocol errors
-      {:error, :invalid_frame} -> {:protocol_error, error}
-      {:error, :frame_too_large} -> {:protocol_error, error}
-      {:error, {:bad_frame, _}} -> {:protocol_error, error}
-      # Authentication errors
-      {:error, :unauthorized} -> {:auth_error, error}
-      {:error, :invalid_credentials} -> {:auth_error, error}
-      {:error, :token_expired} -> {:auth_error, error}
-      # Catch-all for unknown errors
-      _ -> {:unknown_error, error}
+      # Recoverable connection/network errors
+      {:error, :econnrefused} -> {:recoverable, error}
+      {:error, :timeout} -> {:recoverable, error}
+      :timeout -> {:recoverable, {:error, error}}
+      {:error, :nxdomain} -> {:recoverable, error}
+      {:error, {:tls_alert, _}} -> {:recoverable, error}
+      {:error, :enotfound} -> {:recoverable, error}
+      {:error, :ehostunreach} -> {:recoverable, error}
+      {:error, :enetunreach} -> {:recoverable, error}
+      {:gun_down, _, _, reason, _} -> {:recoverable, {:gun_down, reason}}
+      {:gun_error, _, _, reason} -> {:recoverable, {:gun_error, reason}}
+      # Fatal protocol/auth errors
+      {:error, :invalid_frame} -> {:fatal, error}
+      {:error, :frame_too_large} -> {:fatal, error}
+      {:error, {:bad_frame, _}} -> {:fatal, error}
+      {:error, :unauthorized} -> {:fatal, error}
+      {:error, :invalid_credentials} -> {:fatal, error}
+      {:error, :token_expired} -> {:fatal, error}
+      # Unknown errors are fatal (let higher levels decide whether to crash)
+      _ -> {:fatal, error}
     end
   end
 
@@ -50,27 +48,21 @@ defmodule WebsockexNew.ErrorHandler do
   @spec recoverable?(term()) :: boolean()
   def recoverable?(error) do
     case categorize_error(error) do
-      {:connection_error, _} -> true
-      {:timeout_error, _} -> true
-      {:protocol_error, _} -> false
-      {:auth_error, _} -> false
-      {:unknown_error, _} -> false
+      {:recoverable, _} -> true
+      {:fatal, _} -> false
     end
   end
 
   @doc """
   Handles errors by returning appropriate actions.
 
-  Returns either :reconnect, :stop, or :continue based on error type.
+  Returns either :reconnect or :stop based on error recoverability.
   """
-  @spec handle_error(term()) :: :reconnect | :stop | :continue
+  @spec handle_error(term()) :: :reconnect | :stop
   def handle_error(error) do
     case categorize_error(error) do
-      {:connection_error, _} -> :reconnect
-      {:timeout_error, _} -> :reconnect
-      {:protocol_error, _} -> :stop
-      {:auth_error, _} -> :stop
-      {:unknown_error, _} -> :stop
+      {:recoverable, _} -> :reconnect
+      {:fatal, _} -> :stop
     end
   end
 end

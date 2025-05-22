@@ -5,40 +5,40 @@ defmodule WebsockexNew.ErrorHandlerTest do
 
   describe "categorize_error/1" do
     test "categorizes connection errors correctly" do
-      assert {:connection_error, {:error, :econnrefused}} = ErrorHandler.categorize_error({:error, :econnrefused})
-      assert {:connection_error, {:error, :nxdomain}} = ErrorHandler.categorize_error({:error, :nxdomain})
+      assert {:recoverable, {:error, :econnrefused}} = ErrorHandler.categorize_error({:error, :econnrefused})
+      assert {:recoverable, {:error, :nxdomain}} = ErrorHandler.categorize_error({:error, :nxdomain})
 
-      assert {:connection_error, {:error, {:tls_alert, :bad_certificate}}} =
+      assert {:recoverable, {:error, {:tls_alert, :bad_certificate}}} =
                ErrorHandler.categorize_error({:error, {:tls_alert, :bad_certificate}})
 
-      assert {:connection_error, {:gun_down, :closed}} =
+      assert {:recoverable, {:gun_down, :closed}} =
                ErrorHandler.categorize_error({:gun_down, :pid, :ws, :closed, []})
 
-      assert {:connection_error, {:gun_error, :timeout}} =
+      assert {:recoverable, {:gun_error, :timeout}} =
                ErrorHandler.categorize_error({:gun_error, :pid, :ref, :timeout})
     end
 
     test "categorizes timeout errors correctly" do
-      assert {:timeout_error, {:error, :timeout}} = ErrorHandler.categorize_error({:error, :timeout})
+      assert {:recoverable, {:error, :timeout}} = ErrorHandler.categorize_error({:error, :timeout})
     end
 
     test "categorizes protocol errors correctly" do
-      assert {:protocol_error, {:error, :invalid_frame}} = ErrorHandler.categorize_error({:error, :invalid_frame})
-      assert {:protocol_error, {:error, :frame_too_large}} = ErrorHandler.categorize_error({:error, :frame_too_large})
+      assert {:fatal, {:error, :invalid_frame}} = ErrorHandler.categorize_error({:error, :invalid_frame})
+      assert {:fatal, {:error, :frame_too_large}} = ErrorHandler.categorize_error({:error, :frame_too_large})
 
-      assert {:protocol_error, {:error, {:bad_frame, :invalid_opcode}}} =
+      assert {:fatal, {:error, {:bad_frame, :invalid_opcode}}} =
                ErrorHandler.categorize_error({:error, {:bad_frame, :invalid_opcode}})
     end
 
     test "categorizes authentication errors correctly" do
-      assert {:auth_error, {:error, :unauthorized}} = ErrorHandler.categorize_error({:error, :unauthorized})
-      assert {:auth_error, {:error, :invalid_credentials}} = ErrorHandler.categorize_error({:error, :invalid_credentials})
-      assert {:auth_error, {:error, :token_expired}} = ErrorHandler.categorize_error({:error, :token_expired})
+      assert {:fatal, {:error, :unauthorized}} = ErrorHandler.categorize_error({:error, :unauthorized})
+      assert {:fatal, {:error, :invalid_credentials}} = ErrorHandler.categorize_error({:error, :invalid_credentials})
+      assert {:fatal, {:error, :token_expired}} = ErrorHandler.categorize_error({:error, :token_expired})
     end
 
     test "categorizes unknown errors correctly" do
-      assert {:unknown_error, {:error, :some_random_error}} = ErrorHandler.categorize_error({:error, :some_random_error})
-      assert {:unknown_error, :unexpected_data} = ErrorHandler.categorize_error(:unexpected_data)
+      assert {:fatal, {:error, :some_random_error}} = ErrorHandler.categorize_error({:error, :some_random_error})
+      assert {:fatal, :unexpected_data} = ErrorHandler.categorize_error(:unexpected_data)
     end
   end
 
