@@ -11,7 +11,7 @@ defmodule WebsockexNew.ClientTest do
 
     assert client.gun_pid != nil
     assert client.stream_ref != nil
-    assert client.state == :connecting
+    assert client.state == :connected
     assert client.url == @deribit_test_url
 
     Client.close(client)
@@ -23,7 +23,7 @@ defmodule WebsockexNew.ClientTest do
 
     assert client.gun_pid != nil
     assert client.stream_ref != nil
-    assert client.state == :connecting
+    assert client.state == :connected
     assert client.url == @deribit_test_url
 
     Client.close(client)
@@ -40,16 +40,16 @@ defmodule WebsockexNew.ClientTest do
   test "get_state returns current state" do
     {:ok, client} = Client.connect(@deribit_test_url)
 
-    assert Client.get_state(client) == :connecting
+    assert Client.get_state(client) == :connected
 
     Client.close(client)
   end
 
-  test "send_message when not connected returns error" do
+  test "send_message when connected succeeds" do
     {:ok, client} = Client.connect(@deribit_test_url)
 
     result = Client.send_message(client, "test")
-    assert {:error, {:not_connected, :connecting}} == result
+    assert :ok == result
 
     Client.close(client)
   end
@@ -58,7 +58,7 @@ defmodule WebsockexNew.ClientTest do
     {:ok, client} = Client.connect(@deribit_test_url)
 
     result = Client.subscribe(client, ["deribit_price_index.btc_usd"])
-    assert {:error, {:not_connected, :connecting}} == result
+    assert :ok == result
 
     Client.close(client)
   end

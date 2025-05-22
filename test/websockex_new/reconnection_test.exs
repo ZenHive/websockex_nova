@@ -28,7 +28,7 @@ defmodule WebsockexNew.ReconnectionTest do
       {:ok, client} = Reconnection.reconnect(config, 0, [])
 
       assert client.gun_pid != nil
-      assert client.state == :connecting
+      assert client.state == :connected
 
       WebsockexNew.Client.close(client)
     end

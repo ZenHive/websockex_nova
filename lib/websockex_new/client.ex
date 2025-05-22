@@ -49,10 +49,30 @@ defmodule WebsockexNew.Client do
           monitor_ref: monitor_ref
         }
 
-        {:ok, client}
+        case wait_for_upgrade(client, config.timeout) do
+          {:ok, connected_client} -> {:ok, connected_client}
+          error -> error
+        end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  @spec wait_for_upgrade(t(), integer()) :: {:ok, t()} | {:error, term()}
+  def wait_for_upgrade(%__MODULE__{gun_pid: gun_pid, stream_ref: stream_ref} = client, timeout) do
+    receive do
+      {:gun_upgrade, ^gun_pid, ^stream_ref, ["websocket"], _headers} ->
+        {:ok, %{client | state: :connected}}
+
+      {:gun_error, ^gun_pid, ^stream_ref, reason} ->
+        {:error, reason}
+
+      {:gun_down, ^gun_pid, _, reason, _} ->
+        {:error, {:connection_down, reason}}
+    after
+      timeout ->
+        {:error, :timeout}
     end
   end
 
