@@ -17,6 +17,9 @@ mix coverage
 
 # Run tests in watch mode
 mix test.watch
+
+# Run integration tests only
+mix test --only integration
 ```
 
 ### Code Quality & Linting
@@ -35,6 +38,12 @@ mix check
 
 # Rebuild project from scratch with quality checks
 mix rebuild
+
+# Format code
+mix format
+
+# Validate task list format
+mix validate_tasklist
 ```
 
 ### Documentation
@@ -112,11 +121,26 @@ WebsockexNova supports different profiles for varying requirements:
 
 ## Development Workflow
 
-1. **Implement behaviors** in `lib/websockex_nova/behaviors/`
-2. **Create adapters** in `lib/websockex_nova/examples/` for specific platforms
-3. **Write tests** using the mock transport or real endpoints
-4. **Run quality checks** with `mix check` before committing
-5. **Document** any new behaviors or adapters in the docs/ directory
+### Code Quality Standards
+- **Documentation**: Use concise, structured `@moduledoc` with clear bullet points
+- **Function Documentation**: Single-sentence summary followed by structured details
+- **Code Organization**: Group related functions, use clear naming conventions
+- **Error Handling**: Pass raw errors without wrapping, use `{:ok, result} | {:error, reason}` pattern
+- **Simplicity**: Start with minimal viable solution, add complexity incrementally
+
+### TDD Workflow
+1. **Write tests first** - Create comprehensive test cases before implementation
+2. **Implement behaviors** in `lib/websockex_nova/behaviors/`
+3. **Create adapters** in `lib/websockex_nova/examples/` for specific platforms
+4. **Write integration tests** using real WebSocket endpoints when possible
+5. **Run quality checks** with `mix check` before committing
+6. **Document** any new behaviors or adapters in the docs/ directory
+
+### Task Management
+- Use `docs/TaskList.md` for structured task tracking
+- Follow WNX#### ID format for all tasks
+- Include detailed task descriptions with test requirements
+- Mark tasks as completed immediately after finishing
 
 ## Critical Code Paths
 
@@ -132,8 +156,9 @@ WebsockexNova supports different profiles for varying requirements:
 1. Create adapter module implementing required behaviors
 2. Use `WebsockexNova.Adapter` macro for defaults
 3. Override only necessary callbacks
-4. Add integration tests for the platform
-5. Document the adapter in docs/
+4. Keep adapters thin - focus on protocol translation only
+5. Add integration tests for the platform using real endpoints
+6. Document the adapter in docs/
 
 ### Debugging Connection Issues
 1. Check `ConnectionRegistry` for connection ID mapping
@@ -141,3 +166,63 @@ WebsockexNova supports different profiles for varying requirements:
 3. Review state transitions in `ConnectionManager`
 4. Enable debug logging in test_helper.exs
 5. Use `StateTracer` for detailed connection history
+
+### Error Handling Best Practices
+- Pass raw errors without custom wrapping
+- Use pattern matching on raw error data
+- Apply "let it crash" philosophy for unexpected errors
+- Distinguish network errors from protocol/application errors
+- Include minimal context information when necessary
+
+## Simplicity Guidelines
+
+### Core Principles
+- Code simplicity is a primary feature, not an afterthought
+- Implement the minimal viable solution first
+- Each component has a limited "complexity budget"
+- Create abstractions only with proven value (≥3 concrete examples)
+- Start simple and add complexity incrementally
+
+### Module Structure Limits
+- Maximum 5 functions per module initially
+- Maximum function length of 15 lines
+- Maximum of 2 levels of function calls for any operation
+- Prefer pure functions over processes when possible
+
+### Anti-Patterns to Avoid
+- No premature optimization without performance data
+- No "just-in-case" code for hypothetical requirements
+- No abstractions without at least 3 concrete usage examples
+- No complex macros unless absolutely necessary
+- No overly clever solutions that prioritize elegance over maintainability
+
+## Integration Testing Requirements
+
+### Core Principles
+- Test with REAL WebSocket endpoints when possible
+- Use local test server with `Plug.Cowboy` for controlled testing
+- Test behavior under realistic conditions (network issues, reconnection)
+- Document test scenarios thoroughly
+
+### Test Structure
+- Create proper test helpers in `test/support/`
+- Use modular test server implementation
+- Tag integration tests with `@tag :integration`
+- Structure test cases to cover full client lifecycle
+- Test both success and failure scenarios
+
+## Documentation Requirements
+
+### Required Documentation Structure
+- `docs/architecture.md`: Component diagrams and design decisions
+- `docs/client_macro.md`: Usage examples and best practices
+- `docs/integration_testing.md`: Integration testing patterns
+- `docs/behaviors.md`: Available behaviors and their purposes
+- `docs/TaskList.md`: Structured task tracking with WNX#### format
+
+### Documentation Standards
+- All public modules and functions must have documentation
+- Use consistent formatting and examples
+- Include typical usage patterns
+- Document error scenarios and handling
+- Follow token-optimized documentation patterns from .rules
