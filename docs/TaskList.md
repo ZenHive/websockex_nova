@@ -417,14 +417,39 @@ lib/websockex_new/
 - **Monitoring**: Track heartbeat response times and failures for operational visibility
 - **Graceful Degradation**: If heartbeat fails, connection should close cleanly to prevent phantom orders
 
-#### Subtasks
-- [ ] **WNX0019a**: Create HeartbeatHandler GenServer for continuous message processing
-- [ ] **WNX0019b**: Integrate HeartbeatHandler with Client.connect for automatic startup
-- [ ] **WNX0019c**: Implement automatic `/api/v2/public/test` response to test_request messages
-- [ ] **WNX0019d**: Add heartbeat response time monitoring and failure detection
-- [ ] **WNX0019e**: Implement graceful connection termination on heartbeat failure
-- [ ] **WNX0019f**: Add supervision strategy for HeartbeatHandler process recovery
-- [ ] **WNX0019g**: Test continuous heartbeat processing with test.deribit.com (24-hour stability test)
+#### Updated Architecture Decision (May 2025)
+**CORE LIBRARY APPROACH**: After architectural review, heartbeat/ping-pong functionality will be implemented as a general-purpose feature in the core library with customizable handlers, rather than being Deribit-specific. This follows the WebSocket standard where ping/pong is fundamental protocol functionality used across many APIs.
+
+#### Revised File Structure
+```
+lib/websockex_new/
+├── client.ex               # Enhanced with HeartbeatManager integration
+├── heartbeat_manager.ex    # General-purpose heartbeat/ping-pong infrastructure
+└── examples/
+    └── deribit_adapter.ex  # Configures HeartbeatManager with Deribit-specific patterns
+```
+
+#### Core Library Justification
+- **WebSocket Standard**: Ping/pong and heartbeat are fundamental WebSocket protocol features
+- **Multi-Platform Need**: Binance, FTX, Kraken, and other exchanges require similar heartbeat handling
+- **Platform Differences**: Each exchange uses different heartbeat patterns (Deribit: test_request, Binance: ping/pong, etc.)
+- **Abstraction Value**: General HeartbeatManager can handle any platform's heartbeat pattern via configuration
+
+#### Implementation Strategy
+1. **HeartbeatManager**: Core library module handling continuous message processing
+2. **Configurable Handlers**: Platform adapters configure heartbeat detection and response patterns
+3. **DeribitAdapter Integration**: Configure HeartbeatManager with Deribit-specific test_request/public_test pattern
+4. **Future Platform Support**: Other exchanges can easily configure their heartbeat patterns
+
+#### Subtasks (Revised for Core Library Approach)
+- [ ] **WNX0019a**: Create general-purpose HeartbeatManager in core library for continuous message processing
+- [ ] **WNX0019b**: Integrate HeartbeatManager with Client.connect for automatic startup
+- [ ] **WNX0019c**: Add configurable heartbeat detection and response pattern system
+- [ ] **WNX0019d**: Configure DeribitAdapter to use HeartbeatManager with test_request/public_test pattern
+- [ ] **WNX0019e**: Add heartbeat response time monitoring and failure detection
+- [ ] **WNX0019f**: Implement graceful connection termination on heartbeat failure
+- [ ] **WNX0019g**: Add supervision strategy for HeartbeatManager process recovery
+- [ ] **WNX0019h**: Test continuous heartbeat processing with test.deribit.com (24-hour stability test)
 
 #### ExUnit and Integration Test Requirements
 - Real API test against test.deribit.com verifying continuous heartbeat response

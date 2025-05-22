@@ -1,5 +1,7 @@
 # WebsockexNew Rules
 
+In financial software development, especially for market making, there's a well-established principle: **start simple, add complexity only when necessary based on real data**.
+
 ## Code Optimization Guidelines
 
 - **All Elixir code files must balance token optimization with readability**
