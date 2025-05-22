@@ -3,7 +3,7 @@
 ## Current Progress Status
 **Last Updated**: 2025-05-22  
 **Phase**: 3 of 4 (Platform Integration) - **COMPLETED**  
-**Next**: WNX0018 (Real API Testing Infrastructure) and WNX0019 (Deribit Bootstrap Sequence)
+**Next**: WNX0018 (Real API Testing Infrastructure), WNX0019 (Deribit Bootstrap Sequence), and WNX0020 (JSON-RPC Macro System)
 
 ### ✅ Completed Tasks (WNX0010-WNX0017)
 - **WNX0010**: Minimal WebSocket Client - Full Gun-based client with connect/send/close
@@ -386,14 +386,52 @@ lib/websockex_new/examples/
 - [ ] **WNX0019g**: Add test_request message handling with /api/v2/public/test response
 - [ ] **WNX0019h**: Test complete bootstrap sequence with test.deribit.com
 
+### WNX0020: Deribit JSON-RPC 2.0 Macro System
+**Priority**: High  
+**Effort**: Medium  
+**Dependencies**: WNX0019
+
+#### Target Implementation
+Auto-generate JSON-RPC 2.0 requests for market making and options trading operations:
+- Macro for defining Deribit API methods with automatic JSON-RPC structure
+- Request ID management and correlation
+- Support for public and private API endpoints
+- Market data, trading, and risk management method coverage
+
+#### Use Case Context
+This library targets market makers and option sellers on Deribit requiring high-frequency API calls:
+- **Market Data**: `get_instruments`, `subscribe`, `get_order_book`, `get_last_trades_by_instrument`
+- **Trading**: `buy`, `sell`, `edit`, `cancel`, `get_open_orders`, `get_positions` 
+- **Risk Management**: `get_portfolio_margins`, `get_user_trades_by_instrument`, `get_settlements_by_instrument`
+- **Infrastructure**: `auth`, `set_heartbeat`, `enable_cancel_on_disconnect`
+
+#### File Structure
+```
+lib/websockex_new/examples/
+├── deribit_adapter.ex      # Enhanced with JSON-RPC macro usage
+├── deribit_bootstrap.ex    # Bootstrap sequence utilities
+└── deribit_rpc_macro.ex    # JSON-RPC 2.0 method generation macro
+```
+
+#### Subtasks
+- [ ] **WNX0020a**: Create `deribit_rpc_macro.ex` with `defrpc` macro definition
+- [ ] **WNX0020b**: Implement automatic JSON-RPC 2.0 structure generation (`jsonrpc`, `id`, `method`, `params`)
+- [ ] **WNX0020c**: Add request ID management and correlation tracking
+- [ ] **WNX0020d**: Define market data methods (`get_instruments`, `subscribe`, `get_order_book`)
+- [ ] **WNX0020e**: Define trading methods (`buy`, `sell`, `edit`, `cancel`, `get_open_orders`)
+- [ ] **WNX0020f**: Define risk management methods (`get_portfolio_margins`, `get_positions`)
+- [ ] **WNX0020g**: Add infrastructure methods (`set_heartbeat`, `enable_cancel_on_disconnect`)
+- [ ] **WNX0020h**: Test macro-generated methods with test.deribit.com API
+- [ ] **WNX0020i**: Document macro usage patterns for market making workflows
+
 ---
 
 ## Phase 4: Migration and Cleanup
 
-### WNX0020: Documentation for New System
+### WNX0021: Documentation for New System
 **Priority**: Medium  
 **Effort**: Small  
-**Dependencies**: WNX0016, WNX0017, WNX0019
+**Dependencies**: WNX0016, WNX0017, WNX0020
 
 #### Target Implementation
 Concise documentation for the new system:
@@ -403,15 +441,15 @@ Concise documentation for the new system:
 - Migration guide from old system
 
 #### Subtasks
-- [ ] **WNX0020a**: Add comprehensive module documentation
-- [ ] **WNX0020b**: Create Deribit integration examples
-- [ ] **WNX0020c**: Document error handling patterns
-- [ ] **WNX0020d**: Write migration guide from WebsockexNova to WebsockexNew
+- [ ] **WNX0021a**: Add comprehensive module documentation
+- [ ] **WNX0021b**: Create Deribit integration examples
+- [ ] **WNX0021c**: Document error handling patterns
+- [ ] **WNX0021d**: Write migration guide from WebsockexNova to WebsockexNew
 
-### WNX0021: System Migration and Rename
+### WNX0022: System Migration and Rename
 **Priority**: Critical  
 **Effort**: Medium  
-**Dependencies**: WNX0018, WNX0020
+**Dependencies**: WNX0018, WNX0021
 
 #### Target Implementation
 Complete migration from old to new system:
@@ -421,12 +459,12 @@ Complete migration from old to new system:
 - Clean git history
 
 #### Subtasks
-- [ ] **WNX0021a**: Backup current system to `lib/websockex_nova_old/`
-- [ ] **WNX0021b**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
-- [ ] **WNX0021c**: Update all module names from `WebsockexNew` → `WebsockexNova`
-- [ ] **WNX0021d**: Update mix.exs and documentation references
-- [ ] **WNX0021e**: Remove old system files (`lib/websockex_nova_old/`)
-- [ ] **WNX0021f**: Update README and CHANGELOG with new architecture
+- [ ] **WNX0022a**: Backup current system to `lib/websockex_nova_old/`
+- [ ] **WNX0022b**: Rename `lib/websockex_new/` → `lib/websockex_nova/`
+- [ ] **WNX0022c**: Update all module names from `WebsockexNew` → `WebsockexNova`
+- [ ] **WNX0022d**: Update mix.exs and documentation references
+- [ ] **WNX0022e**: Remove old system files (`lib/websockex_nova_old/`)
+- [ ] **WNX0022f**: Update README and CHANGELOG with new architecture
 
 ---
 
