@@ -2,8 +2,8 @@
 
 ## Current Progress Status
 **Last Updated**: 2025-05-22  
-**Phase**: 3 of 4 (Platform Integration) - **COMPLETED**  
-**Next**: WNX0018 (Real API Testing Infrastructure), WNX0019 (Deribit Bootstrap Sequence), and WNX0020 (JSON-RPC Macro System)
+**Phase**: 4 of 4 (Migration and Cleanup) - **IN PROGRESS**  
+**Next**: WNX0022 (System Migration and Rename) → **PRIORITY CHANGE**
 
 ### ✅ Completed Tasks (WNX0010-WNX0017)
 - **WNX0010**: Minimal WebSocket Client - Full Gun-based client with connect/send/close
@@ -23,8 +23,12 @@
 - **Platform Integration**: Deribit adapter fully functional with real API testing
 - **Error Handling**: Complete error categorization system with recovery patterns
 
-### 🎯 Next Milestone
-**WNX0018**: Real API Testing Infrastructure - Comprehensive test suite using only real APIs
+### 🎯 Priority Changed: Migration First
+**WNX0022**: System Migration and Rename - **NOW PRIORITY #1**
+- Eliminates confusion between websockex_new (7 modules) and WebsockexNova (56 modules)
+- Cleaner development environment for implementing remaining features
+- Safer implementation of WNX0018-WNX0021 on clean foundation
+- websockex_new foundation is proven with 93 passing tests
 
 ---
 
@@ -346,24 +350,24 @@ test/websockex_new/
 └── websockex_new_client_test.exs          # Core client functionality
 ```
 
-#### Critical Notes
-- **Separation**: All websockex_new tests MUST be isolated from WebsockexNova tests
-- **Reuse**: Use existing `MockWebSockServer` infrastructure instead of creating new servers
-- **Real APIs**: Primary focus on test.deribit.com for authentic integration testing
-- **No Duplication**: Don't duplicate existing test infrastructure
+#### Implementation Notes
+**MOVED AFTER WNX0022**: This task will be much easier after migration cleanup eliminates the confusion between websockex_new and WebsockexNova systems. The existing `test/support/` infrastructure (MockWebSockServer, etc.) that we currently use for WebsockexNova tests will be reused for the migrated system.
 
-#### Subtasks
-- [ ] **WNX0018a**: Create `test/websockex_new/support/websockex_new_helpers.ex` with real API utilities
-- [ ] **WNX0018b**: Create integration test using existing MockWebSockServer for controlled scenarios
-- [ ] **WNX0018c**: Set up test.deribit.com integration test suite for websockex_new module
-- [ ] **WNX0018d**: Add test configuration and authentication handling for real APIs
-- [ ] **WNX0018e**: Test connection lifecycle (connect, authenticate, subscribe, disconnect)
-- [ ] **WNX0018f**: Test reconnection scenarios and error handling with real endpoints
+#### Test Strategy (Post-Migration)
+- Real API testing with test.deribit.com as primary validation
+- Leverage existing MockWebSockServer for controlled scenarios
+- Focus on connection lifecycle and error handling patterns
+
+#### Subtasks (Deferred until after WNX0022)
+- **WNX0018a**: Enhance existing test infrastructure for migrated system
+- **WNX0018b**: Add comprehensive real API test coverage 
+- **WNX0018c**: Test connection lifecycle scenarios
+- **WNX0018d**: Validate error handling with real endpoints
 
 ### WNX0019: Deribit Bootstrap Sequence Implementation
-**Priority**: High  
+**Priority**: High (Deferred until after WNX0022)  
 **Effort**: Medium  
-**Dependencies**: WNX0016
+**Dependencies**: WNX0022 (Migration), then enhanced from current WNX0016
 
 #### Target Implementation
 Implement proper Deribit connection bootstrap sequence following their required flow:
@@ -395,9 +399,9 @@ lib/websockex_new/examples/
 - [ ] **WNX0019h**: Test complete bootstrap sequence with test.deribit.com
 
 ### WNX0020: Deribit JSON-RPC 2.0 Macro System
-**Priority**: High  
+**Priority**: High (Deferred until after WNX0022)  
 **Effort**: Medium  
-**Dependencies**: WNX0019
+**Dependencies**: WNX0022 (Migration), then WNX0019
 
 #### Target Implementation
 Auto-generate JSON-RPC 2.0 requests for market making and options trading operations:
@@ -437,9 +441,9 @@ lib/websockex_new/examples/
 ## Phase 4: Migration and Cleanup
 
 ### WNX0021: Documentation for New System
-**Priority**: Medium  
+**Priority**: Medium (Deferred until after WNX0022)  
 **Effort**: Small  
-**Dependencies**: WNX0016, WNX0017, WNX0020
+**Dependencies**: WNX0022 (Migration), then enhanced from existing docs
 
 #### Target Implementation
 Concise documentation for the new system:
@@ -455,9 +459,9 @@ Concise documentation for the new system:
 - [ ] **WNX0021d**: Write migration guide from WebsockexNova to WebsockexNew
 
 ### WNX0022: System Migration and Rename
-**Priority**: Critical  
+**Priority**: Critical - **MOVED TO PRIORITY #1**  
 **Effort**: Medium  
-**Dependencies**: WNX0018, WNX0021
+**Dependencies**: None (websockex_new system is complete and tested)
 
 #### Target Implementation
 Complete migration from old to new system with clear file management:
@@ -512,12 +516,14 @@ test/websockex_nova/            → DELETE ENTIRE DIRECTORY
 
 **Test Files to KEEP:**
 ```
-test/integration/               → Keep real API integration tests
-test/support/mock_websock_*     → Keep existing mock infrastructure
+test/integration/               → Keep real API integration tests  
+test/support/mock_websock_*     → Keep existing mock infrastructure (used by websockex_new)
 test/support/certificate_helper.ex → Keep certificate helpers
 test/support/gun_monitor.ex     → Keep if used by new system
 test/test_helper.exs           → Keep and update for new system
 ```
+
+**Important**: The new websockex_new system already uses some of the `test/support/` infrastructure, so this migration preserves that working relationship.
 
 #### Migration Steps
 - [ ] **WNX0022a**: Create backup branch with current state
