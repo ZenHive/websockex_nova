@@ -1,7 +1,7 @@
 defmodule WebsockexNew.MessageHandler do
   @moduledoc """
   Message handling utilities for WebSocket connections.
-  
+
   - Parse incoming WebSocket frames and Gun messages
   - Route messages to user-provided handler functions  
   - Handle control frames (ping/pong) automatically
@@ -26,12 +26,15 @@ defmodule WebsockexNew.MessageHandler do
     case Frame.decode(frame) do
       {:ok, decoded_frame} ->
         case handle_control_frame(decoded_frame, conn_pid, stream_ref) do
-          :handled -> {:ok, :control_frame_handled}
-          :not_control -> 
+          :handled ->
+            {:ok, :control_frame_handled}
+
+          :not_control ->
             result = {:message, decoded_frame}
             handler_fun.(result)
             {:ok, result}
         end
+
       {:error, reason} ->
         error = {:decode_error, reason}
         handler_fun.(error)

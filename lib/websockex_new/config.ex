@@ -13,13 +13,13 @@ defmodule WebsockexNew.Config do
   ]
 
   @type t :: %__MODULE__{
-    url: String.t(),
-    headers: [{String.t(), String.t()}],
-    timeout: pos_integer(),
-    retry_count: non_neg_integer(),
-    retry_delay: pos_integer(),
-    heartbeat_interval: pos_integer()
-  }
+          url: String.t(),
+          headers: [{String.t(), String.t()}],
+          timeout: pos_integer(),
+          retry_count: non_neg_integer(),
+          retry_delay: pos_integer(),
+          heartbeat_interval: pos_integer()
+        }
 
   @doc """
   Creates and validates a new configuration.
@@ -38,30 +38,31 @@ defmodule WebsockexNew.Config do
     cond do
       not valid_url?(url) ->
         {:error, "Invalid URL format"}
-      
+
       config.timeout <= 0 ->
         {:error, "Timeout must be positive"}
-      
+
       config.retry_count < 0 ->
         {:error, "Retry count must be non-negative"}
-      
+
       config.retry_delay <= 0 ->
         {:error, "Retry delay must be positive"}
-      
+
       config.heartbeat_interval <= 0 ->
         {:error, "Heartbeat interval must be positive"}
-      
+
       true ->
         {:ok, config}
     end
   end
-  
+
   def validate(_), do: {:error, "URL is required"}
 
   defp valid_url?(url) do
     case URI.parse(url) do
       %URI{scheme: scheme, host: host} when scheme in ["ws", "wss"] and is_binary(host) and host != "" ->
         true
+
       _ ->
         false
     end

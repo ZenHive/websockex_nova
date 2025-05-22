@@ -22,14 +22,14 @@ defmodule WebsockexNew.Client do
 
   @spec connect(String.t() | WebsockexNew.Config.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def connect(url_or_config, opts \\ [])
-  
+
   def connect(url, opts) when is_binary(url) do
     case WebsockexNew.Config.new(url, opts) do
       {:ok, config} -> connect(config, [])
       error -> error
     end
   end
-  
+
   def connect(%WebsockexNew.Config{} = config, _opts) do
     uri = URI.parse(config.url)
     port = uri.port || if uri.scheme == "wss", do: 443, else: 80

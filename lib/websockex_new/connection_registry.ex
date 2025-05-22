@@ -14,6 +14,7 @@ defmodule WebsockexNew.ConnectionRegistry do
       :undefined ->
         :ets.new(@table_name, [:set, :public, :named_table])
         :ok
+
       _ ->
         :ok
     end
@@ -38,9 +39,11 @@ defmodule WebsockexNew.ConnectionRegistry do
       [{^connection_id, _gun_pid, monitor_ref}] ->
         Process.demonitor(monitor_ref, [:flush])
         :ets.delete(@table_name, connection_id)
+
       [] ->
         :ok
     end
+
     :ok
   end
 
@@ -70,8 +73,10 @@ defmodule WebsockexNew.ConnectionRegistry do
   @spec shutdown() :: :ok
   def shutdown do
     case :ets.whereis(@table_name) do
-      :undefined -> :ok
-      _ -> 
+      :undefined ->
+        :ok
+
+      _ ->
         :ets.delete(@table_name)
         :ok
     end

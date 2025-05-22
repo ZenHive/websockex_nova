@@ -1,7 +1,8 @@
 defmodule WebsockexNew.ClientTest do
   use ExUnit.Case
 
-  alias WebsockexNew.{Client, Config}
+  alias WebsockexNew.Client
+  alias WebsockexNew.Config
 
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
 

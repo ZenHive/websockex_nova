@@ -3,14 +3,15 @@ defmodule WebsockexNew.Reconnection do
   Simple exponential backoff reconnection logic without GenServer.
   """
 
-  alias WebsockexNew.{Client, Config}
+  alias WebsockexNew.Client
+  alias WebsockexNew.Config
 
   @doc """
   Calculate exponential backoff delay.
   """
   @spec calculate_delay(non_neg_integer(), pos_integer()) :: pos_integer()
   def calculate_delay(attempt, base_delay) do
-    min(base_delay * :math.pow(2, attempt), 30_000) |> round()
+    (base_delay * :math.pow(2, attempt)) |> min(30_000) |> round()
   end
 
   @doc """
@@ -19,8 +20,7 @@ defmodule WebsockexNew.Reconnection do
   @spec reconnect(Config.t(), non_neg_integer(), list()) :: {:ok, Client.t()} | {:error, :max_retries}
   def reconnect(config, attempt \\ 0, subscriptions \\ [])
 
-  def reconnect(%Config{retry_count: max_retries}, attempt, _subscriptions) 
-      when attempt >= max_retries do
+  def reconnect(%Config{retry_count: max_retries}, attempt, _subscriptions) when attempt >= max_retries do
     {:error, :max_retries}
   end
 
@@ -29,7 +29,7 @@ defmodule WebsockexNew.Reconnection do
       {:ok, client} ->
         restore_subscriptions(client, subscriptions)
         {:ok, client}
-      
+
       {:error, _reason} ->
         delay = calculate_delay(attempt, config.retry_delay)
         :timer.sleep(delay)
@@ -42,6 +42,7 @@ defmodule WebsockexNew.Reconnection do
   """
   @spec restore_subscriptions(Client.t(), list()) :: :ok
   def restore_subscriptions(_client, []), do: :ok
+
   def restore_subscriptions(client, subscriptions) when is_list(subscriptions) do
     Client.subscribe(client, subscriptions)
     :ok

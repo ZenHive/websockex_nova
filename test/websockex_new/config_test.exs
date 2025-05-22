@@ -6,7 +6,7 @@ defmodule WebsockexNew.ConfigTest do
   describe "new/2" do
     test "creates valid config with defaults" do
       {:ok, config} = Config.new("wss://test.example.com/ws")
-      
+
       assert config.url == "wss://test.example.com/ws"
       assert config.headers == []
       assert config.timeout == 5_000
@@ -18,7 +18,7 @@ defmodule WebsockexNew.ConfigTest do
     test "creates config with custom options" do
       opts = [timeout: 10_000, retry_count: 5, headers: [{"Authorization", "Bearer token"}]]
       {:ok, config} = Config.new("ws://localhost:8080", opts)
-      
+
       assert config.timeout == 10_000
       assert config.retry_count == 5
       assert config.headers == [{"Authorization", "Bearer token"}]

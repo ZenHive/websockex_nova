@@ -1,7 +1,8 @@
 defmodule WebsockexNew.ReconnectionTest do
   use ExUnit.Case
 
-  alias WebsockexNew.{Reconnection, Config}
+  alias WebsockexNew.Config
+  alias WebsockexNew.Reconnection
   alias WebsockexNova.Test.Support.MockWebSockServer
 
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
@@ -23,19 +24,19 @@ defmodule WebsockexNew.ReconnectionTest do
   describe "reconnection logic" do
     test "reconnect/3 succeeds on first attempt with valid config" do
       {:ok, config} = Config.new(@deribit_test_url, retry_count: 3)
-      
+
       {:ok, client} = Reconnection.reconnect(config, 0, [])
-      
+
       assert client.gun_pid != nil
       assert client.state == :connecting
-      
+
       WebsockexNew.Client.close(client)
     end
 
     test "reconnect/3 returns max_retries error when attempt limit reached" do
       # Test the logic directly by starting at max attempts
       {:ok, config} = Config.new(@deribit_test_url, retry_count: 2)
-      
+
       {:error, :max_retries} = Reconnection.reconnect(config, 2, [])
     end
 
@@ -51,31 +52,31 @@ defmodule WebsockexNew.ReconnectionTest do
     test "restore_subscriptions/2 handles empty subscription list" do
       {:ok, config} = Config.new(@deribit_test_url)
       {:ok, client} = WebsockexNew.Client.connect(config)
-      
+
       :ok = Reconnection.restore_subscriptions(client, [])
-      
+
       WebsockexNew.Client.close(client)
     end
 
     test "restore_subscriptions/2 attempts to restore subscriptions" do
       {:ok, config} = Config.new(@deribit_test_url)
       {:ok, client} = WebsockexNew.Client.connect(config)
-      
+
       subscriptions = ["deribit_price_index.btc_usd"]
       :ok = Reconnection.restore_subscriptions(client, subscriptions)
-      
+
       WebsockexNew.Client.close(client)
     end
 
     test "restore_subscriptions/2 with mock server" do
       {:ok, server_pid, port} = MockWebSockServer.start_link()
-      
+
       {:ok, config} = Config.new("ws://localhost:#{port}/ws")
       {:ok, client} = WebsockexNew.Client.connect(config)
-      
+
       subscriptions = ["test_channel"]
       :ok = Reconnection.restore_subscriptions(client, subscriptions)
-      
+
       WebsockexNew.Client.close(client)
       MockWebSockServer.stop(server_pid)
     end

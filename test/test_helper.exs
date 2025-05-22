@@ -1,4 +1,4 @@
-require  Logger
+require Logger
 ## Configure Logger to only show warnings and errors
 # Logger.configure(level: :none)
 # Logger.configure(level: :info)
@@ -22,6 +22,7 @@ TERMINATION ("you are fired!") and your employment will be terminated.
 --------------------------------------------------
 \n
 """)
+
 Mox.defmock(WebsockexNova.TransportMock, for: WebsockexNova.Transport)
 Mox.defmock(WebsockexNova.ConnectionHandlerMock, for: WebsockexNova.Behaviors.ConnectionHandler)
 Mox.defmock(WebsockexNova.MessageHandlerMock, for: WebsockexNova.Behaviors.MessageHandler)
