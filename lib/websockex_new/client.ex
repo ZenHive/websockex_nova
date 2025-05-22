@@ -1,7 +1,7 @@
 defmodule WebsockexNew.Client do
   @moduledoc """
   Simple WebSocket client using Gun as transport layer.
-  
+
   Provides 5 core functions:
   - connect/2 - Establish connection
   - send_message/2 - Send messages  
@@ -13,25 +13,25 @@ defmodule WebsockexNew.Client do
   defstruct [:gun_pid, :stream_ref, :state, :url, :monitor_ref]
 
   @type t :: %__MODULE__{
-    gun_pid: pid() | nil,
-    stream_ref: reference() | nil,
-    state: :connecting | :connected | :disconnected,
-    url: String.t() | nil,
-    monitor_ref: reference() | nil
-  }
+          gun_pid: pid() | nil,
+          stream_ref: reference() | nil,
+          state: :connecting | :connected | :disconnected,
+          url: String.t() | nil,
+          monitor_ref: reference() | nil
+        }
 
   @spec connect(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def connect(url, _opts \\ []) do
     uri = URI.parse(url)
     port = uri.port || if uri.scheme == "wss", do: 443, else: 80
-    
+
     case :gun.open(to_charlist(uri.host), port, %{protocols: [:http]}) do
       {:ok, gun_pid} ->
         monitor_ref = Process.monitor(gun_pid)
         :gun.await_up(gun_pid, 5000)
-        
+
         stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", [])
-        
+
         client = %__MODULE__{
           gun_pid: gun_pid,
           stream_ref: stream_ref,
@@ -39,9 +39,9 @@ defmodule WebsockexNew.Client do
           url: url,
           monitor_ref: monitor_ref
         }
-        
+
         {:ok, client}
-      
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -51,6 +51,7 @@ defmodule WebsockexNew.Client do
   def send_message(%__MODULE__{gun_pid: gun_pid, stream_ref: stream_ref, state: :connected}, message) do
     :gun.ws_send(gun_pid, stream_ref, {:text, message})
   end
+
   def send_message(%__MODULE__{state: state}, _message) do
     {:error, {:not_connected, state}}
   end
@@ -60,6 +61,7 @@ defmodule WebsockexNew.Client do
     Process.demonitor(monitor_ref, [:flush])
     :gun.close(gun_pid)
   end
+
   def close(_client), do: :ok
 
   @spec subscribe(t(), list()) :: :ok | {:error, term()}
