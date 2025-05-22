@@ -332,7 +332,7 @@ lib/websockex_new/
 
 ### WNX0018: Real API Testing Infrastructure
 **Priority**: Critical  
-**Effort**: Medium  
+**Effort**: Large (split into multiple subtasks due to API compatibility issues)  
 **Dependencies**: None
 
 #### Target Implementation
@@ -356,18 +356,49 @@ test/websockex_new/
 ```
 
 #### Implementation Notes
-**MOVED AFTER WNX0022**: This task will be much easier after migration cleanup eliminates the confusion between websockex_new and WebsockexNew systems. The existing `test/support/` infrastructure (MockWebSockServer, etc.) that we currently use for WebsockexNew tests will be reused for the migrated system.
+**SPLIT INTO SUBTASKS**: Previous implementation attempt revealed extensive API compatibility issues. This task has been broken down to address each compatibility layer systematically.
 
 #### Test Strategy (Post-Migration)
 - Real API testing with test.deribit.com as primary validation
 - Leverage existing MockWebSockServer for controlled scenarios
 - Focus on connection lifecycle and error handling patterns
 
-#### Subtasks (Deferred until after WNX0022)
-- **WNX0018a**: Enhance existing test infrastructure for migrated system
-- **WNX0018b**: Add comprehensive real API test coverage 
-- **WNX0018c**: Test connection lifecycle scenarios
-- **WNX0018d**: Validate error handling with real endpoints
+#### Subtasks
+- **WNX0018a**: API Compatibility Audit and Documentation
+  - Audit all existing test support modules (`MockWebSockServer`, `CertificateHelper`, etc.)
+  - Document actual API signatures and return values
+  - Create compatibility guide for ExUnit, Gun, and test infrastructure APIs
+  - Identify modules that need wrapper functions vs direct usage
+
+- **WNX0018b**: Test Infrastructure Foundation
+  - Create minimal test infrastructure without Mix tasks initially
+  - Implement basic test helpers with verified API compatibility
+  - Add simple integration test for WebsockexNew.Client.connect/2
+  - Verify all ExUnit and Gun API usage patterns work correctly
+
+- **WNX0018c**: Mock Server Integration
+  - Implement test cases using existing `MockWebSockServer`
+  - Verify correct module references (`WebsockexNew.Test.Support.MockWebSockServer`)
+  - Test controlled connection scenarios (connect, disconnect, message handling)
+  - Ensure proper test isolation and cleanup
+
+- **WNX0018d**: Certificate and TLS Support
+  - Integrate with existing `CertificateHelper` module
+  - Verify TLS certificate generation and usage APIs
+  - Test secure WebSocket connections using generated certificates
+  - Document certificate helper usage patterns
+
+- **WNX0018e**: Real API Integration Tests
+  - Implement test.deribit.com integration tests
+  - Add health check and connection validation
+  - Test authentication and subscription flows
+  - Ensure real API tests are properly isolated and tagged
+
+- **WNX0018f**: Mix Task Implementation (Final Step)
+  - Create Mix tasks for API testing only after core infrastructure works
+  - Implement `mix test.api`, `mix test.api --deribit` commands
+  - Add performance and stress testing tasks
+  - Ensure all Mix tasks use verified API patterns from previous subtasks
 
 ### WNX0019: Deribit Bootstrap Sequence Implementation
 **Priority**: High (Deferred until after WNX0022)  
