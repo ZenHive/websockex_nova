@@ -377,33 +377,81 @@ test/websockex_new/
 **Dependencies**: WNX0022 (Migration), then enhanced from current WNX0016
 
 #### Target Implementation
-Implement proper Deribit connection bootstrap sequence following their required flow:
-- Connection with proper configuration
-- Authentication
-- Client introduction via hello
-- Heartbeat setup 
-- Cancel-on-disconnect protection
-- Time synchronization
+**PRODUCTION-READY APPROACH**: Implement automatic heartbeat processing during the entire connection lifecycle, not just bootstrap. Financial trading connections require continuous, automatic heartbeat handling to prevent order cancellation due to connection monitoring failures.
 
-#### Technical Requirements
-Heartbeats can be used to detect stale connections. When heartbeats have been set up, the API server will send heartbeat messages and test_request messages. Your software should respond to test_request messages by sending a /api/v2/public/test request. If your software fails to do so, the API server will immediately close the connection. If your account is configured to cancel on disconnect, any orders opened over the connection will be cancelled.
+#### Technical Requirements (CRITICAL - FINANCIAL TRADING)
+**Heartbeat Sequence**: When heartbeats have been set up, the API server will send heartbeat messages and test_request messages. Your software should respond to test_request messages by sending a `/api/v2/public/test` request. If your software fails to do so, the API server will immediately close the connection. If your account is configured to cancel on disconnect, any orders opened over the connection will be cancelled.
+
+**Production Risk**: A simple loop is insufficient for production financial trading. Heartbeat failures can cause immediate order cancellation, resulting in financial losses.
+
+#### Current Issue
+The DeribitAdapter.handle_message/1 correctly detects test_request and returns `{:response, json_response}`, but this response is not automatically sent back. The system requires a separate process or continuous message handling to ensure heartbeats are processed reliably throughout the connection lifecycle.
 
 #### File Structure
 ```
-lib/websockex_new/examples/
-├── deribit_adapter.ex      # Enhanced with bootstrap sequence
-└── deribit_bootstrap.ex    # Bootstrap sequence utilities
+lib/websockex_new/
+├── client.ex               # Enhanced with automatic message processing
+├── heartbeat_handler.ex    # Dedicated heartbeat management process
+└── examples/
+    └── deribit_adapter.ex  # Enhanced integration with automatic heartbeat
 ```
 
+#### Simplicity Progression Plan
+1. **Start Simple**: Add dedicated heartbeat handler process
+2. **Proven Pattern**: Use GenServer for reliable message processing (exception to no-GenServer rule for critical financial infrastructure)
+3. **Add Complexity When Necessary**: This is a case where complexity is proven necessary by financial risk requirements
+
+#### Abstraction Evaluation
+**Concrete Use Cases** (≥3 required for abstraction):
+1. Deribit test_request continuous processing
+2. Deribit heartbeat during active trading sessions
+3. Future platform heartbeat requirements (Binance, FTX, etc.)
+4. Connection monitoring and automatic recovery
+
+**Decision**: Create HeartbeatHandler abstraction - financial trading reliability requirements justify the complexity.
+
+#### Production Requirements
+- **Continuous Processing**: Heartbeats must be handled 24/7 during active connections
+- **Sub-second Response**: test_request must be answered within API timeout (typically 1-5 seconds)
+- **Fault Tolerance**: Heartbeat handler must restart on failure without losing connection
+- **Monitoring**: Track heartbeat response times and failures for operational visibility
+- **Graceful Degradation**: If heartbeat fails, connection should close cleanly to prevent phantom orders
+
 #### Subtasks
-- [ ] **WNX0019a**: Implement connection configuration for bootstrap sequence
-- [ ] **WNX0019b**: Add authentication step in bootstrap flow
-- [ ] **WNX0019c**: Implement client hello message exchange
-- [ ] **WNX0019d**: Set up heartbeat configuration and handling
-- [ ] **WNX0019e**: Add cancel-on-disconnect protection setup
-- [ ] **WNX0019f**: Implement time synchronization with Deribit servers
-- [ ] **WNX0019g**: Add test_request message handling with /api/v2/public/test response
-- [ ] **WNX0019h**: Test complete bootstrap sequence with test.deribit.com
+- [ ] **WNX0019a**: Create HeartbeatHandler GenServer for continuous message processing
+- [ ] **WNX0019b**: Integrate HeartbeatHandler with Client.connect for automatic startup
+- [ ] **WNX0019c**: Implement automatic `/api/v2/public/test` response to test_request messages
+- [ ] **WNX0019d**: Add heartbeat response time monitoring and failure detection
+- [ ] **WNX0019e**: Implement graceful connection termination on heartbeat failure
+- [ ] **WNX0019f**: Add supervision strategy for HeartbeatHandler process recovery
+- [ ] **WNX0019g**: Test continuous heartbeat processing with test.deribit.com (24-hour stability test)
+
+#### ExUnit and Integration Test Requirements
+- Real API test against test.deribit.com verifying continuous heartbeat response
+- Long-running test (minimum 10 minutes) to verify heartbeat stability
+- Test heartbeat handler recovery after process failure
+- Test connection termination when heartbeat responses fail
+- Performance test: verify heartbeat response time under load
+
+#### Error Handling Patterns
+- **HeartbeatHandler crash**: Restart handler, maintain connection if possible
+- **test_request timeout**: Close connection immediately to prevent order issues
+- **Connection loss during heartbeat**: Trigger reconnection with new heartbeat handler
+- **Response send failure**: Log error, attempt retry once, then close connection
+
+#### Implementation Notes
+- Create `HeartbeatHandler` GenServer that continuously processes Gun messages
+- Link HeartbeatHandler to Client process for coordinated lifecycle management
+- Use `Process.monitor/1` to detect heartbeat handler failures
+- Implement heartbeat response caching to handle high-frequency test_requests
+- Add telemetry events for heartbeat monitoring and alerting
+
+#### Complexity Assessment
+- **Current**: DeribitAdapter detects heartbeats but requires manual processing
+- **Target**: Dedicated process for continuous, automatic heartbeat handling
+- **Added Complexity**: ~150 lines (HeartbeatHandler GenServer + Client integration)
+- **Justification**: Financial trading reliability requirements override simplicity preference
+- **Maintains**: All existing DeribitAdapter functionality + production-grade reliability
 
 ### WNX0020: Deribit JSON-RPC 2.0 Macro System
 **Priority**: High (Deferred until after WNX0022)  
