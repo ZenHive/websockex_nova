@@ -40,6 +40,7 @@ defmodule WebsockexNew.Frame do
 
   @doc """
   Decode incoming WebSocket frame.
+  Handles both Gun WebSocket format {:ws, type, data} and direct frame format {:type, data}.
   """
   @spec decode(tuple()) :: {:ok, frame()} | {:error, String.t()}
   def decode({:ws, :text, data}), do: {:ok, {:text, data}}
@@ -47,5 +48,14 @@ defmodule WebsockexNew.Frame do
   def decode({:ws, :ping, data}), do: {:ok, {:ping, data}}
   def decode({:ws, :pong, data}), do: {:ok, {:pong, data}}
   def decode({:ws, :close, _}), do: {:ok, {:close, <<>>}}
+  
+  # Handle direct frame format (for testing and compatibility)
+  def decode({:text, data}), do: {:ok, {:text, data}}
+  def decode({:binary, data}), do: {:ok, {:binary, data}}
+  def decode({:ping, data}), do: {:ok, {:ping, data}}
+  def decode({:pong, data}), do: {:ok, {:pong, data}}
+  def decode({:close, code, reason}) when is_integer(code), do: {:ok, {:close, reason}}
+  def decode({:close, reason}), do: {:ok, {:close, reason}}
+  
   def decode(frame), do: {:error, "Unknown frame type: #{inspect(frame)}"}
 end

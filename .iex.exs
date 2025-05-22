@@ -273,6 +273,56 @@ defmodule WebsockexNewTest do
     {state, alive}
   end
   
+  def test_message_handler do
+    IO.puts("🧪 Testing MessageHandler with mock messages...")
+    
+    # Create a test handler that prints all message types
+    handler = WebsockexNew.MessageHandler.create_handler(
+      on_message: fn frame -> 
+        IO.puts("  📨 Data frame: #{inspect(frame)}")
+      end,
+      on_upgrade: fn {conn_pid, stream_ref} -> 
+        IO.puts("  🔗 WebSocket upgraded: PID=#{inspect(conn_pid)}, Stream=#{inspect(stream_ref)}")
+      end,
+      on_error: fn reason -> 
+        IO.puts("  ❌ Error: #{inspect(reason)}")
+      end,
+      on_down: fn {conn_pid, reason} -> 
+        IO.puts("  ⬇️ Connection down: PID=#{inspect(conn_pid)}, Reason=#{inspect(reason)}")
+      end
+    )
+    
+    # Test various message types
+    test_pid = self()
+    test_ref = make_ref()
+    
+    messages = [
+      {:gun_upgrade, test_pid, test_ref, ["websocket"], []},
+      {:gun_ws, test_pid, test_ref, {:text, "Hello World"}},
+      {:gun_ws, test_pid, test_ref, {:binary, <<1, 2, 3, 4>>}},
+      {:gun_ws, test_pid, test_ref, {:ping, "ping_data"}},
+      {:gun_ws, test_pid, test_ref, {:pong, "pong_data"}},
+      {:gun_ws, test_pid, test_ref, {:close, 1000, "normal"}},
+      {:gun_down, test_pid, :http, :normal, []},
+      {:gun_error, test_pid, test_ref, :timeout},
+      {:unknown_message, "test"}
+    ]
+    
+    IO.puts("\nProcessing test messages:")
+    
+    Enum.each(messages, fn message ->
+      IO.puts("\n➤ Testing: #{inspect(message)}")
+      case WebsockexNew.MessageHandler.handle_message(message, handler) do
+        {:ok, result} -> 
+          IO.puts("  ✅ Result: #{inspect(result)}")
+        {:error, reason} -> 
+          IO.puts("  ❌ Error: #{inspect(reason)}")
+      end
+    end)
+    
+    IO.puts("\n✅ MessageHandler test completed!")
+  end
+  
   def help do
     IO.puts("""
     
@@ -283,6 +333,9 @@ defmodule WebsockexNewTest do
       client = WebsockexNewTest.connect(retry_count: 5)      # Connect with custom options
       WebsockexNewTest.status(client)                        # Check connection status
       WebsockexNewTest.close(client)                         # Close connection
+    
+    Message Handler Testing:
+      WebsockexNewTest.test_message_handler()                # Test MessageHandler with mock messages
     
     Reconnection Testing:
       WebsockexNewTest.monitor_reconnection(client)          # Monitor connection (disable WiFi to test)
@@ -298,6 +351,7 @@ defmodule WebsockexNewTest do
     2. Start monitoring: WebsockexNewTest.monitor_reconnection(client)
     3. Disable WiFi to trigger reconnection attempts
     4. Re-enable WiFi to see successful reconnection
+    5. Test messages: WebsockexNewTest.test_message_handler()
     
     """)
   end

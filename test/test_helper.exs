@@ -1,3 +1,4 @@
+require  Logger
 ## Configure Logger to only show warnings and errors
 # Logger.configure(level: :none)
 # Logger.configure(level: :info)
@@ -5,7 +6,22 @@
 # Logger.configure(level: :debug)
 
 ExUnit.start()
+# Display testing policy message
+Logger.warning("""
+\n[!] TESTING POLICY [!]
+--------------------------------------------------
+DO NOT USE MOCKS! They are proven to be unreliable.
+ALWAYS test against real test APIs (e.g., test.deribit.com).
+If no test API is available, use real API.
 
+NEVER SKIP TESTS because you can not find CREDENTIALS. Credentials
+must be always present. LET THEM FAIL.
+
+Failure to adhere to this policy will result in immediate
+TERMINATION ("you are fired!") and your employment will be terminated.
+--------------------------------------------------
+\n
+""")
 Mox.defmock(WebsockexNova.TransportMock, for: WebsockexNova.Transport)
 Mox.defmock(WebsockexNova.ConnectionHandlerMock, for: WebsockexNova.Behaviors.ConnectionHandler)
 Mox.defmock(WebsockexNova.MessageHandlerMock, for: WebsockexNova.Behaviors.MessageHandler)
