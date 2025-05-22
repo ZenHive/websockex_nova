@@ -361,3 +361,102 @@ The foundation is ready for enhancement tasks (WNX0019-WNX0020) focusing on:
 - JSON-RPC 2.0 macro system for automated API method generation
 
 **Next Phase**: Enhancement tasks building on this solid, simple foundation.
+
+---
+
+## Phase 4: Migration and Cleanup - COMPLETED ✅
+
+### WNX0023: Documentation for New System (Previously WNX0021)
+**Priority**: Medium - **COMPLETED** ✅  
+**Effort**: Small  
+**Dependencies**: None
+
+**Status**: ✅ COMPLETED - Complete documentation suite with architecture overview, API reference, adapter guide, testing patterns, and updated README reflecting the actual WebsockexNew implementation
+
+### WNX0024: System Migration and Cleanup (Previously WNX0022)
+**Priority**: Critical - **COMPLETED** ✅  
+**Effort**: Small (simplified approach)  
+**Dependencies**: None (websockex_new system is complete and tested)
+
+#### Target Implementation
+**SIMPLIFIED APPROACH**: Keep `WebsockexNew` namespace and use project rename tool for metadata only
+
+#### Strategy Benefits
+- **Zero module renaming risk** - all working code stays exactly as-is
+- **90% less complexity** - no mass find/replace operations across codebase
+- **Safe project updates** - use proven `rename` tool for mix.exs/README/docs
+- **"New" becomes permanent identity** - semantically appropriate for modern implementation
+
+#### File Management Strategy
+
+**Files to KEEP (no renaming needed):**
+```
+lib/websockex_new/              → Keep as-is (WebsockexNew namespace permanent)
+test/websockex_new/             → Keep as-is (no module changes needed)
+test/support/                   → Keep existing test infrastructure
+docs/                           → Keep updated documentation
+LICENSE, .formatter.exs, .gitignore → Keep unchanged
+```
+
+**Files to DELETE (old WebsockexNew system):**
+```
+lib/websockex_nova/             → DELETE ENTIRE DIRECTORY
+├── application.ex              → DELETE (56 modules total)
+├── behaviors/                  → DELETE (9 behavior modules)
+├── client.ex                   → DELETE (complex client)
+├── defaults/                   → DELETE (7 default implementations)
+├── examples/                   → DELETE (Deribit adapter)
+├── gun/                        → DELETE (Gun transport layer - 15 modules)
+├── helpers/                    → DELETE (state helpers)
+├── message/                    → DELETE (message handling)
+├── telemetry/                  → DELETE (telemetry system)
+└── transport/                  → DELETE (transport abstraction)
+
+test/websockex_nova/            → DELETE ENTIRE DIRECTORY
+├── auth/                       → DELETE
+├── behaviors/                  → DELETE (behavior tests)
+├── client_conn_*.exs          → DELETE
+├── client_macro_test.exs      → DELETE
+├── client_test.exs            → DELETE
+├── connection_registry_test.exs → DELETE
+├── defaults/                   → DELETE (default handler tests)
+├── examples/                   → DELETE (adapter tests)
+├── gun/                        → DELETE (Gun transport tests)
+├── handler_invoker_test.exs   → DELETE
+├── helpers/                    → DELETE
+├── message/                    → DELETE
+├── telemetry/                  → DELETE
+├── transport/                  → DELETE
+└── transport_test.exs         → DELETE
+```
+
+**Test Files to KEEP:**
+```
+test/integration/               → Keep real API integration tests  
+test/support/mock_websock_*     → Keep existing mock infrastructure (used by websockex_new)
+test/support/certificate_helper.ex → Keep certificate helpers
+test/support/gun_monitor.ex     → Keep if used by new system
+test/test_helper.exs           → Keep and update for new system
+```
+
+**Important**: WebsockexNew system already uses some of the `test/support/` infrastructure, so this cleanup preserves that working relationship.
+
+#### Simplified Migration Steps
+- [x] **WNX0024a**: Create backup branch with current state
+- [x] **WNX0024b**: Delete entire `lib/websockex_nova/` directory (52 modules) 
+- [x] **WNX0024c**: Delete entire `test/websockex_nova/` directory (41 test files)
+- [x] **WNX0024d**: Install and run `rename` tool to update project metadata (mix.exs, README.md)
+- [x] **WNX0024e**: Update mix.exs application configuration (remove WebsockexNova.Application)
+- [x] **WNX0024f**: Clean up incompatible test support files
+- [x] **WNX0024g**: Verify all tests pass with cleaned structure (93 tests passing)
+
+#### Rename Tool Usage
+```bash
+# Install rename tool
+mix archive.install hex rename
+
+# Rename project from websockex_nova to websockex_new
+mix rename websockex_nova websockex_new
+```
+
+**Result**: Clean codebase with `WebsockexNew` namespace as the permanent, modern implementation.

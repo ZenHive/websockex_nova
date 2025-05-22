@@ -2,7 +2,7 @@
 
 ## Current Progress Status
 **Last Updated**: 2025-05-23  
-**Phase**: Enhancement Tasks (WNX0019-WNX0020)  
+**Phase**: Critical Financial Infrastructure (WNX0019-WNX0021)  
 **Foundation**: Complete ✅ (All Phase 1-4 tasks archived)
 
 ### 📊 Current Architecture Status
@@ -10,36 +10,22 @@
 - **Public API**: 5 core functions fully functional ✅
 - **Test Coverage**: 93 tests, 100% real API testing ✅
 - **Platform Integration**: Deribit adapter with real API testing ✅
-- **Migration**: Clean codebase, 26,375 legacy lines removed ✅
 
 ### ✅ Completed Tasks Archive
-**All Phase 1-4 foundation tasks (WNX0010-WNX0018, WNX0021-WNX0022) have been moved to:**
-📁 `docs/archive/completed_tasks.md`
+**All completed foundation and migration tasks have been moved to:**
+📁 `docs/archive/completed_tasks.md` - Foundation tasks (WNX0010-WNX0018)
+📁 `docs/archive/completed_migration.md` - Migration process and tasks (WNX0023-WNX0024)
 
 **Foundation Summary**:
 - 8 core modules: Client, Config, Frame, ConnectionRegistry, Reconnection, MessageHandler, ErrorHandler, DeribitAdapter
 - 5 public API functions: connect, send, close, subscribe, get_state
 - 93 tests passing with 100% real API testing
 - Complete Deribit integration with authentication and subscriptions
-- 90% code reduction (56 → 8 modules, 10,000+ → 900 lines)
 
 ---
 
 ## Project Goal
-Completely rewrite WebsockexNew as a simple, maintainable WebSocket client that delivers core functionality with minimal complexity. Build from scratch in `lib/websockex_new/` using Gun as the transport layer, following strict simplicity principles from day one.
-
-## Why Rewrite Instead of Refactor
-- **Current state**: 56 modules, 9 behaviors, 1,737-line connection wrapper
-- **Refactor effort**: 5-7 weeks of complex surgery with backward compatibility constraints
-- **Rewrite effort**: 2-3 weeks building only what's needed
-- **Clean slate**: No legacy complexity, over-abstractions, or technical debt
-- **Simplicity first**: Implement minimal viable solution, add complexity only when proven necessary
-
-## Development Strategy
-- **New namespace**: Build in `lib/websockex_new/` to avoid conflicts
-- **Parallel development**: Keep existing system running while rewriting
-- **Final migration**: Rename `websockex_new` → `websockex_new` when complete
-- **Clean cutover**: Replace old system entirely, no hybrid approach
+WebsockexNew is a simple, maintainable WebSocket client that delivers core functionality with minimal complexity. Built using Gun as the transport layer, following strict simplicity principles.
 
 ## Core Architecture Principles
 - **Maximum 8 modules** in main library
@@ -52,9 +38,9 @@ Completely rewrite WebsockexNew as a simple, maintainable WebSocket client that 
 
 ---
 
-## Active Enhancement Tasks
+## Active Critical Financial Infrastructure Tasks
 
-### WNX0019: HeartbeatManager Implementation (Critical Financial Infrastructure)
+### WNX0019: HeartbeatManager Implementation
 **Priority**: Critical  
 **Effort**: Medium  
 **Dependencies**: None
@@ -62,7 +48,7 @@ Completely rewrite WebsockexNew as a simple, maintainable WebSocket client that 
 **Status**: Planning complete ✅ - See `docs/HeartbeatManager_Architecture.md` for comprehensive design
 **Priority**: High (Deferred until after WNX0022)  
 **Effort**: Medium  
-**Dependencies**: WNX0022 (Migration), then enhanced from current WNX0016
+**Dependencies**: None
 
 #### Target Implementation
 **PRODUCTION-READY APPROACH**: Implement automatic heartbeat processing during the entire connection lifecycle, not just bootstrap. Financial trading connections require continuous, automatic heartbeat handling to prevent order cancellation due to connection monitoring failures.
@@ -166,10 +152,96 @@ lib/websockex_new/
 - **Justification**: Financial trading reliability requirements override simplicity preference
 - **Maintains**: All existing DeribitAdapter functionality + production-grade reliability
 
-### WNX0020: Deribit JSON-RPC 2.0 Macro System
-**Priority**: High (Deferred until after WNX0022)  
+### WNX0020: Request/Response Correlation Manager
+**Priority**: High  
+**Effort**: Small  
+**Dependencies**: None
+
+#### Target Implementation
+Track and correlate WebSocket request/response pairs for reliable order management:
+- Request ID tracking with configurable timeouts
+- Response matching to original requests
+- Timeout handling for pending requests
+- Simple correlation table using ETS
+
+#### Real Trading Risk
+Without request correlation, you can't reliably know if orders succeeded or failed. This leads to:
+- Duplicate orders from retries
+- Ghost positions from unknown order status
+- Inability to reconcile exchange state
+
+#### File Structure
+```
+lib/websockex_new/
+├── request_tracker.ex      # Simple request/response correlation
+└── client.ex               # Enhanced with correlation support
+```
+
+#### Simplicity Progression Plan
+1. **Start Simple**: ETS table mapping request_id -> {request, timeout}
+2. **Proven Pattern**: Return {:error, :timeout} after configurable delay
+3. **Add When Needed**: Only add features based on real trading issues
+
+#### Subtasks
+- [ ] **WNX0020a**: Create request_tracker.ex with ETS-based correlation table
+- [ ] **WNX0020b**: Add track_request/3 and match_response/2 functions
+- [ ] **WNX0020c**: Implement timeout detection with Process.send_after
+- [ ] **WNX0020d**: Integrate with Client.send_message for automatic tracking
+- [ ] **WNX0020e**: Test with real Deribit order placement/cancellation
+
+#### Implementation Notes
+- ~50 lines total implementation
+- Use ETS for O(1) lookup performance
+- Leverage existing JSON-RPC ID field
+- No complex abstractions, just simple mapping
+
+### WNX0021: Basic Rate Limiter
+**Priority**: High  
+**Effort**: Small  
+**Dependencies**: None
+
+#### Target Implementation
+Prevent API rate limit violations with simple token bucket:
+- Configurable rate limits per connection
+- Token bucket algorithm implementation
+- Automatic request queueing when limit reached
+- Simple, proven approach used across financial APIs
+
+#### Real Trading Risk
+Hitting rate limits causes:
+- Temporary API bans (missed trading opportunities)
+- Order rejections during critical moments
+- Complete system lockout in worst case
+
+#### File Structure
+```
+lib/websockex_new/
+├── rate_limiter.ex         # Token bucket rate limiting
+└── client.ex               # Enhanced with rate limit checks
+```
+
+#### Simplicity Progression Plan
+1. **Start Simple**: Basic token bucket with fixed refill rate
+2. **Proven Pattern**: Standard algorithm used by exchanges
+3. **Add When Needed**: Burst handling only if actually hitting limits
+
+#### Subtasks
+- [ ] **WNX0021a**: Create rate_limiter.ex with token bucket logic
+- [ ] **WNX0021b**: Add consume_token/2 and refill logic
+- [ ] **WNX0021c**: Integrate with Client.send_message
+- [ ] **WNX0021d**: Add configurable limits to Config struct
+- [ ] **WNX0021e**: Test against Deribit rate limits with burst traffic
+
+#### Implementation Notes
+- ~30 lines total implementation
+- Use Process.send_after for token refill
+- Queue requests when tokens exhausted
+- Return {:error, :rate_limited} when queue full
+
+### WNX0022: Deribit JSON-RPC 2.0 Macro System
+**Priority**: Medium (Nice to have)  
 **Effort**: Medium  
-**Dependencies**: WNX0022 (Migration), then WNX0019
+**Dependencies**: WNX0019, WNX0020, WNX0021
 
 #### Target Implementation
 Auto-generate JSON-RPC 2.0 requests for market making and options trading operations:
@@ -206,124 +278,11 @@ lib/websockex_new/examples/
 
 ---
 
-## Phase 4: Migration and Cleanup
-
-### WNX0021: Documentation for New System
-**Priority**: Medium - **COMPLETED** ✅  
-**Effort**: Small  
-**Dependencies**: WNX0022 (Migration), then enhanced from existing docs
-
-#### Target Implementation
-Comprehensive documentation for the WebsockexNew system:
-- Complete architecture documentation reflecting 8-module simplified design
-- Full API reference for all core modules with examples and usage patterns
-- Step-by-step adapter development guide using DeribitAdapter as reference
-- Integration testing patterns with real endpoint testing philosophy
-- Updated README with accurate system overview
-
-#### Subtasks
-- [x] **WNX0021a**: Create accurate architecture documentation for WebsockexNew system
-- [x] **WNX0021b**: Document all core modules and their APIs with complete function signatures
-- [x] **WNX0021c**: Create comprehensive adapter development guide with real examples
-- [x] **WNX0021d**: Document integration testing patterns and best practices
-- [x] **WNX0021e**: Update README with accurate system overview removing outdated references
-- [x] **WNX0021f**: Prepare API documentation structure for generation
-
-**Status**: ✅ COMPLETED - Complete documentation suite with architecture overview, API reference, adapter guide, testing patterns, and updated README reflecting the actual WebsockexNew implementation
-
-### WNX0022: System Migration and Cleanup
-**Priority**: Critical - **COMPLETED** ✅  
-**Effort**: Small (simplified approach)  
-**Dependencies**: None (websockex_new system is complete and tested)
-
-#### Target Implementation
-**SIMPLIFIED APPROACH**: Keep `WebsockexNew` namespace and use project rename tool for metadata only
-
-#### Strategy Benefits
-- **Zero module renaming risk** - all working code stays exactly as-is
-- **90% less complexity** - no mass find/replace operations across codebase
-- **Safe project updates** - use proven `rename` tool for mix.exs/README/docs
-- **"New" becomes permanent identity** - semantically appropriate for modern implementation
-
-#### File Management Strategy
-
-**Files to KEEP (no renaming needed):**
-```
-lib/websockex_new/              → Keep as-is (WebsockexNew namespace permanent)
-test/websockex_new/             → Keep as-is (no module changes needed)
-test/support/                   → Keep existing test infrastructure
-docs/                           → Keep updated documentation
-LICENSE, .formatter.exs, .gitignore → Keep unchanged
-```
-
-**Files to DELETE (old WebsockexNew system):**
-```
-lib/websockex_new/             → DELETE ENTIRE DIRECTORY
-├── application.ex              → DELETE (56 modules total)
-├── behaviors/                  → DELETE (9 behavior modules)
-├── client.ex                   → DELETE (complex client)
-├── defaults/                   → DELETE (7 default implementations)
-├── examples/                   → DELETE (Deribit adapter)
-├── gun/                        → DELETE (Gun transport layer - 15 modules)
-├── helpers/                    → DELETE (state helpers)
-├── message/                    → DELETE (message handling)
-├── telemetry/                  → DELETE (telemetry system)
-└── transport/                  → DELETE (transport abstraction)
-
-test/websockex_new/            → DELETE ENTIRE DIRECTORY
-├── auth/                       → DELETE
-├── behaviors/                  → DELETE (behavior tests)
-├── client_conn_*.exs          → DELETE
-├── client_macro_test.exs      → DELETE
-├── client_test.exs            → DELETE
-├── connection_registry_test.exs → DELETE
-├── defaults/                   → DELETE (default handler tests)
-├── examples/                   → DELETE (adapter tests)
-├── gun/                        → DELETE (Gun transport tests)
-├── handler_invoker_test.exs   → DELETE
-├── helpers/                    → DELETE
-├── message/                    → DELETE
-├── telemetry/                  → DELETE
-├── transport/                  → DELETE
-└── transport_test.exs         → DELETE
-```
-
-**Test Files to KEEP:**
-```
-test/integration/               → Keep real API integration tests  
-test/support/mock_websock_*     → Keep existing mock infrastructure (used by websockex_new)
-test/support/certificate_helper.ex → Keep certificate helpers
-test/support/gun_monitor.ex     → Keep if used by new system
-test/test_helper.exs           → Keep and update for new system
-```
-
-**Important**: WebsockexNew system already uses some of the `test/support/` infrastructure, so this cleanup preserves that working relationship.
-
-#### Simplified Migration Steps
-- [x] **WNX0022a**: Create backup branch with current state
-- [x] **WNX0022b**: Delete entire `lib/websockex_nova/` directory (52 modules) 
-- [x] **WNX0022c**: Delete entire `test/websockex_nova/` directory (41 test files)
-- [x] **WNX0022d**: Install and run `rename` tool to update project metadata (mix.exs, README.md)
-- [x] **WNX0022e**: Update mix.exs application configuration (remove WebsockexNova.Application)
-- [x] **WNX0022f**: Clean up incompatible test support files
-- [x] **WNX0022g**: Verify all tests pass with cleaned structure (93 tests passing)
-
-#### Rename Tool Usage
-```bash
-# Install rename tool
-mix archive.install hex rename
-
-# Rename project from websockex_new to websockex_new
-mix rename websockex_new websockex_new
-```
-
-**Result**: Clean codebase with `WebsockexNew` namespace as the permanent, modern implementation.
-
 ---
 
 ## Target Architecture
 
-### Final Module Structure (8 modules - COMPLETED ✅)
+### Module Structure (8 modules - COMPLETED ✅)
 ```
 lib/websockex_new/
 ├── client.ex              # Main client interface (5 functions) ✅
@@ -347,21 +306,16 @@ WebsockexNew.Client.subscribe(client, channels)
 WebsockexNew.Client.get_state(client)
 ```
 
-### Development Workflow
-1. **Phase 1-3**: Build complete new system in `lib/websockex_new/` ✅ COMPLETED
-2. **Test extensively**: Validate against real APIs throughout development ✅ COMPLETED
-3. **Phase 4**: Clean cutover - remove old system, keep `WebsockexNew` namespace ✅ COMPLETED
-4. **Project rename**: Use rename tool for project metadata only ✅ COMPLETED
 
 ## Success Metrics
 
 ### Quantitative Goals - ACHIEVED ✅
-- **Total modules**: 8 modules ✅ (was 56 in legacy system)
-- **Lines of code**: ~900 lines ✅ (was ~10,000+ in legacy system)
-- **Public API functions**: 5 functions ✅ (was dozens in legacy system)
-- **Configuration options**: 6 essential options ✅ (was 20+ in legacy system)
-- **Behaviors**: 0 behaviors ✅ (was 9 behaviors in legacy system)
-- **GenServers**: 0 GenServers ✅ (was multiple in legacy system)
+- **Total modules**: 8 modules ✅
+- **Lines of code**: ~900 lines ✅
+- **Public API functions**: 5 functions ✅
+- **Configuration options**: 6 essential options ✅
+- **Behaviors**: 0 behaviors ✅
+- **GenServers**: 0 GenServers ✅
 - **Test coverage**: 93 tests, 100% real API testing ✅
 
 ### Qualitative Goals
@@ -374,11 +328,9 @@ WebsockexNew.Client.get_state(client)
 ## Implementation Strategy
 
 ### Development Approach
-1. **Parallel development** - Build in `lib/websockex_new/` without disrupting current system ✅ COMPLETED
-2. **Build incrementally** - Each task produces working, tested code ✅ COMPLETED
-3. **Real API first** - Every feature tested against test.deribit.com ✅ COMPLETED
-4. **Document as you go** - Write docs with each module ✅ COMPLETED
-5. **Clean migration** - Remove old system, keep new namespace permanent ✅ COMPLETED
+1. **Build incrementally** - Each task produces working, tested code
+2. **Real API first** - Every feature tested against test.deribit.com
+3. **Document as you go** - Write docs with each module
 
 ### Quality Gates
 - **Each module**: Maximum 5 functions, 15 lines per function
@@ -387,29 +339,10 @@ WebsockexNew.Client.get_state(client)
 - **Each commit**: Maintains working system end-to-end
 
 ### Timeline
-- **Week 1**: Core client (WNX0010-0012) - Basic connect/send/close ✅ COMPLETED
-- **Week 2**: Connection management (WNX0013-0015) - Reconnection and messaging ✅ COMPLETED
-- **Week 3**: Integration (WNX0016-0017) - Deribit adapter and error handling ✅ COMPLETED
-- **Migration**: System cleanup (WNX0022) - Remove legacy code, clean foundation ✅ COMPLETED
-- **Next phase**: Enhancement features (WNX0018-0021) - Testing infrastructure, bootstrap sequence, JSON-RPC macros, documentation
-
-## Migration Benefits
-
-### Advantages of lib/websockex_new/ Approach
-- **No disruption**: Existing system continues working
-- **Easy comparison**: Can compare old vs new implementations
-- **Safe rollback**: Simple to revert if rewrite fails
-- **Incremental testing**: Can test new system alongside old
-- **Clean history**: Clear commit history showing rewrite progress
-
-### Risk Mitigation
-- **Early real API testing** - Validate approach with actual Deribit integration
-- **Incremental delivery** - Each week produces usable system
-- **Simple rollback** - Keep old system available during development
-- **Performance validation** - Ensure new system meets performance requirements
+- **Foundation Complete**: Core modules, connection management, and Deribit integration ✅
+- **Current phase**: Critical financial infrastructure (WNX0019-0021) - HeartbeatManager, Request Correlation, Rate Limiting
+- **Next phase**: Nice-to-have enhancements (WNX0022) - JSON-RPC macro system
 
 ## Notes
 
-This rewrite prioritizes **shipping a working system quickly** over architectural perfection. The development in `lib/websockex_new/` allowed for safe, parallel development while maintaining the existing system.
-
-**Key philosophy**: Build the minimum system that solves real problems, then clean cutover. The namespace approach provided safety during development, and `WebsockexNew` becomes the permanent, modern identity.
+**Key philosophy**: Build the minimum system that solves real problems. Start simple, add complexity only when necessary based on real data.
