@@ -95,6 +95,37 @@ defmodule WebsockexNew.Client do
 
   # Public API
 
+  @doc """
+  Starts a Client GenServer under a supervisor.
+
+  This function is designed to be called by a supervisor. For direct usage,
+  prefer `connect/2` which provides better error handling and connection
+  establishment feedback.
+  """
+  @spec start_link(String.t() | WebsockexNew.Config.t(), keyword()) ::
+          {:ok, pid()} | {:error, term()}
+  def start_link(url_or_config, opts \\ []) do
+    config =
+      case url_or_config do
+        url when is_binary(url) ->
+          case WebsockexNew.Config.new(url, opts) do
+            {:ok, config} -> config
+            {:error, reason} -> {:error, reason}
+          end
+
+        %WebsockexNew.Config{} = config ->
+          config
+      end
+
+    case config do
+      {:error, reason} ->
+        {:error, reason}
+
+      %WebsockexNew.Config{} = valid_config ->
+        GenServer.start_link(__MODULE__, {valid_config, opts})
+    end
+  end
+
   @spec connect(String.t() | WebsockexNew.Config.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def connect(url_or_config, opts \\ [])
 
