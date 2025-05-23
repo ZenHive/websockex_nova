@@ -1,58 +1,126 @@
 defmodule WebsockexNew.Reconnection do
   @moduledoc """
-  Simple exponential backoff reconnection logic without GenServer.
+  Internal reconnection helper for Client GenServer.
+
+  This module provides reconnection logic that runs within the Client GenServer
+  process to maintain Gun message ownership. It handles:
+
+  - Connection establishment with retry logic
+  - Exponential backoff calculations
+  - Subscription restoration after reconnection
+
+  ## Architecture
+
+  This module is called by the Client GenServer during its handle_continue
+  and handle_info callbacks. All functions run in the Client GenServer process
+  to ensure the new Gun connection sends messages to the correct process.
+
+  ## Not for External Use
+
+  This module is internal to WebsockexNew. External code should use
+  `WebsockexNew.Client.connect/2` which handles initial connection attempts
+  and automatic reconnection.
   """
 
-  alias WebsockexNew.Client
   alias WebsockexNew.Config
 
   @doc """
-  Calculate exponential backoff delay.
+  Attempt to establish a Gun connection with the given configuration.
+
+  This function must be called from within the Client GenServer process
+  to ensure Gun sends messages to the correct process.
   """
-  @spec calculate_delay(non_neg_integer(), pos_integer()) :: pos_integer()
-  def calculate_delay(attempt, base_delay) do
-    (base_delay * :math.pow(2, attempt)) |> min(30_000) |> round()
-  end
+  @spec establish_connection(Config.t()) ::
+          {:ok, gun_pid :: pid(), stream_ref :: reference(), monitor_ref :: reference()}
+          | {:error, term()}
+  def establish_connection(%Config{} = config) do
+    uri = URI.parse(config.url)
+    port = uri.port || if uri.scheme == "wss", do: 443, else: 80
 
-  @doc """
-  Attempt reconnection with exponential backoff.
-  """
-  @spec reconnect(Config.t(), non_neg_integer(), list()) :: {:ok, Client.t()} | {:error, :max_retries}
-  def reconnect(config, attempt \\ 0, subscriptions \\ [])
+    # Gun sends messages to the calling process (Client GenServer)
+    case :gun.open(to_charlist(uri.host), port, %{protocols: [:http]}) do
+      {:ok, gun_pid} ->
+        monitor_ref = Process.monitor(gun_pid)
 
-  def reconnect(%Config{retry_count: max_retries}, attempt, _subscriptions) when attempt >= max_retries do
-    {:error, :max_retries}
-  end
+        case :gun.await_up(gun_pid, config.timeout) do
+          {:ok, _protocol} ->
+            stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", config.headers)
+            {:ok, gun_pid, stream_ref, monitor_ref}
 
-  def reconnect(%Config{} = config, attempt, subscriptions) do
-    case Client.connect(config) do
-      {:ok, client} ->
-        restore_subscriptions(client, subscriptions)
-        {:ok, client}
+          {:error, reason} ->
+            Process.demonitor(monitor_ref, [:flush])
+            :gun.close(gun_pid)
+            {:error, reason}
+        end
 
-      {:error, _reason} ->
-        delay = calculate_delay(attempt, config.retry_delay)
-        :timer.sleep(delay)
-        reconnect(config, attempt + 1, subscriptions)
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   @doc """
-  Restore subscriptions after reconnection.
-  """
-  @spec restore_subscriptions(Client.t(), list()) :: :ok
-  def restore_subscriptions(_client, []), do: :ok
+  Calculate exponential backoff delay for reconnection attempts.
 
-  def restore_subscriptions(client, subscriptions) when is_list(subscriptions) do
-    Client.subscribe(client, subscriptions)
-    :ok
+  ## Examples
+
+      iex> calculate_backoff(0, 1000)
+      1000
+      
+      iex> calculate_backoff(1, 1000)
+      2000
+      
+      iex> calculate_backoff(5, 1000, 30000)
+      30000  # Capped at max_backoff
+  """
+  @spec calculate_backoff(attempt :: non_neg_integer(), base_delay :: pos_integer(), max_backoff :: pos_integer() | nil) ::
+          pos_integer()
+  def calculate_backoff(attempt, base_delay, max_backoff \\ 30_000) do
+    delay = base_delay * :math.pow(2, attempt)
+    max_delay = max_backoff || 30_000
+    min(round(delay), max_delay)
   end
 
   @doc """
-  Check if reconnection should be attempted.
+  Determine if a connection error should trigger reconnection.
+
+  Returns true for recoverable errors like network issues, false for
+  unrecoverable errors like invalid credentials.
   """
-  @spec should_reconnect?(non_neg_integer(), non_neg_integer()) :: boolean()
-  def should_reconnect?(attempt, max_retries) do
-    attempt < max_retries
+  @spec should_reconnect?(error :: term()) :: boolean()
+  def should_reconnect?(error) do
+    case WebsockexNew.ErrorHandler.handle_error(error) do
+      :reconnect -> true
+      _ -> false
+    end
+  end
+
+  @doc """
+  Check if maximum retry attempts have been exceeded.
+  """
+  @spec max_retries_exceeded?(attempt :: non_neg_integer(), max_retries :: non_neg_integer()) :: boolean()
+  def max_retries_exceeded?(attempt, max_retries) do
+    attempt >= max_retries
+  end
+
+  @doc """
+  Restore subscriptions after successful reconnection.
+
+  This should be called after the WebSocket upgrade is complete and the
+  connection is ready to receive subscription messages.
+  """
+  @spec restore_subscriptions(gun_pid :: pid(), stream_ref :: reference(), subscriptions :: [String.t()]) :: :ok
+  def restore_subscriptions(_gun_pid, _stream_ref, []), do: :ok
+
+  def restore_subscriptions(gun_pid, stream_ref, subscriptions) when is_list(subscriptions) do
+    message =
+      Jason.encode!(%{
+        "jsonrpc" => "2.0",
+        "method" => "public/subscribe",
+        "params" => %{"channels" => subscriptions},
+        "id" => System.unique_integer([:positive])
+      })
+
+    :gun.ws_send(gun_pid, stream_ref, {:text, message})
+    :ok
   end
 end

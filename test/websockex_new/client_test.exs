@@ -100,7 +100,7 @@ defmodule WebsockexNew.ClientTest do
     test "GenServer handles connection errors properly" do
       # Use a very short timeout
       config = Config.new!(@deribit_test_url, timeout: 1)
-      
+
       # Should get either timeout or connection_failed
       assert {:error, reason} = Client.connect(config)
       assert reason in [:timeout, :connection_failed]
@@ -114,6 +114,39 @@ defmodule WebsockexNew.ClientTest do
       assert :ok = Client.send_message(client, "test")
 
       Client.close(client)
+    end
+
+    test "Gun sends messages to Client GenServer process" do
+      {:ok, client} = Client.connect(@deribit_test_url)
+
+      # Send a test message that should trigger a response
+      test_request =
+        Jason.encode!(%{
+          "jsonrpc" => "2.0",
+          "method" => "public/test",
+          "params" => %{},
+          "id" => 1
+        })
+
+      # The Client GenServer should handle the response
+      assert :ok = Client.send_message(client, test_request)
+
+      # Give time for response
+      Process.sleep(100)
+
+      # Verify the GenServer is still alive (didn't crash from unhandled messages)
+      assert Process.alive?(client.server_pid)
+
+      Client.close(client)
+    end
+
+    @tag :skip
+    test "reconnection maintains Gun message ownership in Client GenServer" do
+      # This test requires simulating a connection drop
+      # Would need to either:
+      # 1. Kill the Gun process and verify reconnection
+      # 2. Use a mock server that can drop connections
+      # For now, marking as skip since it requires infrastructure changes
     end
   end
 end

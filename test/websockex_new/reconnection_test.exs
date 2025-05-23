@@ -1,84 +1,52 @@
 defmodule WebsockexNew.ReconnectionTest do
   use ExUnit.Case
 
-  alias WebsockexNew.Config
   alias WebsockexNew.Reconnection
-  alias WebsockexNew.Test.Support.MockWebSockServer
 
-  @deribit_test_url "wss://test.deribit.com/ws/api/v2"
-
-  describe "exponential backoff" do
-    test "calculate_delay/2 returns exponential backoff" do
-      assert Reconnection.calculate_delay(0, 1000) == 1000
-      assert Reconnection.calculate_delay(1, 1000) == 2000
-      assert Reconnection.calculate_delay(2, 1000) == 4000
-      assert Reconnection.calculate_delay(3, 1000) == 8000
+  describe "calculate_backoff/3" do
+    test "returns base delay for first attempt" do
+      assert Reconnection.calculate_backoff(0, 1000) == 1000
+      assert Reconnection.calculate_backoff(0, 1000, 5000) == 1000
     end
 
-    test "calculate_delay/2 caps at maximum delay" do
-      delay = Reconnection.calculate_delay(10, 1000)
-      assert delay == 30_000
-    end
-  end
-
-  describe "reconnection logic" do
-    test "reconnect/3 succeeds on first attempt with valid config" do
-      {:ok, config} = Config.new(@deribit_test_url, retry_count: 3)
-
-      {:ok, client} = Reconnection.reconnect(config, 0, [])
-
-      assert client.gun_pid != nil
-      assert client.state == :connected
-
-      WebsockexNew.Client.close(client)
+    test "doubles delay for each attempt" do
+      assert Reconnection.calculate_backoff(1, 1000) == 2000
+      assert Reconnection.calculate_backoff(2, 1000) == 4000
+      assert Reconnection.calculate_backoff(3, 1000) == 8000
     end
 
-    test "reconnect/3 returns max_retries error when attempt limit reached" do
-      # Test the logic directly by starting at max attempts
-      {:ok, config} = Config.new(@deribit_test_url, retry_count: 2)
-
-      {:error, :max_retries} = Reconnection.reconnect(config, 2, [])
+    test "caps delay at default 30 seconds" do
+      assert Reconnection.calculate_backoff(10, 1000) == 30_000
+      assert Reconnection.calculate_backoff(20, 1000) == 30_000
     end
 
-    test "should_reconnect?/2 returns correct boolean" do
-      assert Reconnection.should_reconnect?(0, 3) == true
-      assert Reconnection.should_reconnect?(2, 3) == true
-      assert Reconnection.should_reconnect?(3, 3) == false
-      assert Reconnection.should_reconnect?(5, 3) == false
+    test "caps delay at custom max_backoff" do
+      assert Reconnection.calculate_backoff(10, 1000, 5000) == 5000
+      assert Reconnection.calculate_backoff(20, 1000, 10_000) == 10_000
     end
   end
 
-  describe "subscription restoration" do
-    test "restore_subscriptions/2 handles empty subscription list" do
-      {:ok, config} = Config.new(@deribit_test_url)
-      {:ok, client} = WebsockexNew.Client.connect(config)
-
-      :ok = Reconnection.restore_subscriptions(client, [])
-
-      WebsockexNew.Client.close(client)
+  describe "max_retries_exceeded?/2" do
+    test "returns false when under limit" do
+      refute Reconnection.max_retries_exceeded?(0, 3)
+      refute Reconnection.max_retries_exceeded?(2, 3)
     end
 
-    test "restore_subscriptions/2 attempts to restore subscriptions" do
-      {:ok, config} = Config.new(@deribit_test_url)
-      {:ok, client} = WebsockexNew.Client.connect(config)
+    test "returns true when at or over limit" do
+      assert Reconnection.max_retries_exceeded?(3, 3)
+      assert Reconnection.max_retries_exceeded?(4, 3)
+    end
+  end
 
-      subscriptions = ["deribit_price_index.btc_usd"]
-      :ok = Reconnection.restore_subscriptions(client, subscriptions)
-
-      WebsockexNew.Client.close(client)
+  describe "should_reconnect?/1" do
+    test "returns true for recoverable errors" do
+      assert Reconnection.should_reconnect?(:timeout)
+      assert Reconnection.should_reconnect?(:connection_failed)
     end
 
-    test "restore_subscriptions/2 with mock server" do
-      {:ok, server_pid, port} = MockWebSockServer.start_link()
-
-      {:ok, config} = Config.new("ws://localhost:#{port}/ws")
-      {:ok, client} = WebsockexNew.Client.connect(config)
-
-      subscriptions = ["test_channel"]
-      :ok = Reconnection.restore_subscriptions(client, subscriptions)
-
-      WebsockexNew.Client.close(client)
-      MockWebSockServer.stop(server_pid)
+    test "returns false for non-recoverable errors" do
+      refute Reconnection.should_reconnect?(:invalid_credentials)
+      refute Reconnection.should_reconnect?(:protocol_error)
     end
   end
 end

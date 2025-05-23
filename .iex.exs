@@ -1,156 +1,46 @@
-alias WebsockexNew.Client
-alias WebsockexNew.Examples.ClientDeribit
-alias WebsockexNew.Examples.ClientDeribitMacro
+# WebsockexNew Interactive Testing
+# ================================
+# 
+# This file sets up an interactive environment for testing WebsockexNew library components.
+# It provides convenience functions for testing WebSocket connections, subscriptions,
+# reconnection logic, and various error scenarios.
+#
+# Quick Start:
+#   iex -S mix
+#   WebsockexNewTest.quick_test()
 
-# .iex.exs -- WebsockexNew debugging helpers
-
-import IEx.Helpers
-require Logger
-
-# All helpers are now in WebsockexNew.IExHelpers
-
-defmodule WebsockexNew.IExHelpers do
-  @moduledoc """
-  IEx helpers for inspecting WebsockexNew connection state.
-
-  Usage in IEx:
-    import WebsockexNew.IExHelpers
-    conn, state = get_conn_state(conn)
-    print_conn(conn)
-    print_adapter(conn)
-    print_handlers(conn)
-    print_full_config(conn)
-  """
-
-  # Helper to get the canonical conn and adapter state from a running connection
-  # Usage: {conn, state} = get_conn_state(conn)
-  def get_conn_state(conn) do
-    state = :sys.get_state(conn.transport_pid)
-    {conn, state}
-  end
-
-  # Helper to pretty-print the top-level fields of conn
-  # Usage: print_conn(conn)
-  def print_conn(conn) do
-    IO.puts("\n=== WebsockexNew.ClientConn (top-level) ===")
-    conn
-    |> Map.from_struct()
-    |> Enum.reject(fn {k, _v} -> k in [:adapter_state, :connection_handler_settings, :auth_handler_settings, :subscription_handler_settings, :error_handler_settings, :message_handler_settings, :extras] end)
-    |> Enum.each(fn {k, v} -> IO.puts("#{k}: #{inspect(v, pretty: true)}") end)
-    IO.puts("\n--- Handler/Feature State ---")
-    IO.puts("rate_limit: #{inspect(conn.rate_limit, pretty: true)}")
-    IO.puts("logging: #{inspect(conn.logging, pretty: true)}")
-    IO.puts("metrics: #{inspect(conn.metrics, pretty: true)}")
-    IO.puts("subscriptions: #{inspect(conn.subscriptions, pretty: true)}")
-    IO.puts("reconnection: #{inspect(conn.reconnection, pretty: true)}")
-    IO.puts("auth_status: #{inspect(conn.auth_status)}")
-    IO.puts("auth_expires_at: #{inspect(conn.auth_expires_at)}")
-    IO.puts("auth_refresh_threshold: #{inspect(conn.auth_refresh_threshold)}")
-    IO.puts("last_error: #{inspect(conn.last_error)}")
-    IO.puts("\n--- Handler Settings ---")
-    IO.puts("connection_handler_settings: #{inspect(conn.connection_handler_settings, pretty: true)}")
-    IO.puts("auth_handler_settings: #{inspect(conn.auth_handler_settings, pretty: true)}")
-    IO.puts("subscription_handler_settings: #{inspect(conn.subscription_handler_settings, pretty: true)}")
-    IO.puts("error_handler_settings: #{inspect(conn.error_handler_settings, pretty: true)}")
-    IO.puts("message_handler_settings: #{inspect(conn.message_handler_settings, pretty: true)}")
-    IO.puts("\n--- Extras ---")
-    IO.puts("extras: #{inspect(conn.extras, pretty: true)}")
-    # Print full config if present in extras or handler settings
-    full_config = conn.extras[:full_config] || conn.connection_handler_settings[:full_config]
-    if full_config do
-      IO.puts("\n--- Full Adapter Config (from :full_config) ---")
-      IO.inspect(full_config, pretty: true)
-    end
-    :ok
-  end
-
-  # Helper to print the adapter module and its state
-  # Usage: print_adapter(conn)
-  def print_adapter(conn) do
-    IO.puts("\n=== Adapter Info ===")
-    IO.puts("adapter: #{inspect(conn.adapter)}")
-    IO.puts("adapter_state: #{inspect(conn.adapter_state, pretty: true)}")
-    :ok
-  end
-
-  # Helper to print all handler-specific state in detail
-  # Usage: print_handlers(conn)
-  def print_handlers(conn) do
-    IO.puts("\n=== Handler State ===")
-    IO.puts("connection_handler_settings: #{inspect(conn.connection_handler_settings, pretty: true)}")
-    IO.puts("auth_handler_settings: #{inspect(conn.auth_handler_settings, pretty: true)}")
-    IO.puts("subscription_handler_settings: #{inspect(conn.subscription_handler_settings, pretty: true)}")
-    IO.puts("error_handler_settings: #{inspect(conn.error_handler_settings, pretty: true)}")
-    IO.puts("message_handler_settings: #{inspect(conn.message_handler_settings, pretty: true)}")
-    :ok
-  end
-
-  # Helper to print just the full config if present
-  # Usage: print_full_config(conn)
-  def print_full_config(conn) do
-    full_config = conn.extras[:full_config] || conn.connection_handler_settings[:full_config]
-    if full_config do
-      IO.puts("\n=== Full Adapter Config (from :full_config) ===")
-      IO.inspect(full_config, pretty: true)
-    else
-      IO.puts("No :full_config found in conn.extras or conn.connection_handler_settings.")
-    end
-    :ok
-  end
-end
-
-# Make helpers available directly in IEx
-import WebsockexNew.IExHelpers
-
-# Usage:
-#   {conn, state} = get_conn_state(conn)
-#   print_conn(conn)
-#   print_adapter(conn)
-#   print_handlers(conn)
-#   print_full_config(conn)
-
-# WebsockexNew Testing Interface
 defmodule WebsockexNewTest do
   @moduledoc """
-  Testing interface for WebsockexNew reconnection behavior.
+  Interactive testing module for WebsockexNew library.
   
-  Usage:
-    # Connect to test.deribit.com
-    client = WebsockexNewTest.connect()
-    
-    # Connect with custom config
-    client = WebsockexNewTest.connect(retry_count: 5, retry_delay: 2000)
-    
-    # Monitor reconnection attempts
-    WebsockexNewTest.monitor_reconnection(client)
-    
-    # Test reconnection manually
-    WebsockexNewTest.test_reconnection()
-    
-    # Close connection
-    WebsockexNewTest.close(client)
+  ## Quick Start
+  
+      # Basic connection test
+      WebsockexNewTest.quick_test()
+      
+      # Connect with custom options
+      client = WebsockexNewTest.connect(timeout: 10_000)
+      
+      # Subscribe to channels
+      WebsockexNewTest.subscribe(client, ["deribit_price_index.btc_usd"])
+      
+      # Send custom messages
+      WebsockexNewTest.send_json(client, %{method: "public/test"})
   """
   
-  alias WebsockexNew.{Client, Config, Reconnection}
+  alias WebsockexNew.{Client, Config}
   
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
   
   def connect(opts \\ []) do
-    opts = Keyword.merge([retry_count: 10, retry_delay: 1000], opts)
-    
-    IO.puts("🔌 Connecting to #{@deribit_test_url}")
-    IO.puts("   Options: #{inspect(opts)}")
+    IO.puts("🔌 Connecting to Deribit test server...")
     
     case Client.connect(@deribit_test_url, opts) do
       {:ok, client} ->
-        IO.puts("✅ Connected! PID: #{inspect(client.gun_pid)}")
-        IO.puts("   State: #{inspect(client.state)}")
-        IO.puts("   URL: #{client.url}")
-        
-        # Subscribe to a test channel
-        Client.subscribe(client, ["deribit_price_index.btc_usd"])
-        IO.puts("📡 Subscribed to deribit_price_index.btc_usd")
-        
+        IO.puts("✅ Connected successfully!")
+        IO.puts("   Client PID: #{inspect(client.server_pid)}")
+        IO.puts("   Gun PID: #{inspect(client.gun_pid)}")
+        IO.puts("   Stream: #{inspect(client.stream_ref)}")
         client
         
       {:error, reason} ->
@@ -159,96 +49,123 @@ defmodule WebsockexNewTest do
     end
   end
   
-  def monitor_reconnection(client) when is_map(client) do
-    IO.puts("👀 Monitoring connection status...")
-    IO.puts("   Now disconnect your WiFi to test reconnection!")
-    IO.puts("   Use Ctrl+C to stop monitoring")
+  def quick_test do
+    IO.puts("""
+    🚀 Running WebsockexNew Quick Test
+    ==================================
+    """)
     
-    spawn(fn -> monitor_loop(client) end)
+    # Connect
+    client = connect()
+    
+    if client do
+      # Test basic message
+      IO.puts("\n📤 Sending test message...")
+      send_json(client, %{
+        "jsonrpc" => "2.0",
+        "method" => "public/test",
+        "params" => %{},
+        "id" => 1
+      })
+      
+      # Subscribe to a channel
+      IO.puts("\n📡 Subscribing to BTC price index...")
+      subscribe(client, ["deribit_price_index.btc_usd"])
+      
+      # Wait a bit to see some messages
+      IO.puts("\n⏳ Waiting 5 seconds to observe messages...")
+      :timer.sleep(5000)
+      
+      # Close
+      IO.puts("\n🔌 Closing connection...")
+      Client.close(client)
+      IO.puts("✅ Test completed!")
+    else
+      IO.puts("❌ Test aborted - connection failed")
+    end
+    
+    :ok
+  end
+  
+  def subscribe(client, channels) when is_list(channels) do
+    IO.puts("📡 Subscribing to channels: #{inspect(channels)}")
+    
+    case Client.subscribe(client, channels) do
+      :ok ->
+        IO.puts("✅ Subscription request sent")
+        :ok
+        
+      {:error, reason} ->
+        IO.puts("❌ Subscription failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+  
+  def send_json(client, message) when is_map(message) do
+    json = Jason.encode!(message)
+    IO.puts("📤 Sending JSON: #{json}")
+    
+    case Client.send_message(client, json) do
+      :ok ->
+        IO.puts("✅ Message sent")
+        :ok
+        
+      {:error, reason} ->
+        IO.puts("❌ Send failed: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+  
+  def test_error_scenarios do
+    IO.puts("🧪 Testing error scenarios...")
+    
+    # Test invalid URL
+    IO.puts("\n1. Testing invalid URL...")
+    {:error, reason} = Client.connect("not-a-url")
+    IO.puts("   ✅ Got expected error: #{inspect(reason)}")
+    
+    # Test connection timeout
+    IO.puts("\n2. Testing connection timeout...")
+    {:error, reason} = Client.connect(@deribit_test_url, timeout: 1)
+    IO.puts("   ✅ Got expected error: #{inspect(reason)}")
+    
+    # Test send on disconnected client
+    IO.puts("\n3. Testing send on closed connection...")
+    {:ok, client} = Client.connect(@deribit_test_url)
+    Client.close(client)
+    :timer.sleep(100)
+    result = Client.send_message(client, "test")
+    IO.puts("   ✅ Got expected result: #{inspect(result)}")
+    
+    IO.puts("\n✅ All error scenarios passed!")
+  end
+  
+  def monitor_connection(client) do
+    IO.puts("👁️  Monitoring connection state...")
+    spawn(fn -> 
+      monitor_loop(client)
+    end)
   end
   
   defp monitor_loop(client) do
     state = Client.get_state(client)
-    
-    case state do
-      :connected ->
-        IO.puts("🟢 Status: CONNECTED")
-      :connecting ->
-        IO.puts("🟡 Status: CONNECTING...")
-      :disconnected ->
-        IO.puts("🔴 Status: DISCONNECTED")
-      _ ->
-        IO.puts("⚪ Status: #{inspect(state)}")
-    end
-    
-    # Check if process is still alive
-    if Process.alive?(client.gun_pid) do
-      :timer.sleep(2000)
-      monitor_loop(client)
-    else
-      IO.puts("💀 Gun process died: #{inspect(client.gun_pid)}")
-    end
+    IO.puts("[#{DateTime.utc_now() |> DateTime.to_string()}] Connection state: #{state}")
+    :timer.sleep(5000)
+    monitor_loop(client)
   end
   
-  def test_reconnection do
-    IO.puts("🧪 Testing reconnection logic...")
+  def test_internal_reconnection do
+    IO.puts("🔄 Testing internal reconnection...")
+    IO.puts("Note: Client GenServer now handles reconnection internally")
+    IO.puts("Kill the Gun process and watch the Client reconnect automatically")
     
-    {:ok, config} = Config.new(@deribit_test_url, retry_count: 3, retry_delay: 1000)
-    
-    IO.puts("   Config: #{inspect(config)}")
-    IO.puts("   Attempting reconnection with subscriptions...")
-    
-    subscriptions = ["deribit_price_index.btc_usd"]
-    
-    case Reconnection.reconnect(config, 0, subscriptions) do
-      {:ok, client} ->
-        IO.puts("✅ Reconnection successful!")
-        IO.puts("   New client: #{inspect(client.gun_pid)}")
-        client
-        
-      {:error, :max_retries} ->
-        IO.puts("❌ Reconnection failed: max retries exceeded")
-        nil
-        
-      {:error, reason} ->
-        IO.puts("❌ Reconnection failed: #{inspect(reason)}")
-        nil
-    end
-  end
-  
-  def simulate_disconnect_test do
-    IO.puts("🔌 Testing reconnection by simulating connection failure...")
-    
-    # Connect first
     client = connect()
-    
     if client do
-      IO.puts("📍 Original connection: #{inspect(client.gun_pid)}")
-      
-      # Kill the Gun process to simulate network failure
-      Process.exit(client.gun_pid, :kill)
-      :timer.sleep(100)
-      
-      IO.puts("💀 Killed Gun process, now testing reconnection...")
-      
-      # Test reconnection
-      {:ok, config} = Config.new(@deribit_test_url, retry_count: 3, retry_delay: 500)
-      subscriptions = ["deribit_price_index.btc_usd"]
-      
-      case Reconnection.reconnect(config, 0, subscriptions) do
-        {:ok, new_client} ->
-          IO.puts("✅ Reconnection successful after simulated failure!")
-          IO.puts("   New connection: #{inspect(new_client.gun_pid)}")
-          IO.puts("   Subscriptions restored: #{inspect(subscriptions)}")
-          new_client
-          
-        {:error, reason} ->
-          IO.puts("❌ Reconnection failed: #{inspect(reason)}")
-          nil
-      end
-    else
-      IO.puts("❌ Initial connection failed")
-      nil
+      IO.puts("📍 Client GenServer PID: #{inspect(client.server_pid)}")
+      IO.puts("📍 Gun PID: #{inspect(client.gun_pid)}")
+      IO.puts("\nTry: Process.exit(client.gun_pid, :kill)")
+      IO.puts("Then check: Client.get_state(client)")
+      client
     end
   end
   
@@ -259,106 +176,42 @@ defmodule WebsockexNewTest do
     :ok
   end
   
-  def close(_), do: :ok
-  
-  def status(client) when is_map(client) do
-    state = Client.get_state(client)
-    alive = Process.alive?(client.gun_pid)
-    
-    IO.puts("📊 Connection Status:")
-    IO.puts("   State: #{inspect(state)}")
-    IO.puts("   PID: #{inspect(client.gun_pid)} (alive: #{alive})")
-    IO.puts("   URL: #{client.url}")
-    
-    {state, alive}
-  end
-  
-  def test_message_handler do
-    IO.puts("🧪 Testing MessageHandler with mock messages...")
-    
-    # Create a test handler that prints all message types
-    handler = WebsockexNew.MessageHandler.create_handler(
-      on_message: fn frame -> 
-        IO.puts("  📨 Data frame: #{inspect(frame)}")
-      end,
-      on_upgrade: fn {conn_pid, stream_ref} -> 
-        IO.puts("  🔗 WebSocket upgraded: PID=#{inspect(conn_pid)}, Stream=#{inspect(stream_ref)}")
-      end,
-      on_error: fn reason -> 
-        IO.puts("  ❌ Error: #{inspect(reason)}")
-      end,
-      on_down: fn {conn_pid, reason} -> 
-        IO.puts("  ⬇️ Connection down: PID=#{inspect(conn_pid)}, Reason=#{inspect(reason)}")
-      end
-    )
-    
-    # Test various message types
-    test_pid = self()
-    test_ref = make_ref()
-    
-    messages = [
-      {:gun_upgrade, test_pid, test_ref, ["websocket"], []},
-      {:gun_ws, test_pid, test_ref, {:text, "Hello World"}},
-      {:gun_ws, test_pid, test_ref, {:binary, <<1, 2, 3, 4>>}},
-      {:gun_ws, test_pid, test_ref, {:ping, "ping_data"}},
-      {:gun_ws, test_pid, test_ref, {:pong, "pong_data"}},
-      {:gun_ws, test_pid, test_ref, {:close, 1000, "normal"}},
-      {:gun_down, test_pid, :http, :normal, []},
-      {:gun_error, test_pid, test_ref, :timeout},
-      {:unknown_message, "test"}
-    ]
-    
-    IO.puts("\nProcessing test messages:")
-    
-    Enum.each(messages, fn message ->
-      IO.puts("\n➤ Testing: #{inspect(message)}")
-      case WebsockexNew.MessageHandler.handle_message(message, handler) do
-        {:ok, result} -> 
-          IO.puts("  ✅ Result: #{inspect(result)}")
-        {:error, reason} -> 
-          IO.puts("  ❌ Error: #{inspect(reason)}")
-      end
-    end)
-    
-    IO.puts("\n✅ MessageHandler test completed!")
-  end
-  
   def help do
     IO.puts("""
+    WebsockexNew Interactive Testing
+    ================================
     
-    🚀 WebsockexNew Testing Interface
+    Quick Start:
+      client = WebsockexNewTest.connect()
+      WebsockexNewTest.quick_test()
     
-    Basic Usage:
-      client = WebsockexNewTest.connect()                    # Connect with defaults
-      client = WebsockexNewTest.connect(retry_count: 5)      # Connect with custom options
-      WebsockexNewTest.status(client)                        # Check connection status
+    Connection Management:
+      WebsockexNewTest.connect()                             # Connect with defaults
+      WebsockexNewTest.connect(timeout: 10_000)              # Connect with options
       WebsockexNewTest.close(client)                         # Close connection
     
-    Message Handler Testing:
-      WebsockexNewTest.test_message_handler()                # Test MessageHandler with mock messages
+    Message Operations:
+      WebsockexNewTest.send_json(client, %{method: "test"})  # Send JSON message
+      WebsockexNewTest.subscribe(client, ["channel"])        # Subscribe to channels
     
-    Reconnection Testing:
-      WebsockexNewTest.monitor_reconnection(client)          # Monitor connection (disable WiFi to test)
-      WebsockexNewTest.test_reconnection()                   # Test reconnection logic manually
-      WebsockexNewTest.simulate_disconnect_test()            # Kill connection and test reconnection
+    Testing & Monitoring:
+      WebsockexNewTest.test_error_scenarios()                # Test error handling
+      WebsockexNewTest.monitor_connection(client)            # Monitor connection state
+    
+    Internal Reconnection Testing:
+      WebsockexNewTest.test_internal_reconnection()          # Test Client's internal reconnection
     
     Direct API:
       WebsockexNew.Client.connect("wss://...")               # Direct client connection
-      WebsockexNew.Reconnection.reconnect(config, 0, [])    # Direct reconnection test
+      # Client handles reconnection internally now
     
     Tips:
-    1. Connect first: client = WebsockexNewTest.connect()
-    2. Start monitoring: WebsockexNewTest.monitor_reconnection(client)
-    3. Disable WiFi to trigger reconnection attempts
-    4. Re-enable WiFi to see successful reconnection
-    5. Test messages: WebsockexNewTest.test_message_handler()
-    
+      - The Client GenServer now handles reconnection internally
+      - Kill Gun process to test reconnection: Process.exit(client.gun_pid, :kill)
+      - Monitor connection state: WebsockexNewTest.monitor_connection(client)
     """)
   end
 end
 
-# Make testing interface available
-import WebsockexNewTest
-
-IO.puts("🚀 WebsockexNew Testing Interface loaded!")
-IO.puts("   Type: WebsockexNewTest.help() for usage instructions")
+# Print help on startup
+WebsockexNewTest.help()

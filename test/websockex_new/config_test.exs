@@ -13,6 +13,9 @@ defmodule WebsockexNew.ConfigTest do
       assert config.retry_count == 3
       assert config.retry_delay == 1_000
       assert config.heartbeat_interval == 30_000
+      assert config.max_backoff == 30_000
+      assert config.reconnect_on_error == true
+      assert config.restore_subscriptions == true
     end
 
     test "creates config with custom options" do
@@ -45,6 +48,31 @@ defmodule WebsockexNew.ConfigTest do
 
     test "validates positive heartbeat interval" do
       {:error, "Heartbeat interval must be positive"} = Config.new("wss://test.com", heartbeat_interval: 0)
+    end
+
+    test "validates positive max backoff" do
+      {:error, "Max backoff must be positive"} = Config.new("wss://test.com", max_backoff: 0)
+    end
+
+    test "validates max backoff >= retry delay" do
+      {:error, "Max backoff must be >= retry delay"} =
+        Config.new("wss://test.com",
+          retry_delay: 5000,
+          max_backoff: 1000
+        )
+    end
+
+    test "accepts custom reconnection options" do
+      {:ok, config} =
+        Config.new("wss://test.com",
+          max_backoff: 60_000,
+          reconnect_on_error: false,
+          restore_subscriptions: false
+        )
+
+      assert config.max_backoff == 60_000
+      assert config.reconnect_on_error == false
+      assert config.restore_subscriptions == false
     end
   end
 

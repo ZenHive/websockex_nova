@@ -1,6 +1,36 @@
 defmodule WebsockexNew.Config do
   @moduledoc """
   Configuration struct for WebSocket connections.
+
+  ## Options
+
+  - `:url` - WebSocket URL (required, must be ws:// or wss://)
+  - `:headers` - HTTP headers for the upgrade request (default: [])
+  - `:timeout` - Connection timeout in milliseconds (default: 5000)
+  - `:retry_count` - Maximum reconnection attempts (default: 3)
+  - `:retry_delay` - Base delay for exponential backoff in ms (default: 1000)
+  - `:heartbeat_interval` - Interval for heartbeat messages in ms (default: 30000)
+  - `:max_backoff` - Maximum delay between reconnection attempts in ms (default: 30000)
+  - `:reconnect_on_error` - Whether to auto-reconnect on connection errors (default: true)
+  - `:restore_subscriptions` - Whether to restore subscriptions after reconnect (default: true)
+
+  ## Examples
+
+      # Basic configuration
+      {:ok, config} = Config.new("wss://example.com")
+
+      # Custom reconnection settings
+      {:ok, config} = Config.new("wss://example.com",
+        retry_count: 5,
+        retry_delay: 2000,
+        max_backoff: 60_000,
+        reconnect_on_error: true
+      )
+
+      # Disable auto-reconnection
+      {:ok, config} = Config.new("wss://example.com",
+        reconnect_on_error: false
+      )
   """
 
   defstruct [
@@ -9,7 +39,10 @@ defmodule WebsockexNew.Config do
     timeout: 5_000,
     retry_count: 3,
     retry_delay: 1_000,
-    heartbeat_interval: 30_000
+    heartbeat_interval: 30_000,
+    max_backoff: 30_000,
+    reconnect_on_error: true,
+    restore_subscriptions: true
   ]
 
   @type t :: %__MODULE__{
@@ -18,7 +51,10 @@ defmodule WebsockexNew.Config do
           timeout: pos_integer(),
           retry_count: non_neg_integer(),
           retry_delay: pos_integer(),
-          heartbeat_interval: pos_integer()
+          heartbeat_interval: pos_integer(),
+          max_backoff: pos_integer(),
+          reconnect_on_error: boolean(),
+          restore_subscriptions: boolean()
         }
 
   @doc """
@@ -61,6 +97,12 @@ defmodule WebsockexNew.Config do
 
       config.heartbeat_interval <= 0 ->
         {:error, "Heartbeat interval must be positive"}
+
+      config.max_backoff <= 0 ->
+        {:error, "Max backoff must be positive"}
+
+      config.max_backoff < config.retry_delay ->
+        {:error, "Max backoff must be >= retry delay"}
 
       true ->
         {:ok, config}
