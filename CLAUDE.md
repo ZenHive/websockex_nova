@@ -50,12 +50,13 @@ lib/websockex_new/
 
 #### Enhancement Modules (financial infrastructure - in progress)
 ```
-├── heartbeat_manager.ex   # Critical connection health monitoring
 ├── correlation_manager.ex # Request/response correlation
 ├── rate_limiter.ex        # API rate limit management
 └── examples/
     └── deribit_adapter.ex # Deribit platform integration
 ```
+
+**Note**: Heartbeat functionality is integrated directly into the Client GenServer for optimal performance and reduced complexity.
 
 ### Public API (Only 5 Functions)
 ```elixir

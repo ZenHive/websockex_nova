@@ -357,7 +357,7 @@ These completed tasks represent the foundation phase of WebsockexNew. The system
 5. **Clean, maintainable codebase** following strict simplicity principles
 
 The foundation is ready for enhancement tasks (WNX0019-WNX0020) focusing on:
-- HeartbeatManager for critical financial infrastructure
+- Integrated heartbeat functionality in Client GenServer for critical financial infrastructure
 - JSON-RPC 2.0 macro system for automated API method generation
 
 **Next Phase**: Enhancement tasks building on this solid, simple foundation.

@@ -1,13 +1,13 @@
-# WNX0019 Learnings - HeartbeatManager Architecture Issue
+# WNX0019 Learnings - Integrated Heartbeat Architecture
 
 **FINAL IMPLEMENTATION UPDATE**: Based on these learnings, we chose to integrate heartbeat functionality directly into the Client GenServer rather than creating a separate HeartbeatManager. This simpler approach achieved all the same benefits with less complexity.
 
-## Problem Discovered
-The HeartbeatManager GenServer was created but couldn't receive WebSocket messages because:
+## Problem Discovered During Exploration
+During initial exploration, a separate HeartbeatManager GenServer was attempted but couldn't receive WebSocket messages because:
 
 1. **Gun sends messages to the calling process** - When Gun receives WebSocket messages, it sends them to the process that called `gun:open/3`
 2. **Client is just a struct** - Not a GenServer or process that can receive messages
-3. **No message routing** - Nothing forwards Gun messages to HeartbeatManager
+3. **No message routing** - Nothing forwards Gun messages to separate processes
 
 ## Additional Critical Issue: Reconnection Coordination
 Beyond message routing, we discovered that **reconnection coordination** also requires Client to be a GenServer:
@@ -15,20 +15,20 @@ Beyond message routing, we discovered that **reconnection coordination** also re
 1. **Connection Monitoring** - Someone needs to monitor the Gun process and detect drops
 2. **Reconnection Orchestration** - After a drop, the Reconnection module creates a new Gun process
 3. **Message Routing Re-establishment** - The new Gun process needs to know where to send messages
-4. **State Continuity** - HeartbeatManager must seamlessly continue with the new connection
+4. **State Continuity** - Separate heartbeat processes must seamlessly continue with new connections
 
 Without a coordinating GenServer, there's no central process to manage this complex lifecycle.
 
 ## What We Tried
-- Created HeartbeatManager as a GenServer to handle heartbeats
+- Explored separate HeartbeatManager GenServer to handle heartbeats
 - Added logging to track message flow
 - Discovered messages were being sent but never received
 - Found that Gun messages had nowhere to go
 
 ## Architecture Options for Fix
-1. **Client as GenServer** - Make Client a GenServer that receives Gun messages and forwards to HeartbeatManager
+1. **Client as GenServer** - Make Client a GenServer that receives Gun messages and forwards to separate heartbeat process
 2. **Message Router Process** - Create a dedicated process to route messages from Gun to appropriate handlers
-3. **HeartbeatManager owns Gun** - Have HeartbeatManager directly receive Gun messages (violates separation of concerns)
+3. **Separate process owns Gun** - Have heartbeat process directly receive Gun messages (violates separation of concerns)
 
 ## Recommended Solution: Client as GenServer
 
@@ -36,8 +36,8 @@ After careful analysis, the **Client as GenServer** approach is optimal because:
 
 ### Advantages
 - **Natural message receiver** - Client GenServer can receive Gun messages directly
-- **Clean routing** - Client routes heartbeat messages to HeartbeatManager, other messages to user handlers
-- **Maintains separation** - HeartbeatManager focuses purely on heartbeat logic
+- **Integrated approach chosen** - Client handles heartbeat functionality directly for optimal performance
+- **Simplified architecture** - No message routing overhead or process coordination complexity
 - **Backward compatibility** - Public API can remain the same
 - **Future extensibility** - Enables other message processing features
 - **Aligns with simplicity** - Single, clear message flow path

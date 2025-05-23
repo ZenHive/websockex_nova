@@ -77,11 +77,11 @@ One of Gun's most powerful features is the ability to transfer connection owners
 ### When to Transfer Ownership
 
 Ownership transfer is useful when:
-- Client GenServer needs to receive Gun messages for routing to HeartbeatManager
+- Client GenServer needs to receive Gun messages for integrated heartbeat processing
 - Reconnection creates a new Gun process that needs proper ownership
 - Moving connections between supervision trees
 
-### Implementation for HeartbeatManager
+### Implementation for Integrated Heartbeat
 
 ```elixir
 defmodule WebsockexNew.Client do
@@ -109,8 +109,8 @@ defmodule WebsockexNew.Client do
   def handle_info({:gun_ws, gun_pid, stream_ref, frame}, state) do
     case MessageHandler.parse(frame) do
       {:heartbeat, msg} ->
-        # Forward to HeartbeatManager
-        send(state.heartbeat_manager, {:heartbeat_message, msg})
+        # Process heartbeat directly in Client
+        handle_heartbeat_message(state, msg)
       {:user_message, msg} ->
         # Forward to user handler
         send(state.user_handler, {:websocket_message, msg})
@@ -137,8 +137,8 @@ def handle_info({:DOWN, ref, :process, pid, reason}, state) do
           monitor_ref: new_monitor_ref
         }
         
-        # Notify HeartbeatManager of new connection
-        send(state.heartbeat_manager, :connection_restored)
+        # Resume integrated heartbeat processing
+        resume_heartbeat_processing(new_state)
         
         {:noreply, new_state}
     end
@@ -219,7 +219,7 @@ Always test how your application handles:
 ## Summary
 
 Gun's process monitoring and ownership features are critical for WebsockexNew's architecture. By having the Client GenServer own the Gun connection, we enable:
-- Message routing to HeartbeatManager and user handlers
+- Integrated heartbeat processing and user message handling
 - Seamless reconnection with state preservation
 - Reliable heartbeat handling for financial trading
 - Clean separation of concerns between modules
