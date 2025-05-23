@@ -96,13 +96,13 @@ defmodule WebsockexNew.Client do
 
   def connect(url, opts) when is_binary(url) do
     case WebsockexNew.Config.new(url, opts) do
-      {:ok, config} -> connect(config, [])
+      {:ok, config} -> connect(config, opts)
       error -> error
     end
   end
 
-  def connect(%WebsockexNew.Config{} = config, _opts) do
-    case GenServer.start(__MODULE__, config) do
+  def connect(%WebsockexNew.Config{} = config, opts) do
+    case GenServer.start(__MODULE__, {config, opts}) do
       {:ok, server_pid} ->
         # Add a bit more time for GenServer overhead
         timeout = max(config.timeout + 100, 1000)
@@ -189,9 +189,32 @@ defmodule WebsockexNew.Client do
   # GenServer callbacks
 
   @impl true
-  def init(%WebsockexNew.Config{} = config) do
-    {:ok, %{config: config, gun_pid: nil, stream_ref: nil, state: :disconnected, monitor_ref: nil, url: config.url},
-     {:continue, :connect}}
+  def init({%WebsockexNew.Config{} = config, opts}) do
+    # Setup message handler callback
+    handler = Keyword.get(opts, :handler, &WebsockexNew.MessageHandler.default_handler/1)
+    
+    # Setup heartbeat configuration
+    heartbeat_config = Keyword.get(opts, :heartbeat_config, :disabled)
+
+    initial_state = %{
+      config: config,
+      gun_pid: nil,
+      stream_ref: nil,
+      state: :disconnected,
+      monitor_ref: nil,
+      url: config.url,
+      handler: handler,
+      subscriptions: MapSet.new(),
+      pending_requests: %{},
+      # Heartbeat tracking
+      heartbeat_config: heartbeat_config,
+      active_heartbeats: MapSet.new(),
+      last_heartbeat_at: nil,
+      heartbeat_failures: 0,
+      heartbeat_timer: nil
+    }
+
+    {:ok, initial_state, {:continue, :connect}}
   end
 
   @impl true
@@ -271,7 +294,10 @@ defmodule WebsockexNew.Client do
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], _headers},
         %{gun_pid: gun_pid, stream_ref: stream_ref} = state
       ) do
-    new_state = %{state | state: :connected}
+    # Start heartbeat timer if configured
+    new_state = 
+      %{state | state: :connected}
+      |> maybe_start_heartbeat_timer()
 
     if Map.has_key?(state, :awaiting_connection) do
       GenServer.reply(state.awaiting_connection, {:ok, new_state})
@@ -293,10 +319,22 @@ defmodule WebsockexNew.Client do
     handle_connection_error(state, {:connection_down, reason})
   end
 
-  def handle_info({:gun_ws, gun_pid, stream_ref, _frame}, %{gun_pid: gun_pid, stream_ref: stream_ref} = state) do
-    # TODO: Forward WebSocket frames to HeartbeatManager when implemented
-    # Gun sends these messages to us because we own the connection
-    {:noreply, state}
+  def handle_info({:gun_ws, gun_pid, stream_ref, frame}, %{gun_pid: gun_pid, stream_ref: stream_ref} = state) do
+    # Route WebSocket frames through MessageHandler
+    case WebsockexNew.MessageHandler.handle_message({:gun_ws, gun_pid, stream_ref, frame}, state.handler) do
+      {:ok, {:message, decoded_frame}} ->
+        # Data frame - route to subscriptions, heartbeat manager, etc.
+        new_state = route_data_frame(decoded_frame, state)
+        {:noreply, new_state}
+
+      {:ok, :control_frame_handled} ->
+        # Control frame already handled (ping/pong)
+        {:noreply, state}
+
+      {:error, reason} ->
+        # Frame decode error
+        handle_frame_error(state, reason)
+    end
   end
 
   def handle_info({:connection_timeout, _timeout}, %{state: :connecting} = state) do
@@ -320,6 +358,24 @@ defmodule WebsockexNew.Client do
     end
   end
 
+  @doc false
+  # Handles periodic heartbeat sending
+  def handle_info(:send_heartbeat, %{state: :connected, heartbeat_config: config} = state) when is_map(config) do
+    # Send platform-specific heartbeat
+    new_state = send_platform_heartbeat(config, state)
+    
+    # Schedule next heartbeat
+    interval = Map.get(config, :interval, 30_000)
+    timer_ref = Process.send_after(self(), :send_heartbeat, interval)
+    
+    {:noreply, %{new_state | heartbeat_timer: timer_ref}}
+  end
+
+  def handle_info(:send_heartbeat, state) do
+    # Not connected or heartbeat disabled
+    {:noreply, state}
+  end
+
   def handle_info(_msg, state) do
     {:noreply, state}
   end
@@ -340,8 +396,20 @@ defmodule WebsockexNew.Client do
         Process.demonitor(state.monitor_ref, [:flush])
       end
 
+      # Cancel heartbeat timer
+      if state.heartbeat_timer do
+        Process.cancel_timer(state.heartbeat_timer)
+      end
+
       # Trigger reconnection from this GenServer to maintain ownership
-      new_state = %{state | gun_pid: nil, stream_ref: nil, state: :disconnected, monitor_ref: nil}
+      new_state = %{state | 
+        gun_pid: nil, 
+        stream_ref: nil, 
+        state: :disconnected, 
+        monitor_ref: nil,
+        heartbeat_timer: nil,
+        heartbeat_failures: 0
+      }
       {:noreply, Map.delete(new_state, :awaiting_connection), {:continue, :reconnect}}
     else
       {:stop, reason, state}
@@ -358,5 +426,173 @@ defmodule WebsockexNew.Client do
       monitor_ref: state.monitor_ref,
       server_pid: server_pid
     }
+  end
+
+  # Routes data frames to appropriate handlers based on content
+  @spec route_data_frame(term(), state()) :: state()
+  defp route_data_frame(frame, state) do
+    case frame do
+      {:text, json_data} ->
+        # Parse JSON and route based on message type
+        case Jason.decode(json_data) do
+          {:ok, %{"method" => "heartbeat"} = msg} ->
+            # Handle heartbeat directly
+            handle_heartbeat_message(msg, state)
+
+          {:ok, %{"method" => "subscription"} = msg} ->
+            # Handle subscription confirmation
+            handle_subscription_message(msg, state)
+
+          {:ok, %{"id" => id} = msg} when is_integer(id) or is_binary(id) ->
+            # JSON-RPC response - route to pending request
+            handle_rpc_response(msg, state)
+
+          {:ok, msg} ->
+            # General message - forward to handler
+            state.handler.({:message, msg})
+            state
+
+          {:error, _} ->
+            # Non-JSON text frame
+            state.handler.({:message, json_data})
+            state
+        end
+
+      {:binary, data} ->
+        # Binary frame
+        state.handler.({:binary, data})
+        state
+
+      other ->
+        # Other frame types
+        state.handler.({:frame, other})
+        state
+    end
+  end
+
+  # Handles subscription-related messages
+  @spec handle_subscription_message(map(), state()) :: state()
+  defp handle_subscription_message(%{"params" => %{"channel" => channel}}, state) do
+    new_subscriptions = MapSet.put(state.subscriptions, channel)
+    %{state | subscriptions: new_subscriptions}
+  end
+
+  defp handle_subscription_message(_msg, state), do: state
+
+  # Routes JSON-RPC responses to waiting callers
+  @spec handle_rpc_response(map(), state()) :: state()
+  defp handle_rpc_response(%{"id" => id} = response, state) do
+    case Map.pop(state.pending_requests, id) do
+      {nil, _} ->
+        # No pending request for this ID
+        state.handler.({:unmatched_response, response})
+        state
+
+      {from, new_pending} ->
+        # Reply to waiting caller
+        GenServer.reply(from, {:ok, response})
+        %{state | pending_requests: new_pending}
+    end
+  end
+
+  # Handles frame decode errors
+  @spec handle_frame_error(state(), term()) :: {:noreply, state()} | {:stop, term(), state()}
+  defp handle_frame_error(state, {:protocol_error, _} = error) do
+    # Serious protocol error - stop the connection
+    {:stop, error, state}
+  end
+
+  defp handle_frame_error(state, error) do
+    # Other errors - log and continue
+    state.handler.({:frame_error, error})
+    {:noreply, state}
+  end
+
+  # Handles heartbeat messages based on platform configuration
+  @spec handle_heartbeat_message(map(), state()) :: state()
+  defp handle_heartbeat_message(msg, state) do
+    case msg do
+      %{"params" => %{"type" => "test_request"}} ->
+        # Deribit test_request heartbeat
+        handle_deribit_heartbeat(state)
+
+      %{"method" => "heartbeat", "params" => %{"type" => type}} ->
+        # Other platform heartbeats
+        handle_platform_heartbeat(type, state)
+
+      _ ->
+        # Unknown heartbeat format
+        state
+    end
+  end
+
+  # Handles Deribit-specific heartbeat
+  @spec handle_deribit_heartbeat(state()) :: state()
+  defp handle_deribit_heartbeat(state) do
+    # Send immediate test response
+    response = Jason.encode!(%{
+      jsonrpc: "2.0",
+      method: "public/test",
+      params: %{}
+    })
+
+    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, response})
+
+    # Update heartbeat tracking
+    %{state |
+      active_heartbeats: MapSet.put(state.active_heartbeats, :deribit_test_request),
+      last_heartbeat_at: System.monotonic_time(:millisecond),
+      heartbeat_failures: 0
+    }
+  end
+
+  # Handles generic platform heartbeats
+  @spec handle_platform_heartbeat(String.t(), state()) :: state()
+  defp handle_platform_heartbeat(type, state) do
+    # Update active heartbeats
+    %{state |
+      active_heartbeats: MapSet.put(state.active_heartbeats, type),
+      last_heartbeat_at: System.monotonic_time(:millisecond),
+      heartbeat_failures: 0
+    }
+  end
+
+  # Starts heartbeat timer if configured
+  @spec maybe_start_heartbeat_timer(state()) :: state()
+  defp maybe_start_heartbeat_timer(%{heartbeat_config: :disabled} = state), do: state
+
+  defp maybe_start_heartbeat_timer(%{heartbeat_config: config} = state) when is_map(config) do
+    interval = Map.get(config, :interval, 30_000)
+    timer_ref = Process.send_after(self(), :send_heartbeat, interval)
+    %{state | heartbeat_timer: timer_ref}
+  end
+
+  defp maybe_start_heartbeat_timer(state), do: state
+
+  # Sends platform-specific heartbeat message
+  @spec send_platform_heartbeat(map(), state()) :: state()
+  defp send_platform_heartbeat(%{type: :deribit} = _config, state) do
+    # Send Deribit-specific heartbeat ping
+    message = Jason.encode!(%{
+      jsonrpc: "2.0",
+      method: "public/test",
+      params: %{}
+    })
+    
+    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, message})
+    
+    %{state | last_heartbeat_at: System.monotonic_time(:millisecond)}
+  end
+
+  defp send_platform_heartbeat(%{type: :ping_pong} = _config, state) do
+    # Send standard ping frame
+    :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
+    
+    %{state | last_heartbeat_at: System.monotonic_time(:millisecond)}
+  end
+
+  defp send_platform_heartbeat(_config, state) do
+    # Unknown heartbeat type, do nothing
+    state
   end
 end
