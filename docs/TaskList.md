@@ -162,7 +162,7 @@ lib/websockex_new/
 - [x] **WNX0019h**: Created comprehensive tests with real Deribit API
 
 **Phase 3: Production Hardening**
-- [ ] **WNX0019i**: Add supervision strategies for Client and HeartbeatManager
+- [ ] **WNX0019i**: Add supervision strategies for Client GenServer
 - [ ] **WNX0019j**: Implement graceful degradation on heartbeat failures
 - [ ] **WNX0019k**: Conduct 24-hour stability test with continuous heartbeats
 - [ ] **WNX0019l**: Document production deployment guidelines
@@ -175,22 +175,22 @@ lib/websockex_new/
 - Performance test: verify heartbeat response time under load
 
 #### Error Handling Patterns
-- **HeartbeatHandler crash**: Restart handler, maintain connection if possible
+- **Client GenServer crash**: Supervisor restarts Client, re-establishes connection
 - **test_request timeout**: Close connection immediately to prevent order issues
-- **Connection loss during heartbeat**: Trigger reconnection with new heartbeat handler
+- **Connection loss during heartbeat**: Client triggers reconnection automatically
 - **Response send failure**: Log error, attempt retry once, then close connection
 
 #### Implementation Notes
-- Create `HeartbeatHandler` GenServer that continuously processes Gun messages
-- Link HeartbeatHandler to Client process for coordinated lifecycle management
-- Use `Process.monitor/1` to detect heartbeat handler failures
-- Implement heartbeat response caching to handle high-frequency test_requests
+- Heartbeat handling integrated directly into Client GenServer for simplicity
+- Platform-specific logic delegated to helper modules (e.g., helpers/deribit.ex)
+- Use `Process.monitor/1` to detect Gun connection failures
+- Heartbeat timer managed within Client state
 - Add telemetry events for heartbeat monitoring and alerting
 
 #### Complexity Assessment
-- **Current**: Client is a simple struct, no message processing capability
-- **Target**: Client as GenServer with message routing + HeartbeatManager integration
-- **Added Complexity**: ~200-250 lines (Client GenServer conversion + message routing + HeartbeatManager updates)
+- **Previous**: Client was a simple struct, no message processing capability
+- **Current**: Client as GenServer with integrated heartbeat handling
+- **Added Complexity**: ~200 lines (Client GenServer conversion + heartbeat integration)
 - **Justification**: Fundamental architecture requirement - Gun needs a process to send messages to
 - **Benefits**: Enables all async message processing features, not just heartbeats
 - **Maintains**: All existing public API compatibility + adds critical infrastructure
