@@ -796,7 +796,7 @@ defmodule WebsockexNew.Client do
   defp send_platform_heartbeat(%{type: :ping_pong} = _config, state) do
     # Send standard ping frame
     :ok = :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
-    
+
     %{state | last_heartbeat_at: System.monotonic_time(:millisecond)}
   end
 
