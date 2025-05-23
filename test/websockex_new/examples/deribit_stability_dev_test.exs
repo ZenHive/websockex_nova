@@ -93,7 +93,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
                     Logger.info("💚 Heartbeat response received")
                     StabilityMonitor.record_heartbeat(monitor)
                   end
-                  
+
                 %{"result" => "ok", "id" => _id} ->
                   # Response from set_heartbeat - ignore it
                   Logger.debug("✅ set_heartbeat response acknowledged")

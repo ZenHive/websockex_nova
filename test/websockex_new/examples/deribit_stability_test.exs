@@ -214,8 +214,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
     def format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
     def format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
 
-    def format_bytes(bytes) when bytes < 1024 * 1024 * 1024,
-      do: "#{Float.round(bytes / (1024 * 1024), 1)} MB"
+    def format_bytes(bytes) when bytes < 1024 * 1024 * 1024, do: "#{Float.round(bytes / (1024 * 1024), 1)} MB"
 
     def format_bytes(bytes), do: "#{Float.round(bytes / (1024 * 1024 * 1024), 2)} GB"
   end
@@ -289,7 +288,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
                     Logger.info("💚 Heartbeat response received")
                     StabilityMonitor.record_heartbeat(monitor)
                   end
-                  
+
                 %{"result" => "ok", "id" => _id} ->
                   # Response from set_heartbeat - ignore it
                   Logger.debug("✅ set_heartbeat response acknowledged")
