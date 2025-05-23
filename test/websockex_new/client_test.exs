@@ -62,4 +62,58 @@ defmodule WebsockexNew.ClientTest do
 
     Client.close(client)
   end
+
+  describe "GenServer implementation" do
+    test "client struct includes server_pid" do
+      {:ok, client} = Client.connect(@deribit_test_url)
+
+      assert is_pid(client.server_pid)
+      assert Process.alive?(client.server_pid)
+
+      Client.close(client)
+    end
+
+    test "closing client stops GenServer process" do
+      {:ok, client} = Client.connect(@deribit_test_url)
+      server_pid = client.server_pid
+
+      assert Process.alive?(server_pid)
+      Client.close(client)
+
+      # Give the process time to stop
+      Process.sleep(100)
+      refute Process.alive?(server_pid)
+    end
+
+    test "multiple clients can run concurrently" do
+      {:ok, client1} = Client.connect(@deribit_test_url)
+      {:ok, client2} = Client.connect(@deribit_test_url)
+
+      assert client1.server_pid != client2.server_pid
+      assert Process.alive?(client1.server_pid)
+      assert Process.alive?(client2.server_pid)
+
+      Client.close(client1)
+      Client.close(client2)
+    end
+
+    test "GenServer handles connection errors properly" do
+      # Use a very short timeout
+      config = Config.new!(@deribit_test_url, timeout: 1)
+      
+      # Should get either timeout or connection_failed
+      assert {:error, reason} = Client.connect(config)
+      assert reason in [:timeout, :connection_failed]
+    end
+
+    test "client operations work through GenServer calls" do
+      {:ok, client} = Client.connect(@deribit_test_url)
+
+      # Test that operations go through GenServer
+      assert Client.get_state(client) == :connected
+      assert :ok = Client.send_message(client, "test")
+
+      Client.close(client)
+    end
+  end
 end

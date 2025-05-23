@@ -30,6 +30,7 @@ defmodule WebsockexNew.ErrorHandler do
       {:error, :enetunreach} -> {:recoverable, error}
       {:gun_down, _, _, reason, _} -> {:recoverable, {:gun_down, reason}}
       {:gun_error, _, _, reason} -> {:recoverable, {:gun_error, reason}}
+      :connection_failed -> {:recoverable, error}
       # Fatal protocol/auth errors
       {:error, :invalid_frame} -> {:fatal, error}
       {:error, :frame_too_large} -> {:fatal, error}
