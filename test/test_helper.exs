@@ -1,11 +1,11 @@
 require Logger
 ## Configure Logger to only show warnings and errors
 Logger.configure(level: :none)
-# Logger.configure(level: :info)
+Logger.configure(level: :info)
 # Logger.configure(level: :warning)
 # Logger.configure(level: :debug)
 
-ExUnit.start()
+ExUnit.start(exclude: [:stability, :stability_dev])
 # Display testing policy message
 Logger.warning("""
 \n[!] TESTING POLICY [!]
