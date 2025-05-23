@@ -6,7 +6,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   - Authentication flow
   - Subscription management
   - Message format handling
-  - Heartbeat responses
+  - Automatic heartbeat responses (handled by Client)
   """
 
   use WebsockexNew.JsonRpc
@@ -70,14 +70,33 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
 
   @doc """
   Connect to Deribit WebSocket API with optional authentication.
+
+  ## Options
+
+  * `:client_id` - Client ID for authentication
+  * `:client_secret` - Client secret for authentication  
+  * `:url` - WebSocket URL (defaults to test.deribit.com)
+  * `:handler` - Message handler function
+  * `:heartbeat_interval` - Heartbeat interval in seconds (default: 30)
   """
   @spec connect(keyword()) :: {:ok, t()} | {:error, term()}
   def connect(opts \\ []) do
     client_id = Keyword.get(opts, :client_id)
     client_secret = Keyword.get(opts, :client_secret)
     url = Keyword.get(opts, :url, @deribit_test_url)
+    handler = Keyword.get(opts, :handler)
+    heartbeat_interval = Keyword.get(opts, :heartbeat_interval, 30) * 1000
 
-    case Client.connect(url) do
+    connect_opts = [
+      heartbeat_config: %{
+        type: :deribit,
+        interval: heartbeat_interval
+      }
+    ]
+
+    connect_opts = if handler, do: Keyword.put(connect_opts, :handler, handler), else: connect_opts
+
+    case Client.connect(url, connect_opts) do
       {:ok, client} ->
         adapter = %__MODULE__{
           client: client,
@@ -110,6 +129,10 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
 
     case Client.send_message(client, Jason.encode!(request)) do
       :ok ->
+        # Set up heartbeat after authentication
+        {:ok, heartbeat_request} = set_heartbeat(%{interval: 30})
+        Client.send_message(client, Jason.encode!(heartbeat_request))
+        
         {:ok, %{adapter | authenticated: true}}
 
       error ->
@@ -152,15 +175,11 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   end
 
   @doc """
-  Handle Deribit-specific messages including heartbeats.
+  Handle Deribit-specific messages (heartbeats handled automatically by Client).
   """
-  @spec handle_message(term()) :: :ok | {:response, binary()}
+  @spec handle_message(term()) :: :ok
   def handle_message({:text, message}) do
     case Jason.decode(message) do
-      {:ok, %{"method" => "heartbeat", "params" => %{"type" => "test_request"}}} ->
-        {:ok, request} = test_request()
-        {:response, Jason.encode!(request)}
-
       {:ok, decoded} ->
         handle_decoded_message(decoded)
 
@@ -177,17 +196,11 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   @spec create_message_handler(keyword()) :: function()
   def create_message_handler(opts \\ []) do
     on_message = Keyword.get(opts, :on_message, &default_message_handler/1)
-    on_heartbeat = Keyword.get(opts, :on_heartbeat, &default_heartbeat_handler/1)
 
     MessageHandler.create_handler(
       on_message: fn frame ->
-        case handle_message(frame) do
-          {:response, response} ->
-            on_heartbeat.(response)
-
-          :ok ->
-            on_message.(frame)
-        end
+        handle_message(frame)
+        on_message.(frame)
       end,
       on_upgrade: fn upgrade_info ->
         IO.puts("WebSocket connection upgraded: #{inspect(upgrade_info)}")
@@ -246,9 +259,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
     IO.puts("Deribit message: #{inspect(message)}")
   end
 
-  defp default_heartbeat_handler(response) do
-    IO.puts("Sending heartbeat response: #{response}")
-  end
+
 
   defp default_auth_handler(auth_result) do
     IO.puts("Authentication result: #{inspect(auth_result)}")
