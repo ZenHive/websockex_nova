@@ -188,11 +188,23 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
             {:ok, %{"method" => "heartbeat"}} ->
               StabilityMonitor.record_heartbeat(monitor)
 
+            {:ok, %{"params" => %{"type" => "heartbeat"}}} ->
+              # Deribit sends heartbeats as params.type = "heartbeat"
+              StabilityMonitor.record_heartbeat(monitor)
+
             {:ok, %{"method" => "subscription", "params" => %{"channel" => channel}}} ->
               Logger.debug("📊 Market data: #{channel}")
 
             {:ok, %{"error" => error}} ->
               StabilityMonitor.record_error(monitor, error)
+
+            {:ok, decoded} ->
+              # Log unhandled messages for debugging
+              if Map.has_key?(decoded, "method") do
+                Logger.debug("Unhandled method: #{decoded["method"]}")
+              end
+
+              :ok
 
             _ ->
               :ok

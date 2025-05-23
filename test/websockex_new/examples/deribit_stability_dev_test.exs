@@ -66,11 +66,23 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
             {:ok, %{"method" => "heartbeat"}} ->
               StabilityMonitor.record_heartbeat(monitor)
 
+            {:ok, %{"params" => %{"type" => "heartbeat"}}} ->
+              # Deribit sends heartbeats as params.type = "heartbeat"
+              StabilityMonitor.record_heartbeat(monitor)
+
             {:ok, %{"method" => "subscription", "params" => %{"channel" => channel}}} ->
               Logger.debug("📊 Market data: #{channel}")
 
             {:ok, %{"error" => error}} ->
               StabilityMonitor.record_error(monitor, error)
+
+            {:ok, decoded} ->
+              # Log unhandled messages for debugging
+              if Map.has_key?(decoded, "method") do
+                Logger.debug("Unhandled method: #{decoded["method"]}")
+              end
+
+              :ok
 
             _ ->
               :ok
@@ -100,11 +112,11 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     Process.sleep(2_000)
 
     # Authenticate
-    assert :ok = DeribitGenServerAdapter.authenticate(adapter)
+    :ok = DeribitGenServerAdapter.authenticate(adapter)
     Process.sleep(1_000)
 
-    # Subscribe to channels
-    assert :ok = DeribitGenServerAdapter.subscribe(adapter, @subscription_channels)
+    # Subscribe to channels  
+    :ok = DeribitGenServerAdapter.subscribe(adapter, @subscription_channels)
 
     # Run stability test
     start_time = System.monotonic_time(:millisecond)
