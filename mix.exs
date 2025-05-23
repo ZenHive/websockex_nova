@@ -67,7 +67,7 @@ defmodule WebsockexNew.MixProject do
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
 
       # Tasks
-      {:task_validator, "~> 0.5.0", only: [:dev, :test], runtime: false},
+      {:task_validator, "~> 0.6.0", only: [:dev, :test], runtime: false},
 
       # Mocks
       # {:mox, "~> 1.0", only: :test},
