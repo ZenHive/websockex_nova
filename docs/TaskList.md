@@ -65,12 +65,25 @@ The HeartbeatManager GenServer cannot receive WebSocket messages because:
 
 This is a **critical blocker** - without message routing, heartbeat handling is impossible, leading to disconnections and order cancellations in financial trading.
 
+**See**: [Gun Integration Guide](gun_integration.md) for detailed explanation of Gun's process ownership model and how it affects our architecture.
+
 #### Recommended Solution: Client as GenServer
 Convert Client from a struct-returning module to a GenServer that:
 - Owns the Gun connection and receives all WebSocket messages
 - Routes messages to appropriate handlers (HeartbeatManager, user callbacks)
 - Maintains backward API compatibility
 - Enables future message processing features
+- **Coordinates reconnection** and re-establishes message routing after connection drops
+
+#### Critical Coordination Requirement
+The Client GenServer is essential for reconnection flow:
+1. Client GenServer owns and monitors the Gun connection
+2. On connection drop, Client triggers Reconnection module
+3. Client receives new Gun process from reconnection
+4. Client re-establishes message routing to HeartbeatManager
+5. HeartbeatManager resumes heartbeat handling seamlessly
+
+Without Client as a coordinating process, there's no way to properly handle the reconnection → message routing flow, making this architecture change mandatory for production reliability.
 
 #### File Structure
 ```

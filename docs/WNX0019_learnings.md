@@ -7,6 +7,16 @@ The HeartbeatManager GenServer was created but couldn't receive WebSocket messag
 2. **Client is just a struct** - Not a GenServer or process that can receive messages
 3. **No message routing** - Nothing forwards Gun messages to HeartbeatManager
 
+## Additional Critical Issue: Reconnection Coordination
+Beyond message routing, we discovered that **reconnection coordination** also requires Client to be a GenServer:
+
+1. **Connection Monitoring** - Someone needs to monitor the Gun process and detect drops
+2. **Reconnection Orchestration** - After a drop, the Reconnection module creates a new Gun process
+3. **Message Routing Re-establishment** - The new Gun process needs to know where to send messages
+4. **State Continuity** - HeartbeatManager must seamlessly continue with the new connection
+
+Without a coordinating GenServer, there's no central process to manage this complex lifecycle.
+
 ## What We Tried
 - Created HeartbeatManager as a GenServer to handle heartbeats
 - Added logging to track message flow
@@ -35,6 +45,13 @@ After careful analysis, the **Client as GenServer** approach is optimal because:
 Gun Process → Client GenServer → HeartbeatManager (heartbeat messages)
                               → User Handlers (application messages)
                               → Error Handlers (connection events)
+
+Reconnection Flow:
+1. Client GenServer monitors Gun process
+2. Gun process dies → Client detects via monitor
+3. Client calls Reconnection.reconnect → gets new Gun process
+4. Client re-establishes message routing to HeartbeatManager
+5. HeartbeatManager continues seamlessly with new connection
 ```
 
 ### Implementation Strategy
