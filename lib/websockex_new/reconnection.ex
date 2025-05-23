@@ -37,7 +37,7 @@ defmodule WebsockexNew.Reconnection do
     uri = URI.parse(config.url)
     port = uri.port || if uri.scheme == "wss", do: 443, else: 80
 
-    IO.puts("🔫 [GUN OPEN] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("🔫 [GUN OPEN] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🌐 Host: #{uri.host}")
     IO.puts("   🔌 Port: #{port}")
     IO.puts("   📋 Scheme: #{uri.scheme}")
@@ -50,7 +50,7 @@ defmodule WebsockexNew.Reconnection do
         IO.puts("   ✅ Gun connection opened successfully")
         IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
         IO.puts("   👁️  Setting up process monitor...")
-        
+
         monitor_ref = Process.monitor(gun_pid)
         IO.puts("   📍 Monitor Ref: #{inspect(monitor_ref)}")
         IO.puts("   ⏳ Awaiting Gun up (timeout: #{config.timeout}ms)...")
@@ -61,18 +61,18 @@ defmodule WebsockexNew.Reconnection do
             IO.puts("   🌐 Protocol: #{inspect(protocol)}")
             IO.puts("   🔄 Upgrading to WebSocket...")
             IO.puts("   📋 Headers: #{inspect(config.headers)}")
-            
+
             stream_ref = :gun.ws_upgrade(gun_pid, uri.path || "/", config.headers)
             IO.puts("   📡 WebSocket upgrade initiated")
             IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
             IO.puts("   ✅ Connection establishment complete")
-            
+
             {:ok, gun_pid, stream_ref, monitor_ref}
 
           {:error, reason} ->
             IO.puts("   ❌ Gun await_up failed: #{inspect(reason)}")
             IO.puts("   🧹 Cleaning up monitor and closing Gun...")
-            
+
             Process.demonitor(monitor_ref, [:flush])
             :gun.close(gun_pid)
             {:error, reason}
@@ -138,11 +138,11 @@ defmodule WebsockexNew.Reconnection do
   def restore_subscriptions(_gun_pid, _stream_ref, []), do: :ok
 
   def restore_subscriptions(gun_pid, stream_ref, subscriptions) when is_list(subscriptions) do
-    IO.puts("📡 [RESTORE SUBSCRIPTIONS] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("📡 [RESTORE SUBSCRIPTIONS] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
     IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
     IO.puts("   📋 Subscriptions: #{inspect(subscriptions)}")
-    
+
     message =
       Jason.encode!(%{
         "jsonrpc" => "2.0",

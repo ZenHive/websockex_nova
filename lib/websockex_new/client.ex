@@ -70,6 +70,10 @@ defmodule WebsockexNew.Client do
 
   use GenServer
 
+  alias WebsockexNew.Helpers.Deribit
+
+  require Logger
+
   defstruct [:gun_pid, :stream_ref, :state, :url, :monitor_ref, :server_pid]
 
   @type t :: %__MODULE__{
@@ -199,7 +203,7 @@ defmodule WebsockexNew.Client do
   def init({%WebsockexNew.Config{} = config, opts}) do
     # Setup message handler callback
     handler = Keyword.get(opts, :handler, &WebsockexNew.MessageHandler.default_handler/1)
-    
+
     # Setup heartbeat configuration
     heartbeat_config = Keyword.get(opts, :heartbeat_config, :disabled)
 
@@ -226,11 +230,11 @@ defmodule WebsockexNew.Client do
 
   @impl true
   def handle_continue(:connect, %{config: config} = state) do
-    IO.puts("🔌 [GUN CONNECT] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("🔌 [GUN CONNECT] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🌐 URL: #{config.url}")
     IO.puts("   ⏱️  Timeout: #{config.timeout}ms")
     IO.puts("   🔄 Establishing connection...")
-    
+
     case WebsockexNew.Reconnection.establish_connection(config) do
       {:ok, gun_pid, stream_ref, monitor_ref} ->
         IO.puts("   ✅ Gun connection established")
@@ -239,7 +243,7 @@ defmodule WebsockexNew.Client do
         IO.puts("   👁️  Monitor Ref: #{inspect(monitor_ref)}")
         IO.puts("   🔄 State: :disconnected → :connecting")
         IO.puts("   ⏰ Timeout scheduled: #{config.timeout}ms")
-        
+
         # Gun will send all messages to this GenServer process (self())
         # because we opened the connection from this process
 
@@ -261,12 +265,12 @@ defmodule WebsockexNew.Client do
   @doc false
   def handle_continue(:reconnect, %{config: config} = state) do
     current_attempt = Map.get(state, :retry_count, 0)
-    
-    IO.puts("🔄 [GUN RECONNECT] #{DateTime.utc_now() |> DateTime.to_string()}")
+
+    IO.puts("🔄 [GUN RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔢 Attempt: #{current_attempt + 1}")
     IO.puts("   🌐 URL: #{config.url}")
     IO.puts("   🔄 Re-establishing connection...")
-    
+
     # Reconnect from within the GenServer to maintain Gun ownership
     # This ensures the new Gun connection sends messages to this GenServer
     case WebsockexNew.Reconnection.establish_connection(config) do
@@ -277,14 +281,14 @@ defmodule WebsockexNew.Client do
         IO.puts("   👁️  New Monitor Ref: #{inspect(monitor_ref)}")
         IO.puts("   🔄 State: :disconnected → :connecting")
         IO.puts("   ⏰ Timeout scheduled: #{config.timeout}ms")
-        
+
         # New Gun connection will send messages to this GenServer
         Process.send_after(self(), {:connection_timeout, config.timeout}, config.timeout)
         {:noreply, %{state | gun_pid: gun_pid, stream_ref: stream_ref, state: :connecting, monitor_ref: monitor_ref}}
 
       {:error, reason} ->
         IO.puts("   ❌ Gun reconnection failed: #{inspect(reason)}")
-        
+
         # Schedule retry with exponential backoff
         retry_delay =
           WebsockexNew.Reconnection.calculate_backoff(
@@ -333,6 +337,7 @@ defmodule WebsockexNew.Client do
       config: Map.get(state, :heartbeat_config, :disabled),
       timer_active: Map.get(state, :heartbeat_timer) != nil
     }
+
     {:reply, health, state}
   end
 
@@ -341,18 +346,17 @@ defmodule WebsockexNew.Client do
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers},
         %{gun_pid: gun_pid, stream_ref: stream_ref} = state
       ) do
-    IO.puts("🔗 [GUN UPGRADE] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("🔗 [GUN UPGRADE] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   ✅ WebSocket connection upgraded successfully")
     IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
     IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
     IO.puts("   📋 Headers: #{inspect(headers, pretty: true)}")
-    
+
     # Start heartbeat timer if configured
-    new_state = 
-      %{state | state: :connected}
-      |> maybe_start_heartbeat_timer()
+    new_state = maybe_start_heartbeat_timer(%{state | state: :connected})
 
     IO.puts("   🔄 State: :connecting → :connected")
+
     if Map.get(state, :heartbeat_config) != :disabled do
       IO.puts("   💓 Heartbeat timer started")
     end
@@ -366,33 +370,33 @@ defmodule WebsockexNew.Client do
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid, stream_ref: stream_ref} = state) do
-    IO.puts("❌ [GUN ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("❌ [GUN ERROR] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
     IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
     IO.puts("   💥 Reason: #{inspect(reason)}")
     IO.puts("   🔄 Triggering connection error handling...")
-    
+
     handle_connection_error(state, {:gun_error, gun_pid, stream_ref, reason})
   end
 
   def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams}, %{gun_pid: gun_pid} = state) do
-    IO.puts("📉 [GUN DOWN] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("📉 [GUN DOWN] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
     IO.puts("   🌐 Protocol: #{inspect(protocol)}")
     IO.puts("   💥 Reason: #{inspect(reason)}")
     IO.puts("   🚫 Killed Streams: #{inspect(killed_streams)}")
     IO.puts("   🔄 Connection lost, triggering error handling...")
-    
+
     handle_connection_error(state, {:gun_down, gun_pid, protocol, reason, killed_streams})
   end
 
   def handle_info({:DOWN, ref, :process, gun_pid, reason}, %{gun_pid: gun_pid, monitor_ref: ref} = state) do
-    IO.puts("💀 [PROCESS DOWN] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("💀 [PROCESS DOWN] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔧 Gun PID: #{inspect(gun_pid)} (monitored process)")
     IO.puts("   📍 Monitor Ref: #{inspect(ref)}")
     IO.puts("   💥 Exit Reason: #{inspect(reason)}")
     IO.puts("   🔄 Process terminated, triggering connection error handling...")
-    
+
     handle_connection_error(state, {:connection_down, reason})
   end
 
@@ -400,22 +404,27 @@ defmodule WebsockexNew.Client do
     # Log WebSocket frame details
     case frame do
       {:text, _} ->
-        IO.puts("📨 [GUN WS TEXT] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("📨 [GUN WS TEXT] #{DateTime.to_string(DateTime.utc_now())}")
+
       {:binary, data} ->
-        IO.puts("📦 [GUN WS BINARY] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("📦 [GUN WS BINARY] #{DateTime.to_string(DateTime.utc_now())}")
         IO.puts("   📏 Size: #{byte_size(data)} bytes")
+
       {:ping, payload} ->
-        IO.puts("🏓 [GUN WS PING] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("🏓 [GUN WS PING] #{DateTime.to_string(DateTime.utc_now())}")
         IO.puts("   📦 Payload: #{inspect(payload)}")
+
       {:pong, payload} ->
-        IO.puts("🏓 [GUN WS PONG] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("🏓 [GUN WS PONG] #{DateTime.to_string(DateTime.utc_now())}")
         IO.puts("   📦 Payload: #{inspect(payload)}")
+
       {:close, code, reason} ->
-        IO.puts("🔒 [GUN WS CLOSE] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("🔒 [GUN WS CLOSE] #{DateTime.to_string(DateTime.utc_now())}")
         IO.puts("   🔢 Code: #{code}")
         IO.puts("   📝 Reason: #{inspect(reason)}")
+
       other ->
-        IO.puts("❓ [GUN WS OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
+        IO.puts("❓ [GUN WS OTHER] #{DateTime.to_string(DateTime.utc_now())}")
         IO.puts("   🔍 Frame: #{inspect(other)}")
     end
 
@@ -439,11 +448,11 @@ defmodule WebsockexNew.Client do
   end
 
   def handle_info({:connection_timeout, timeout}, %{state: :connecting} = state) do
-    IO.puts("⏰ [CONNECTION TIMEOUT] #{DateTime.utc_now() |> DateTime.to_string()}")
+    IO.puts("⏰ [CONNECTION TIMEOUT] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   ⏱️  Timeout: #{timeout}ms")
     IO.puts("   🔄 State: :connecting (timeout)")
     IO.puts("   🔄 Triggering connection error handling...")
-    
+
     handle_connection_error(state, :timeout)
   end
 
@@ -456,8 +465,8 @@ defmodule WebsockexNew.Client do
   # Handles scheduled reconnection retry with exponential backoff
   def handle_info(:retry_reconnect, %{config: config} = state) do
     current_retries = Map.get(state, :retry_count, 0)
-    
-    IO.puts("🔄 [RETRY RECONNECT] #{DateTime.utc_now() |> DateTime.to_string()}")
+
+    IO.puts("🔄 [RETRY RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
     IO.puts("   🔢 Current Retries: #{current_retries}")
     IO.puts("   🔢 Max Retries: #{config.retry_count}")
 
@@ -476,11 +485,11 @@ defmodule WebsockexNew.Client do
   def handle_info(:send_heartbeat, %{state: :connected, heartbeat_config: config} = state) when is_map(config) do
     # Send platform-specific heartbeat
     new_state = send_platform_heartbeat(config, state)
-    
+
     # Schedule next heartbeat
     interval = Map.get(config, :interval, 30_000)
     timer_ref = Process.send_after(self(), :send_heartbeat, interval)
-    
+
     {:noreply, %{new_state | heartbeat_timer: timer_ref}}
   end
 
@@ -515,14 +524,16 @@ defmodule WebsockexNew.Client do
       end
 
       # Trigger reconnection from this GenServer to maintain ownership
-      new_state = %{state | 
-        gun_pid: nil, 
-        stream_ref: nil, 
-        state: :disconnected, 
-        monitor_ref: nil,
-        heartbeat_timer: nil,
-        heartbeat_failures: 0
+      new_state = %{
+        state
+        | gun_pid: nil,
+          stream_ref: nil,
+          state: :disconnected,
+          monitor_ref: nil,
+          heartbeat_timer: nil,
+          heartbeat_failures: 0
       }
+
       {:noreply, Map.delete(new_state, :awaiting_connection), {:continue, :reconnect}}
     else
       {:stop, reason, state}
@@ -550,8 +561,8 @@ defmodule WebsockexNew.Client do
         case Jason.decode(json_data) do
           {:ok, %{"method" => "heartbeat"} = msg} ->
             # Handle heartbeat directly
-            IO.puts("💓 [HEARTBEAT DETECTED] #{DateTime.utc_now() |> DateTime.to_string()}")
-            IO.inspect(msg, label: "   Heartbeat message", pretty: true)
+            Logger.debug("💓 [HEARTBEAT DETECTED] #{DateTime.to_string(DateTime.utc_now())}")
+            Logger.debug("   Heartbeat message: #{inspect(msg, pretty: true)}")
             handle_heartbeat_message(msg, state)
 
           {:ok, %{"method" => "subscription"} = msg} ->
@@ -626,55 +637,37 @@ defmodule WebsockexNew.Client do
   # Handles heartbeat messages based on platform configuration
   @spec handle_heartbeat_message(map(), state()) :: state()
   defp handle_heartbeat_message(msg, state) do
-    case msg do
-      %{"params" => %{"type" => "test_request"}} ->
-        # Deribit test_request heartbeat
-        IO.puts("🚨 [DERIBIT TEST_REQUEST] Auto-responding...")
-        handle_deribit_heartbeat(state)
+    case state.heartbeat_config do
+      %{type: :deribit} ->
+        Deribit.handle_heartbeat(msg, state)
 
-      %{"method" => "heartbeat", "params" => %{"type" => type}} ->
-        # Other platform heartbeats
-        IO.puts("💚 [PLATFORM HEARTBEAT] Type: #{type}")
-        handle_platform_heartbeat(type, state)
+      %{type: :binance} ->
+        # Binance uses WebSocket ping/pong frames, not application messages
+        state
 
       _ ->
-        # Unknown heartbeat format
-        IO.puts("❓ [UNKNOWN HEARTBEAT] #{inspect(msg)}")
-        state
+        # Generic heartbeat handling
+        case msg do
+          %{"method" => "heartbeat", "params" => %{"type" => type}} ->
+            Logger.info("💚 [PLATFORM HEARTBEAT] Type: #{type}")
+            handle_platform_heartbeat(type, state)
+
+          _ ->
+            Logger.info("❓ [UNKNOWN HEARTBEAT] #{inspect(msg)}")
+            state
+        end
     end
-  end
-
-  # Handles Deribit-specific heartbeat
-  @spec handle_deribit_heartbeat(state()) :: state()
-  defp handle_deribit_heartbeat(state) do
-    # Send immediate test response
-    response = Jason.encode!(%{
-      jsonrpc: "2.0",
-      method: "public/test",
-      params: %{}
-    })
-
-    IO.puts("📤 [HEARTBEAT RESPONSE] #{DateTime.utc_now() |> DateTime.to_string()}")
-    IO.puts("   ✅ Sending automatic public/test response")
-    
-    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, response})
-
-    # Update heartbeat tracking
-    %{state |
-      active_heartbeats: MapSet.put(state.active_heartbeats, :deribit_test_request),
-      last_heartbeat_at: System.system_time(:millisecond),
-      heartbeat_failures: 0
-    }
   end
 
   # Handles generic platform heartbeats
   @spec handle_platform_heartbeat(String.t(), state()) :: state()
   defp handle_platform_heartbeat(type, state) do
     # Update active heartbeats
-    %{state |
-      active_heartbeats: MapSet.put(state.active_heartbeats, type),
-      last_heartbeat_at: System.system_time(:millisecond),
-      heartbeat_failures: 0
+    %{
+      state
+      | active_heartbeats: MapSet.put(state.active_heartbeats, type),
+        last_heartbeat_at: System.system_time(:millisecond),
+        heartbeat_failures: 0
     }
   end
 
@@ -693,22 +686,13 @@ defmodule WebsockexNew.Client do
   # Sends platform-specific heartbeat message
   @spec send_platform_heartbeat(map(), state()) :: state()
   defp send_platform_heartbeat(%{type: :deribit} = _config, state) do
-    # Send Deribit-specific heartbeat ping
-    message = Jason.encode!(%{
-      jsonrpc: "2.0",
-      method: "public/test",
-      params: %{}
-    })
-    
-    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, message})
-    
-    %{state | last_heartbeat_at: System.system_time(:millisecond)}
+    Deribit.send_heartbeat(state)
   end
 
   defp send_platform_heartbeat(%{type: :ping_pong} = _config, state) do
     # Send standard ping frame
     :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
-    
+
     %{state | last_heartbeat_at: System.system_time(:millisecond)}
   end
 

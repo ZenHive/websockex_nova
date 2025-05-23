@@ -98,18 +98,15 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
 
   describe "DeribitAdapter.handle_message/1" do
     test "handles heartbeat test_request messages" do
+      # Heartbeats are now handled automatically by the Client module
+      # DeribitAdapter just passes them through
       heartbeat_message = %{
         "method" => "heartbeat",
         "params" => %{"type" => "test_request"}
       }
 
       json_message = Jason.encode!(heartbeat_message)
-      assert {:response, response} = DeribitAdapter.handle_message({:text, json_message})
-
-      # Verify response is valid JSON with test method
-      assert {:ok, decoded_response} = Jason.decode(response)
-      assert decoded_response["method"] == "public/test"
-      assert decoded_response["jsonrpc"] == "2.0"
+      assert :ok = DeribitAdapter.handle_message({:text, json_message})
     end
 
     test "handles regular messages without error" do

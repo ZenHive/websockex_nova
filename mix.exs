@@ -70,7 +70,7 @@ defmodule WebsockexNew.MixProject do
       {:task_validator, "~> 0.5.0", only: [:dev, :test], runtime: false},
 
       # Mocks
-      {:mox, "~> 1.0", only: :test},
+      # {:mox, "~> 1.0", only: :test},
 
       # Security scanning
       {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
@@ -94,9 +94,9 @@ defmodule WebsockexNew.MixProject do
       # For generating self-signed certificates in tests
       {:x509, "~> 0.8", only: :test},
       {:certifi, "~> 2.5"},
-      {:telemetry, "~> 1.3"},
-      {:meck, "~> 0.9", only: :test},
-      {:rename, "~> 0.1.0", only: :dev}
+      {:telemetry, "~> 1.3"}
+      # {:meck, "~> 0.9", only: :test},
+      # {:rename, "~> 0.1.0", only: :dev}
 
       # {:mint_web_socket, "~> 1.0"}
       # {:dep_from_hexpm, "~> 0.3.0"},

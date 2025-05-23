@@ -52,6 +52,11 @@ WebsockexNew is a production-grade WebSocket client for financial trading system
 
 **Implementation Summary**: Following architectural analysis, heartbeat functionality was integrated directly into the Client GenServer rather than creating a separate HeartbeatManager process. This simpler approach provides better performance and maintains all benefits while reducing complexity.
 
+**Platform-Specific Handling**: Created helper modules architecture for clean separation:
+- `lib/websockex_new/helpers/deribit.ex` - Deribit-specific heartbeat handling
+- Future: `helpers/binance.ex` for Binance ping/pong frames
+- Client dispatches to helpers based on platform configuration
+
 #### Target Implementation
 **PRODUCTION-READY APPROACH**: Implement automatic heartbeat processing during the entire connection lifecycle, not just bootstrap. Financial trading connections require continuous, automatic heartbeat handling to prevent order cancellation due to connection monitoring failures.
 
@@ -358,6 +363,9 @@ lib/websockex_new/
 #### Enhancement Modules (financial infrastructure - IN PROGRESS)
 ```
 ├── client.ex              # Enhanced with integrated heartbeat handling ✅
+├── helpers/               # Platform-specific helper modules ✅
+│   ├── deribit.ex         # Deribit heartbeat handling ✅
+│   └── binance.ex         # Future: Binance ping/pong handling
 ├── correlation_manager.ex # Request/response correlation 🚧
 ├── rate_limiter.ex        # API rate limit management 🚧
 └── examples/

@@ -132,7 +132,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
         # Set up heartbeat after authentication
         {:ok, heartbeat_request} = set_heartbeat(%{interval: 30})
         Client.send_message(client, Jason.encode!(heartbeat_request))
-        
+
         {:ok, %{adapter | authenticated: true}}
 
       error ->
@@ -258,8 +258,6 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   defp default_message_handler(message) do
     IO.puts("Deribit message: #{inspect(message)}")
   end
-
-
 
   defp default_auth_handler(auth_result) do
     IO.puts("Authentication result: #{inspect(auth_result)}")
