@@ -1,13 +1,24 @@
 defmodule WebsockexNew.ClientSupervisor do
   @moduledoc """
-  Supervisor for WebSocket client connections.
+  Optional supervisor for WebSocket client connections.
 
   Provides supervised client connections with automatic restart on failure.
   Each client runs under its own supervisor for isolation.
 
+  ## Adding to Your Supervision Tree
+
+      # In your application supervisor
+      children = [
+        # Start the ClientSupervisor
+        WebsockexNew.ClientSupervisor,
+        # Your other children...
+      ]
+      
+      Supervisor.start_link(children, strategy: :one_for_one)
+
   ## Usage
 
-      # Start a supervised connection
+      # After supervisor is started, create supervised connections
       {:ok, client} = ClientSupervisor.start_client("wss://example.com", 
         retry_count: 5,
         heartbeat_config: %{type: :deribit, interval: 30_000}

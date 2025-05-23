@@ -93,6 +93,36 @@ defmodule WebsockexNew.Client do
           monitor_ref: reference() | nil
         }
 
+  @doc """
+  Returns a child specification for starting a Client under a supervisor.
+  
+  ## Examples
+  
+      # In your application's supervision tree
+      children = [
+        {WebsockexNew.Client, url: "wss://example.com", id: :my_client},
+        # Or with full configuration
+        {WebsockexNew.Client, [
+          url: "wss://example.com",
+          heartbeat_config: %{type: :deribit, interval: 30_000},
+          retry_count: 10
+        ]}
+      ]
+      
+      Supervisor.start_link(children, strategy: :one_for_one)
+  """
+  def child_spec(opts) do
+    url = Keyword.fetch!(opts, :url)
+    id = Keyword.get(opts, :id, __MODULE__)
+    
+    %{
+      id: id,
+      start: {__MODULE__, :start_link, [url, opts]},
+      type: :worker,
+      restart: :permanent
+    }
+  end
+
   # Public API
 
   @doc """

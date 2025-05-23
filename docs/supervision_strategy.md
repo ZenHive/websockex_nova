@@ -2,40 +2,71 @@
 
 ## Overview
 
-WebsockexNew provides built-in supervision for WebSocket client connections, ensuring resilience and automatic recovery from failures. This is critical for financial trading systems where connection stability directly impacts order execution and risk management.
+WebsockexNew provides optional supervision for WebSocket client connections, ensuring resilience and automatic recovery from failures. This is critical for financial trading systems where connection stability directly impacts order execution and risk management.
+
+**Important**: As a library, WebsockexNew does not start any supervisors automatically. You must explicitly add supervision to your application's supervision tree when needed.
 
 ## Architecture
 
 ```
-Application Supervisor
-    └── ClientSupervisor (DynamicSupervisor)
-            ├── Client GenServer 1
-            ├── Client GenServer 2
-            └── Client GenServer N
+Your Application Supervisor
+    ├── WebsockexNew.ClientSupervisor (Optional DynamicSupervisor)
+    │       ├── Client GenServer 1
+    │       ├── Client GenServer 2
+    │       └── Client GenServer N
+    └── Your other children...
 ```
 
 ## Key Components
 
-### 1. Application Module (`WebsockexNew.Application`)
-- Starts automatically when the application launches
-- Supervises the ClientSupervisor
-- Ensures supervisor is always available
-
-### 2. ClientSupervisor (`WebsockexNew.ClientSupervisor`)
+### 1. ClientSupervisor (`WebsockexNew.ClientSupervisor`)
 - DynamicSupervisor for managing client connections
 - Restart strategy: `:one_for_one` (isolated failures)
 - Maximum 10 restarts in 60 seconds (configurable)
 - Each client runs independently
 
-### 3. Client GenServer (`WebsockexNew.Client`)
+### 2. Client GenServer (`WebsockexNew.Client`)
 - Manages individual WebSocket connections
 - Handles Gun process ownership and message routing
 - Integrated heartbeat handling
 - Automatic reconnection on network failures
 
-## Usage
+## Usage Patterns
 
-### Starting a Supervised Client
+### Pattern 1: No Supervision (Simple/Testing)
+
+```elixir
+# Direct connection without supervision
+{:ok, client} = WebsockexNew.Client.connect("wss://example.com")
+
+# Use the client
+WebsockexNew.Client.send_message(client, "Hello")
+
+# Clean up when done
+WebsockexNew.Client.close(client)
+```
+
+### Pattern 2: Using ClientSupervisor
+
+First, add the supervisor to your application:
+
+```elixir
+defmodule MyApp.Application do
+  use Application
+  
+  def start(_type, _args) do
+    children = [
+      # Add the WebsockexNew supervisor
+      WebsockexNew.ClientSupervisor,
+      # Your other children...
+    ]
+    
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
+end
+```
+
+Then create supervised connections:
 
 ```elixir
 # Basic supervised connection
@@ -48,11 +79,32 @@ Application Supervisor
 )
 ```
 
-### Direct Connection (Unsupervised)
+### Pattern 3: Direct Client Supervision
+
+Add individual clients directly to your supervision tree:
 
 ```elixir
-# For testing or short-lived connections
-{:ok, client} = WebsockexNew.Client.connect("wss://example.com")
+defmodule MyApp.Application do
+  use Application
+  
+  def start(_type, _args) do
+    children = [
+      # Supervise individual clients
+      {WebsockexNew.Client, [
+        url: "wss://exchange1.com",
+        id: :exchange1_client,
+        heartbeat_config: %{type: :deribit, interval: 30_000}
+      ]},
+      {WebsockexNew.Client, [
+        url: "wss://exchange2.com", 
+        id: :exchange2_client
+      ]},
+      # Your other children...
+    ]
+    
+    Supervisor.start_link(children, strategy: :one_for_one)
+  end
+end
 ```
 
 ## Restart Behavior

@@ -126,13 +126,15 @@ lib/websockex_new/
 #### Updated Architecture Decision (May 2025)
 **CORE LIBRARY APPROACH**: After architectural review, heartbeat/ping-pong functionality will be implemented as a general-purpose feature in the core library with customizable handlers, rather than being Deribit-specific. This follows the WebSocket standard where ping/pong is fundamental protocol functionality used across many APIs.
 
-#### Revised File Structure
+#### Final Implementation Structure
 ```
 lib/websockex_new/
-├── client.ex               # Enhanced with HeartbeatManager integration
-├── heartbeat_manager.ex    # General-purpose heartbeat/ping-pong infrastructure
+├── client.ex               # Client GenServer with integrated heartbeat handling
+├── client_supervisor.ex    # Optional supervisor for production deployments  
+├── helpers/
+│   └── deribit.ex          # Platform-specific heartbeat logic
 └── examples/
-    └── deribit_adapter.ex  # Configures HeartbeatManager with Deribit-specific patterns
+    └── deribit_adapter.ex  # Configures heartbeat for Deribit platform
 ```
 
 #### Core Library Justification
@@ -162,7 +164,12 @@ lib/websockex_new/
 - [x] **WNX0019h**: Created comprehensive tests with real Deribit API
 
 **Phase 3: Production Hardening**
-- [ ] **WNX0019i**: Add supervision strategies for Client GenServer
+- [x] **WNX0019i**: Add supervision strategies for Client GenServer ✅
+  - Created optional ClientSupervisor for dynamic supervision
+  - Added child_spec to Client for direct supervision
+  - Removed automatic application startup (library pattern)
+  - Created comprehensive supervision documentation
+  - Added usage examples showing three supervision patterns
 - [ ] **WNX0019j**: Implement graceful degradation on heartbeat failures
 - [ ] **WNX0019k**: Conduct 24-hour stability test with continuous heartbeats
 - [ ] **WNX0019l**: Document production deployment guidelines
@@ -363,13 +370,16 @@ lib/websockex_new/
 #### Enhancement Modules (financial infrastructure - IN PROGRESS)
 ```
 ├── client.ex              # Enhanced with integrated heartbeat handling ✅
+├── client_supervisor.ex   # Optional dynamic supervisor for clients ✅
 ├── helpers/               # Platform-specific helper modules ✅
 │   ├── deribit.ex         # Deribit heartbeat handling ✅
 │   └── binance.ex         # Future: Binance ping/pong handling
 ├── correlation_manager.ex # Request/response correlation 🚧
 ├── rate_limiter.ex        # API rate limit management 🚧
 └── examples/
-    └── deribit_adapter.ex # Platform-specific integration ✅
+    ├── deribit_adapter.ex # Platform-specific integration ✅
+    ├── supervised_client.ex # Supervision usage examples ✅
+    └── usage_patterns.ex  # Three supervision patterns ✅
 ```
 
 ### Public API (5 functions only)

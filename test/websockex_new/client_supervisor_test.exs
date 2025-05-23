@@ -7,10 +7,9 @@ defmodule WebsockexNew.ClientSupervisorTest do
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
 
   setup do
-    # The supervisor is already started by the application
-    # Clean up any existing clients
-    Enum.each(ClientSupervisor.list_clients(), &ClientSupervisor.stop_client/1)
-    :ok
+    # Start the supervisor for tests
+    {:ok, sup_pid} = start_supervised(ClientSupervisor)
+    {:ok, supervisor: sup_pid}
   end
 
   describe "start_client/2" do
