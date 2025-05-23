@@ -69,7 +69,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
             {:ok, %{"params" => %{"type" => "heartbeat"}}} ->
               # Deribit sends heartbeats as params.type = "heartbeat"
               StabilityMonitor.record_heartbeat(monitor)
-              
+
             {:ok, %{"params" => %{"type" => "test_request"}}} ->
               # This won't be seen as Client handles it internally
               Logger.debug("❗ Saw test_request (should be handled by Client)")
@@ -84,7 +84,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
             {:ok, decoded} ->
               # Log all messages to debug heartbeat format
               Logger.debug("📩 Received message: #{inspect(decoded, limit: :infinity)}")
-              
+
               # Check if this is a heartbeat response  
               case decoded do
                 %{"result" => result, "id" => _id} when is_map(result) ->
@@ -94,9 +94,14 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
                     StabilityMonitor.record_heartbeat(monitor)
                   end
                   
-                _ -> :ok
+                %{"result" => "ok", "id" => _id} ->
+                  # Response from set_heartbeat - ignore it
+                  Logger.debug("✅ set_heartbeat response acknowledged")
+
+                _ ->
+                  :ok
               end
-              
+
               :ok
 
             _ ->
@@ -162,12 +167,16 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
 
     # Verify adapter is still alive
     if Process.alive?(Process.whereis(:stability_dev_test_adapter)) do
-      # Periodically send a test request to verify connectivity
-      if rem(div(@test_duration_ms - remaining_ms, 1000), 120) == 0 do
-        case DeribitGenServerAdapter.send_request(adapter, "public/get_time") do
-          {:ok, _} -> :ok
-          error -> StabilityMonitor.record_error(monitor, error)
-        end
+      # Send explicit heartbeat test every check interval
+      case DeribitGenServerAdapter.send_request(adapter, "public/test", %{}) do
+        :ok ->
+          Logger.debug("💚 Manual heartbeat test sent")
+
+        # We'll count the response in the handler
+
+        error ->
+          Logger.warning("⚠️  Failed to send heartbeat test: #{inspect(error)}")
+          StabilityMonitor.record_error(monitor, error)
       end
     else
       Logger.error("💀 Adapter process died!")
@@ -199,6 +208,11 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     Connection Stability:
     - Reconnections: #{metrics.reconnection_count}
     - Errors: #{metrics.error_count}
+
+    System Resources:
+    - Memory (avg): #{StabilityMonitor.format_bytes(metrics.avg_memory_bytes)}
+    - Memory (max): #{StabilityMonitor.format_bytes(metrics.max_memory_bytes)}
+    - CPU (avg): #{Float.round(metrics.avg_cpu_percent, 1)}%
 
     Message Processing:
     - Total messages: #{metrics.message_count}

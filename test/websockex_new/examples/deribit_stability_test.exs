@@ -43,7 +43,10 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       :error_count,
       :message_count,
       :last_heartbeat_time,
-      :test_pid
+      :test_pid,
+      :memory_samples,
+      :cpu_samples,
+      :last_sample_time
     ]
 
     def start_link(adapter, test_pid) do
@@ -80,25 +83,37 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
         error_count: 0,
         message_count: 0,
         last_heartbeat_time: System.monotonic_time(:millisecond),
-        test_pid: test_pid
+        test_pid: test_pid,
+        memory_samples: [],
+        cpu_samples: [],
+        last_sample_time: System.monotonic_time(:millisecond)
       }
 
       # Start periodic status reporting
       # Report every minute
       :timer.send_interval(60_000, :report_status)
 
+      # Sample memory/CPU every 30 seconds
+      :timer.send_interval(30_000, :sample_system_metrics)
+
       {:ok, state}
     end
 
     @impl true
     def handle_call(:get_metrics, _from, state) do
+      {avg_memory, max_memory} = calculate_memory_stats(state.memory_samples)
+      avg_cpu = calculate_cpu_stats(state.cpu_samples)
+
       metrics = %{
         runtime_ms: System.monotonic_time(:millisecond) - state.start_time,
         heartbeat_count: state.heartbeat_count,
         reconnection_count: state.reconnection_count,
         error_count: state.error_count,
         message_count: state.message_count,
-        heartbeat_interval_ms: System.monotonic_time(:millisecond) - state.last_heartbeat_time
+        heartbeat_interval_ms: System.monotonic_time(:millisecond) - state.last_heartbeat_time,
+        avg_memory_bytes: avg_memory,
+        max_memory_bytes: max_memory,
+        avg_cpu_percent: avg_cpu
       }
 
       {:reply, metrics, state}
@@ -130,6 +145,12 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       runtime_hours = (System.monotonic_time(:millisecond) - state.start_time) / (60 * 60 * 1000)
       heartbeat_rate = state.heartbeat_count / max(runtime_hours, 0.001)
 
+      # Calculate memory stats
+      {avg_memory, max_memory} = calculate_memory_stats(state.memory_samples)
+
+      # Calculate CPU stats
+      avg_cpu = calculate_cpu_stats(state.cpu_samples)
+
       Logger.info("""
 
       📊 === STABILITY TEST STATUS REPORT ===
@@ -139,11 +160,64 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       ❌ Errors: #{state.error_count}
       📨 Messages: #{state.message_count}
       🕐 Last heartbeat: #{div(System.monotonic_time(:millisecond) - state.last_heartbeat_time, 1000)}s ago
+      💾 Memory: #{format_bytes(avg_memory)} avg, #{format_bytes(max_memory)} max
+      🖥️  CPU: #{Float.round(avg_cpu, 1)}% avg
       =====================================
       """)
 
       {:noreply, state}
     end
+
+    def handle_info(:sample_system_metrics, state) do
+      # Get current memory usage
+      memory = :erlang.memory(:total)
+
+      # Get CPU usage (simplified - measures scheduler utilization)
+      cpu = get_cpu_usage()
+
+      # Keep last 120 samples (1 hour at 30s intervals)
+      memory_samples = Enum.take([memory | state.memory_samples], 120)
+      cpu_samples = Enum.take([cpu | state.cpu_samples], 120)
+
+      {:noreply, %{state | memory_samples: memory_samples, cpu_samples: cpu_samples}}
+    end
+
+    # Helper functions
+    defp get_cpu_usage do
+      # Get scheduler utilization as a proxy for CPU usage
+      # schedulers = :erlang.system_info(:schedulers)
+      schedulers_online = :erlang.system_info(:schedulers_online)
+
+      # Calculate average run queue length as a proxy for CPU usage
+      run_queue = :erlang.statistics(:run_queue)
+
+      # Rough approximation: (run_queue / schedulers_online) * 100
+      # Capped at 100%
+      utilization = run_queue / schedulers_online * 100
+      min(utilization, 100.0)
+    end
+
+    defp calculate_memory_stats([]), do: {0, 0}
+
+    defp calculate_memory_stats(samples) do
+      avg = Enum.sum(samples) / length(samples)
+      max = Enum.max(samples)
+      {avg, max}
+    end
+
+    defp calculate_cpu_stats([]), do: 0.0
+
+    defp calculate_cpu_stats(samples) do
+      Enum.sum(samples) / length(samples)
+    end
+
+    def format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
+    def format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 1)} KB"
+
+    def format_bytes(bytes) when bytes < 1024 * 1024 * 1024,
+      do: "#{Float.round(bytes / (1024 * 1024), 1)} MB"
+
+    def format_bytes(bytes), do: "#{Float.round(bytes / (1024 * 1024 * 1024), 2)} GB"
   end
 
   setup do
@@ -191,7 +265,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
             {:ok, %{"params" => %{"type" => "heartbeat"}}} ->
               # Deribit sends heartbeats as params.type = "heartbeat"
               StabilityMonitor.record_heartbeat(monitor)
-              
+
             {:ok, %{"params" => %{"type" => "test_request"}}} ->
               # This won't be seen as Client handles it internally
               Logger.debug("❗ Saw test_request (should be handled by Client)")
@@ -206,8 +280,8 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
             {:ok, decoded} ->
               # Log all messages to debug heartbeat format
               Logger.debug("📩 Received message: #{inspect(decoded, limit: :infinity)}")
-              
-              # Check if this is a heartbeat response  
+
+              # Check if this is a heartbeat response
               case decoded do
                 %{"result" => result, "id" => _id} when is_map(result) ->
                   # This might be a response to our heartbeat
@@ -216,9 +290,14 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
                     StabilityMonitor.record_heartbeat(monitor)
                   end
                   
-                _ -> :ok
+                %{"result" => "ok", "id" => _id} ->
+                  # Response from set_heartbeat - ignore it
+                  Logger.debug("✅ set_heartbeat response acknowledged")
+
+                _ ->
+                  :ok
               end
-              
+
               :ok
 
             _ ->
@@ -287,6 +366,18 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
         {:ok, state} ->
           if state.authenticated do
             Logger.debug("✅ Adapter healthy and authenticated")
+
+            # Send explicit heartbeat test to verify connection
+            case DeribitGenServerAdapter.send_request(adapter, "public/test", %{}) do
+              :ok ->
+                Logger.debug("💚 Manual heartbeat test sent")
+
+              # We'll count the response in the handler
+
+              error ->
+                Logger.warning("⚠️  Failed to send heartbeat test: #{inspect(error)}")
+                StabilityMonitor.record_error(monitor, error)
+            end
           else
             Logger.warning("⚠️  Adapter not authenticated, attempting re-auth")
             DeribitGenServerAdapter.authenticate(adapter)
@@ -330,6 +421,11 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
     Message Processing:
     - Total messages: #{metrics.message_count}
     - Message rate: #{Float.round(message_rate, 1)}/hour
+
+    System Resources:
+    - Memory (avg): #{StabilityMonitor.format_bytes(metrics.avg_memory_bytes)}
+    - Memory (max): #{StabilityMonitor.format_bytes(metrics.max_memory_bytes)}
+    - CPU (avg): #{Float.round(metrics.avg_cpu_percent, 1)}%
 
     Overall Assessment:
     #{stability_assessment(metrics, runtime_hours)}
