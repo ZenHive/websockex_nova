@@ -72,9 +72,9 @@ WebsockexNew.Client.get_state(client)
 - **Enhancement Phase** - Adding critical financial infrastructure
 - **Maximum 5 functions per module** for new modules
 - **Maximum 15 lines per function**
-- **No behaviors** unless ≥3 concrete implementations exist
+- **Use behaviors** when ≥2 implementations exist or when clarifying interfaces
 - **Direct Gun API usage** - no wrapper layers
-- **Functions over processes** - GenServers only when essential
+- **Use GenServers** when you need message handling, state, or supervision
 - **Real API testing only** - zero mocks
 
 ## Code Style Guidelines
@@ -246,7 +246,7 @@ end
 - **Code simplicity is a primary feature**, not an afterthought
 - **Implement minimal viable solution first**
 - **Each component has a limited "complexity budget"**
-- **Create abstractions only with proven value** (≥3 concrete examples)
+- **Create abstractions only with proven value** (≥2 concrete examples)
 - **Start simple and add complexity incrementally**
 - **Prioritize execution and practical operational efficiency**
 
@@ -259,14 +259,28 @@ end
 - **Maximum 5 functions per module** for all modules
 - **Maximum function length of 15 lines**
 - **Maximum of 2 levels of function calls** for any operation
-- **Prefer pure functions over processes** when possible
+- **Choose the right tool**: pure functions for stateless operations, GenServers for stateful/concurrent needs
+
+### When to Use GenServers
+
+**Use GenServers when you need to:**
+- **Receive messages** - e.g., Gun WebSocket frames that arrive asynchronously
+- **Maintain state** - e.g., connection state, subscriptions, correlation tracking
+- **Coordinate concurrent access** - e.g., rate limiting, connection pooling
+- **Implement supervision** - e.g., supervised processes with restart strategies
+
+**Use pure functions/ETS when:**
+- **No message handling needed** - e.g., frame encoding/decoding
+- **Simple lookups suffice** - e.g., connection registry
+- **Stateless transformations** - e.g., message parsing, validation
 
 ### Anti-Patterns to Avoid
 - No premature optimization without performance data
 - No "just-in-case" code for hypothetical requirements
-- No abstractions without at least 3 concrete usage examples
+- No abstractions without at least 2 concrete usage examples
 - No complex macros unless absolutely necessary
 - No overly clever solutions that prioritize elegance over maintainability
+- No avoiding GenServers when they're the natural solution
 
 **Remember**: "The elegance comes from doing less, not more. Removing complexity, not adding it!"
 
@@ -350,7 +364,7 @@ Located in `lib/websockex_new/examples/deribit_adapter.ex`
 
 ### Performance Considerations
 - ETS-based connection registry for fast lookups
-- Minimal process overhead (no GenServers in core path)
+- Efficient process usage (GenServers where appropriate for state management)
 - Efficient frame encoding/decoding
 - Connection pooling via Gun transport layer
 

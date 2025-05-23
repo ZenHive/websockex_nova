@@ -44,13 +44,9 @@ WebsockexNew is a production-grade WebSocket client for financial trading system
 ## Active Critical Financial Infrastructure Tasks
 
 ### WNX0019: HeartbeatManager Implementation
+**Status**: Architecture Issue Identified - See `docs/WNX0019_learnings.md`  
 **Priority**: Critical  
-**Effort**: Medium  
-**Dependencies**: None
-
-**Status**: Planning complete ✅ - See `docs/HeartbeatManager_Architecture.md` for comprehensive design
-**Priority**: High (Deferred until after WNX0022)  
-**Effort**: Medium  
+**Effort**: Large (requires Client refactor)  
 **Dependencies**: None
 
 #### Target Implementation
@@ -61,8 +57,20 @@ WebsockexNew is a production-grade WebSocket client for financial trading system
 
 **Production Risk**: A simple loop is insufficient for production financial trading. Heartbeat failures can cause immediate order cancellation, resulting in financial losses.
 
-#### Current Issue
-The DeribitAdapter.handle_message/1 correctly detects test_request and returns `{:response, json_response}`, but this response is not automatically sent back. The system requires a separate process or continuous message handling to ensure heartbeats are processed reliably throughout the connection lifecycle.
+#### Architecture Issue Discovered
+The HeartbeatManager GenServer cannot receive WebSocket messages because:
+1. Gun sends messages to the process that opened the connection
+2. Client is currently just a struct, not a process
+3. No message routing exists to forward Gun messages to HeartbeatManager
+
+This is a **critical blocker** - without message routing, heartbeat handling is impossible, leading to disconnections and order cancellations in financial trading.
+
+#### Recommended Solution: Client as GenServer
+Convert Client from a struct-returning module to a GenServer that:
+- Owns the Gun connection and receives all WebSocket messages
+- Routes messages to appropriate handlers (HeartbeatManager, user callbacks)
+- Maintains backward API compatibility
+- Enables future message processing features
 
 #### File Structure
 ```
@@ -118,15 +126,25 @@ lib/websockex_new/
 3. **DeribitAdapter Integration**: Configure HeartbeatManager with Deribit-specific test_request/public_test pattern
 4. **Future Platform Support**: Other exchanges can easily configure their heartbeat patterns
 
-#### Subtasks (Revised for Core Library Approach)
-- [ ] **WNX0019a**: Create general-purpose HeartbeatManager in core library for continuous message processing
-- [ ] **WNX0019b**: Integrate HeartbeatManager with Client.connect for automatic startup
-- [ ] **WNX0019c**: Add configurable heartbeat detection and response pattern system
-- [ ] **WNX0019d**: Configure DeribitAdapter to use HeartbeatManager with test_request/public_test pattern
-- [ ] **WNX0019e**: Add heartbeat response time monitoring and failure detection
-- [ ] **WNX0019f**: Implement graceful connection termination on heartbeat failure
-- [ ] **WNX0019g**: Add supervision strategy for HeartbeatManager process recovery
-- [ ] **WNX0019h**: Test continuous heartbeat processing with test.deribit.com (24-hour stability test)
+#### Implementation Phases
+
+**Phase 1: Client GenServer Refactor**
+- [ ] **WNX0019a**: Convert Client module to GenServer while maintaining public API
+- [ ] **WNX0019b**: Move Gun connection ownership to Client process
+- [ ] **WNX0019c**: Implement message routing logic for different message types
+- [ ] **WNX0019d**: Ensure all existing tests pass with new architecture
+
+**Phase 2: HeartbeatManager Integration**
+- [ ] **WNX0019e**: Update HeartbeatManager to receive messages from Client routing
+- [ ] **WNX0019f**: Implement heartbeat response logic with configurable patterns
+- [ ] **WNX0019g**: Add telemetry and monitoring for heartbeat performance
+- [ ] **WNX0019h**: Test with real Deribit API (test.deribit.com)
+
+**Phase 3: Production Hardening**
+- [ ] **WNX0019i**: Add supervision strategies for Client and HeartbeatManager
+- [ ] **WNX0019j**: Implement graceful degradation on heartbeat failures
+- [ ] **WNX0019k**: Conduct 24-hour stability test with continuous heartbeats
+- [ ] **WNX0019l**: Document production deployment guidelines
 
 #### ExUnit and Integration Test Requirements
 - Real API test against test.deribit.com verifying continuous heartbeat response
@@ -149,11 +167,12 @@ lib/websockex_new/
 - Add telemetry events for heartbeat monitoring and alerting
 
 #### Complexity Assessment
-- **Current**: DeribitAdapter detects heartbeats but requires manual processing
-- **Target**: Dedicated process for continuous, automatic heartbeat handling
-- **Added Complexity**: ~150 lines (HeartbeatHandler GenServer + Client integration)
-- **Justification**: Financial trading reliability requirements override simplicity preference
-- **Maintains**: All existing DeribitAdapter functionality + production-grade reliability
+- **Current**: Client is a simple struct, no message processing capability
+- **Target**: Client as GenServer with message routing + HeartbeatManager integration
+- **Added Complexity**: ~200-250 lines (Client GenServer conversion + message routing + HeartbeatManager updates)
+- **Justification**: Fundamental architecture requirement - Gun needs a process to send messages to
+- **Benefits**: Enables all async message processing features, not just heartbeats
+- **Maintains**: All existing public API compatibility + adds critical infrastructure
 
 ### WNX0020: Request/Response Correlation Manager
 **Priority**: High  

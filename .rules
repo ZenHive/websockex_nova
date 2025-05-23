@@ -214,7 +214,7 @@ In financial software development, especially for market making, there's a well-
   - Code simplicity is a primary feature, not an afterthought
   - Implement the minimal viable solution first
   - Each component has a limited "complexity budget"
-  - Create abstractions only with proven value (≥3 concrete examples)
+  - Create abstractions only with proven value (≥2 concrete examples)
   - Start simple and add complexity incrementally
   - Prioritize execution and practical operational efficiency
   - Deliberately simplify solutions wherever possible, reducing overhead and maintenance costs
@@ -225,7 +225,7 @@ In financial software development, especially for market making, there's a well-
   - Maximum 5 functions per module initially
   - Maximum function length of 15 lines
   - Maximum of 2 levels of function calls for any operation
-  - Prefer pure functions over processes when possible
+  - Choose the right tool: pure functions for stateless operations, GenServers for stateful/concurrent needs
 
 - **Code Structure Guidelines**:
 
@@ -261,42 +261,55 @@ In financial software development, especially for market making, there's a well-
 
 - **Process and State Management**:
 
-  - ✅ **DO**: Use the simplest process pattern that works
+  - ✅ **DO**: Use GenServer when you need to receive messages or manage state
 
     ```elixir
-    # Simple connection tracking without GenServer overhead
+    # GenServer is appropriate when receiving Gun messages
+    defmodule WebsockexNew.Client do
+      use GenServer
+      
+      def handle_info({:gun_ws, gun_pid, stream_ref, frame}, state) do
+        # Process incoming WebSocket frames
+        {:noreply, process_frame(state, frame)}
+      end
+    end
+    
+    # ETS is good for shared state without message handling
     def register_connection(client_id, gun_pid) do
       :ets.insert(:websockex_connections, {client_id, gun_pid, :os.timestamp()})
     end
-
-    def get_connection(client_id) do
-      case :ets.lookup(:websockex_connections, client_id) do
-        [{^client_id, gun_pid, _timestamp}] -> {:ok, gun_pid}
-        [] -> {:error, :not_found}
-      end
-    end
     ```
 
-  - ❌ **DON'T**: Create complex process hierarchies unnecessarily
+  - ❌ **DON'T**: Avoid processes when they genuinely simplify the solution
     ```elixir
-    # Unnecessary GenServer for simple connection tracking
-    defmodule ComplexConnectionManager do
-      use GenServer
-      # Complex state management for a simple lookup table
+    # Don't use complex workarounds to avoid GenServer
+    # when GenServer is the natural solution
+    defmodule AvoidingGenServerUnnecessarily do
+      # Complex polling or callback mechanisms
+      # when a simple GenServer would suffice
     end
     ```
 
 - **Technology Selection Guidelines**:
 
-  - Use ETS before GenServers for simple state
-  - Use Gun directly without additional transport abstractions
-  - Default to function modules over stateful processes
-  - If a feature can be implemented without a custom process, do so
+  - Use GenServers when you need:
+    - To receive messages (like Gun WebSocket frames)
+    - Maintain state across operations
+    - Coordinate concurrent access
+    - Implement supervision/fault tolerance
+  - Use ETS for:
+    - Shared state without message handling
+    - High-performance lookups
+    - Cache-like functionality
+  - Use pure functions for:
+    - Stateless transformations
+    - Simple calculations
+    - Data validation
 
 - **Anti-Patterns to Avoid**:
   - No premature optimization without performance data
   - No "just-in-case" code for hypothetical requirements
-  - No abstractions without at least 3 concrete usage examples
+  - No abstractions without at least 2 concrete usage examples
   - No complex macros unless absolutely necessary
   - No overly clever solutions that prioritize elegance over maintainability
 
