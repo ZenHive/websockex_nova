@@ -178,7 +178,10 @@ lib/websockex_new/
   - Removed automatic application startup (library pattern)
   - Created comprehensive supervision documentation
   - Added usage examples showing three supervision patterns
-- [ ] **WNX0019j**: Implement graceful degradation on heartbeat failures
+- [x] **WNX0019j**: Implement graceful degradation on heartbeat failures ❌ REVERTED
+  - Attempted implementation but it interfered with Deribit heartbeats
+  - False positives due to timeout mechanism conflicting with actual responses
+  - Decision: Keep heartbeat simple - let it fail on real issues only
 - [ ] **WNX0019k**: Conduct 24-hour stability test with continuous heartbeats
 - [ ] **WNX0019l**: Document production deployment guidelines
 
