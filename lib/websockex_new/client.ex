@@ -747,12 +747,13 @@ defmodule WebsockexNew.Client do
   # Sends platform-specific heartbeat message
   @spec send_platform_heartbeat(map(), state()) :: state()
   defp send_platform_heartbeat(%{type: :deribit} = _config, state) do
-    Deribit.send_heartbeat(state)
+    new_state = Deribit.send_heartbeat(state)
+    new_state
   end
 
   defp send_platform_heartbeat(%{type: :ping_pong} = _config, state) do
     # Send standard ping frame
-    :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
+    :ok = :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
 
     %{state | last_heartbeat_at: System.system_time(:millisecond)}
   end

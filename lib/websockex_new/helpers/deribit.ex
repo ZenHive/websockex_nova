@@ -8,6 +8,7 @@ defmodule WebsockexNew.Helpers.Deribit do
   @doc """
   Handles Deribit test_request heartbeat messages.
   """
+  @spec handle_heartbeat(map(), map()) :: map()
   def handle_heartbeat(%{"params" => %{"type" => "test_request"}}, state) do
     Logger.info("🚨 [DERIBIT TEST_REQUEST] Auto-responding...")
 
@@ -22,7 +23,7 @@ defmodule WebsockexNew.Helpers.Deribit do
     Logger.info("📤 [HEARTBEAT RESPONSE] #{DateTime.to_string(DateTime.utc_now())}")
     Logger.info("   ✅ Sending automatic public/test response")
 
-    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, response})
+    :ok = :gun.ws_send(state.gun_pid, state.stream_ref, {:text, response})
 
     # Update heartbeat tracking
     %{
@@ -38,6 +39,7 @@ defmodule WebsockexNew.Helpers.Deribit do
   @doc """
   Sends Deribit heartbeat ping message.
   """
+  @spec send_heartbeat(map()) :: map()
   def send_heartbeat(state) do
     message =
       Jason.encode!(%{
@@ -46,7 +48,7 @@ defmodule WebsockexNew.Helpers.Deribit do
         params: %{}
       })
 
-    :gun.ws_send(state.gun_pid, state.stream_ref, {:text, message})
+    :ok = :gun.ws_send(state.gun_pid, state.stream_ref, {:text, message})
 
     %{state | last_heartbeat_at: System.system_time(:millisecond)}
   end

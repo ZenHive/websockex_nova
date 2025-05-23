@@ -21,7 +21,7 @@ defmodule Mix.Tasks.StabilityTest do
   @impl Mix.Task
   def run(args) do
     # Start the application
-    Mix.Task.run("app.start")
+    Application.ensure_all_started(:websockex_new)
 
     # Parse arguments
     {opts, _, _} =
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.StabilityTest do
 
     # Check for credentials
     if !(System.get_env("DERIBIT_CLIENT_ID") && System.get_env("DERIBIT_CLIENT_SECRET")) do
-      Mix.shell().error("""
+      IO.puts(:stderr, """
 
       ❌ Missing Deribit credentials!
 
@@ -47,7 +47,7 @@ defmodule Mix.Tasks.StabilityTest do
     # Determine which test to run
     cond do
       opts[:full] ->
-        Mix.shell().info("🚀 Starting 24-hour stability test...")
+        IO.puts("🚀 Starting 24-hour stability test...")
 
         System.cmd("mix", ["test", "--only", "stability", "test/websockex_new/examples/deribit_stability_test.exs"],
           into: IO.stream(:stdio, :line)
@@ -55,9 +55,9 @@ defmodule Mix.Tasks.StabilityTest do
 
       opts[:hours] ->
         hours = opts[:hours]
-        Mix.shell().info("🚀 Starting #{hours}-hour custom stability test...")
+        IO.puts("🚀 Starting #{hours}-hour custom stability test...")
         # For now, we'll use the dev test with a notice
-        Mix.shell().info("⚠️  Custom duration not implemented yet. Running 1-hour test instead.")
+        IO.puts("⚠️  Custom duration not implemented yet. Running 1-hour test instead.")
 
         System.cmd(
           "mix",
@@ -66,7 +66,7 @@ defmodule Mix.Tasks.StabilityTest do
         )
 
       true ->
-        Mix.shell().info("🚀 Starting 1-hour development stability test...")
+        IO.puts("🚀 Starting 1-hour development stability test...")
 
         System.cmd(
           "mix",
