@@ -11,7 +11,7 @@ defmodule WebsockexNew.MixProject do
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
-      # dialyzer: dialyzer(),
+      dialyzer: dialyzer(),
       aliases: aliases(),
       preferred_cli_env: [
         dialyzer: :dev,
@@ -104,13 +104,13 @@ defmodule WebsockexNew.MixProject do
     ]
   end
 
-  # defp dialyzer do
-  #   [
-  #     plt_core_path: "priv/plts",
-  #     plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
-  #     plt_add_apps: [:mix, :ex_unit]
-  #   ]
-  # end
+  defp dialyzer do
+    [
+      plt_core_path: "priv/plts",
+      plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
+      ignore_warnings: ".dialyzer_ignore.exs"
+    ]
+  end
 
   # Add aliases for code quality tools
   defp aliases do

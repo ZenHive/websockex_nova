@@ -46,7 +46,8 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       :test_pid,
       :memory_samples,
       :cpu_samples,
-      :last_sample_time
+      :last_sample_time,
+      :state_metrics_samples
     ]
 
     def start_link(adapter, test_pid) do
@@ -73,6 +74,10 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       GenServer.cast(monitor, :message)
     end
 
+    def set_adapter(monitor, adapter) do
+      GenServer.cast(monitor, {:set_adapter, adapter})
+    end
+
     @impl true
     def init({adapter, test_pid}) do
       state = %__MODULE__{
@@ -86,7 +91,8 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
         test_pid: test_pid,
         memory_samples: [],
         cpu_samples: [],
-        last_sample_time: System.monotonic_time(:millisecond)
+        last_sample_time: System.monotonic_time(:millisecond),
+        state_metrics_samples: []
       }
 
       # Start periodic status reporting
@@ -103,6 +109,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
     def handle_call(:get_metrics, _from, state) do
       {avg_memory, max_memory} = calculate_memory_stats(state.memory_samples)
       avg_cpu = calculate_cpu_stats(state.cpu_samples)
+      state_analysis = analyze_state_metrics(state.state_metrics_samples)
 
       metrics = %{
         runtime_ms: System.monotonic_time(:millisecond) - state.start_time,
@@ -113,7 +120,8 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
         heartbeat_interval_ms: System.monotonic_time(:millisecond) - state.last_heartbeat_time,
         avg_memory_bytes: avg_memory,
         max_memory_bytes: max_memory,
-        avg_cpu_percent: avg_cpu
+        avg_cpu_percent: avg_cpu,
+        state_metrics: state_analysis
       }
 
       {:reply, metrics, state}
@@ -138,6 +146,10 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
 
     def handle_cast(:message, state) do
       {:noreply, %{state | message_count: state.message_count + 1}}
+    end
+
+    def handle_cast({:set_adapter, adapter}, state) do
+      {:noreply, %{state | adapter: adapter}}
     end
 
     @impl true
@@ -175,11 +187,23 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       # Get CPU usage (simplified - measures scheduler utilization)
       cpu = get_cpu_usage()
 
+      # Get client state metrics
+      state_metrics =
+        case DeribitGenServerAdapter.get_state(state.adapter) do
+          {:ok, %{client: client}} when not is_nil(client) ->
+            WebsockexNew.Client.get_state_metrics(client)
+
+          _ ->
+            nil
+        end
+
       # Keep last 120 samples (1 hour at 30s intervals)
       memory_samples = Enum.take([memory | state.memory_samples], 120)
       cpu_samples = Enum.take([cpu | state.cpu_samples], 120)
+      state_metrics_samples = Enum.take([state_metrics | state.state_metrics_samples], 120)
 
-      {:noreply, %{state | memory_samples: memory_samples, cpu_samples: cpu_samples}}
+      {:noreply,
+       %{state | memory_samples: memory_samples, cpu_samples: cpu_samples, state_metrics_samples: state_metrics_samples}}
     end
 
     # Helper functions
@@ -209,6 +233,33 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
 
     defp calculate_cpu_stats(samples) do
       Enum.sum(samples) / length(samples)
+    end
+
+    defp analyze_state_metrics([]), do: %{}
+
+    defp analyze_state_metrics(samples) do
+      # Filter out nil samples
+      valid_samples = Enum.reject(samples, &is_nil/1)
+
+      if Enum.empty?(valid_samples) do
+        %{}
+      else
+        # Get first and last samples to check for growth
+        first = List.last(valid_samples)
+        last = List.first(valid_samples)
+
+        %{
+          active_heartbeats_growth:
+            Map.get(last, :active_heartbeats_size, 0) - Map.get(first, :active_heartbeats_size, 0),
+          subscriptions_growth: Map.get(last, :subscriptions_size, 0) - Map.get(first, :subscriptions_size, 0),
+          pending_requests_growth: Map.get(last, :pending_requests_size, 0) - Map.get(first, :pending_requests_size, 0),
+          state_memory_growth: Map.get(last, :state_memory, 0) - Map.get(first, :state_memory, 0),
+          process_memory_growth: Map.get(last, :memory, 0) - Map.get(first, :memory, 0),
+          message_queue_max:
+            valid_samples |> Enum.max_by(&Map.get(&1, :message_queue_len, 0)) |> Map.get(:message_queue_len, 0),
+          latest_metrics: last
+        }
+      end
     end
 
     def format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"

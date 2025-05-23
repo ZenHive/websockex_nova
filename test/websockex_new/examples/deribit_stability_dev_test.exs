@@ -53,7 +53,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     =======================================
     """)
 
-    # Start the monitor
+    # Start the monitor (adapter will be set later)
     {:ok, monitor} = StabilityMonitor.start_link(nil, self())
 
     # Create handler function that captures the monitor
@@ -127,6 +127,9 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     ]
 
     {:ok, adapter} = DeribitGenServerAdapter.start_link(adapter_opts)
+
+    # Update monitor with adapter
+    StabilityMonitor.set_adapter(monitor, adapter)
 
     # Wait for connection
     Process.sleep(2_000)
@@ -218,11 +221,28 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     - Total messages: #{metrics.message_count}
     - Message rate: #{Float.round(metrics.message_count / max(runtime_minutes, 1), 1)}/minute
 
+    #{format_state_metrics(metrics.state_metrics)}
     Result: #{dev_stability_assessment(metrics, expected_heartbeats)}
     =====================================
     """
 
     Logger.info(report)
+  end
+
+  defp format_state_metrics(state_metrics) when map_size(state_metrics) == 0 do
+    ""
+  end
+
+  defp format_state_metrics(state_metrics) do
+    """
+    Internal State Growth:
+    - Active heartbeats: #{state_metrics.active_heartbeats_growth}
+    - Subscriptions: #{state_metrics.subscriptions_growth}
+    - Pending requests: #{state_metrics.pending_requests_growth}
+    - State memory: #{state_metrics.state_memory_growth} words
+    - Process memory: #{StabilityMonitor.format_bytes(state_metrics.process_memory_growth)}
+    - Max message queue: #{state_metrics.message_queue_max}
+    """
   end
 
   defp dev_stability_assessment(metrics, expected_heartbeats) do

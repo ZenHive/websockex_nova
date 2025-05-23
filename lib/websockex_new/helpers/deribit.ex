@@ -50,6 +50,6 @@ defmodule WebsockexNew.Helpers.Deribit do
 
     :ok = :gun.ws_send(state.gun_pid, state.stream_ref, {:text, message})
 
-    %{state | last_heartbeat_at: System.system_time(:millisecond)}
+    %{state | last_heartbeat_at: System.monotonic_time(:millisecond)}
   end
 end

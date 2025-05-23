@@ -35,7 +35,7 @@ defmodule WebsockexNew.Client do
   4. Maintains Gun message ownership continuity
   5. Preserves the same Client GenServer PID throughout
 
-  This ensures that components like HeartbeatManager continue to work seamlessly
+  This ensures that integrated heartbeat functionality continues to work seamlessly
   across reconnections without needing to track connection changes.
 
   The Client GenServer handles all reconnection logic internally to maintain
@@ -241,6 +241,21 @@ defmodule WebsockexNew.Client do
 
   def get_heartbeat_health(%__MODULE__{}), do: nil
 
+  @doc """
+  Gets detailed metrics about the client's internal state.
+
+  Returns a map containing:
+  - Data structure sizes (heartbeats, subscriptions, pending requests)
+  - Memory usage information
+  - Process statistics
+  """
+  @spec get_state_metrics(t()) :: map() | nil
+  def get_state_metrics(%__MODULE__{server_pid: server_pid}) when is_pid(server_pid) do
+    GenServer.call(server_pid, :get_state_metrics)
+  end
+
+  def get_state_metrics(%__MODULE__{}), do: nil
+
   @spec reconnect(t()) :: {:ok, t()} | {:error, term()}
   def reconnect(%__MODULE__{url: url} = client) do
     close(client)
@@ -400,6 +415,33 @@ defmodule WebsockexNew.Client do
     }
 
     {:reply, health, state}
+  end
+
+  def handle_call(:get_state_metrics, _from, state) do
+    metrics = %{
+      # Connection state
+      connection_state: Map.get(state, :state, :unknown),
+
+      # Data structure sizes
+      active_heartbeats_size: MapSet.size(Map.get(state, :active_heartbeats, MapSet.new())),
+      subscriptions_size: MapSet.size(Map.get(state, :subscriptions, MapSet.new())),
+      pending_requests_size: map_size(Map.get(state, :pending_requests, %{})),
+
+      # Memory usage estimates
+      state_memory: :erts_debug.size(state),
+
+      # Heartbeat tracking
+      heartbeat_failures: Map.get(state, :heartbeat_failures, 0),
+      last_heartbeat_at: Map.get(state, :last_heartbeat_at),
+      heartbeat_timer_active: Map.get(state, :heartbeat_timer) != nil,
+
+      # Process info
+      message_queue_len: self() |> Process.info(:message_queue_len) |> elem(1),
+      memory: self() |> Process.info(:memory) |> elem(1),
+      reductions: self() |> Process.info(:reductions) |> elem(1)
+    }
+
+    {:reply, metrics, state}
   end
 
   @impl true
@@ -567,7 +609,7 @@ defmodule WebsockexNew.Client do
 
   # Handles connection errors and triggers internal reconnection when appropriate.
   # This maintains Gun ownership by reconnecting from within the same GenServer.
-  @spec handle_connection_error(state(), term()) :: {:noreply, state()} | {:stop, term(), state()}
+  @spec handle_connection_error(map(), term()) :: {:noreply, map()} | {:stop, term(), map()}
   defp handle_connection_error(state, reason) do
     if Map.has_key?(state, :awaiting_connection) do
       GenServer.reply(state.awaiting_connection, {:error, reason})
@@ -721,19 +763,19 @@ defmodule WebsockexNew.Client do
   end
 
   # Handles generic platform heartbeats
-  @spec handle_platform_heartbeat(String.t(), state()) :: state()
+  @spec handle_platform_heartbeat(String.t(), map()) :: map()
   defp handle_platform_heartbeat(type, state) do
     # Update active heartbeats
     %{
       state
       | active_heartbeats: MapSet.put(state.active_heartbeats, type),
-        last_heartbeat_at: System.system_time(:millisecond),
+        last_heartbeat_at: System.monotonic_time(:millisecond),
         heartbeat_failures: 0
     }
   end
 
   # Starts heartbeat timer if configured
-  @spec maybe_start_heartbeat_timer(state()) :: state()
+  @spec maybe_start_heartbeat_timer(map()) :: map()
   defp maybe_start_heartbeat_timer(%{heartbeat_config: :disabled} = state), do: state
 
   defp maybe_start_heartbeat_timer(%{heartbeat_config: config} = state) when is_map(config) do
@@ -745,7 +787,7 @@ defmodule WebsockexNew.Client do
   defp maybe_start_heartbeat_timer(state), do: state
 
   # Sends platform-specific heartbeat message
-  @spec send_platform_heartbeat(map(), state()) :: state()
+  @spec send_platform_heartbeat(map(), map()) :: map()
   defp send_platform_heartbeat(%{type: :deribit} = _config, state) do
     new_state = Deribit.send_heartbeat(state)
     new_state
@@ -754,8 +796,8 @@ defmodule WebsockexNew.Client do
   defp send_platform_heartbeat(%{type: :ping_pong} = _config, state) do
     # Send standard ping frame
     :ok = :gun.ws_send(state.gun_pid, state.stream_ref, :ping)
-
-    %{state | last_heartbeat_at: System.system_time(:millisecond)}
+    
+    %{state | last_heartbeat_at: System.monotonic_time(:millisecond)}
   end
 
   defp send_platform_heartbeat(_config, state) do
