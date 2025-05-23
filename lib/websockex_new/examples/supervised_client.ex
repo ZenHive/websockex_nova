@@ -5,10 +5,11 @@ defmodule WebsockexNew.Examples.SupervisedClient do
   Supervised clients automatically restart on failure, providing resilience
   for financial trading systems.
   """
-
   alias WebsockexNew.Client
   alias WebsockexNew.ClientSupervisor
   alias WebsockexNew.Examples.DeribitAdapter
+
+  require Logger
 
   @doc """
   Starts a supervised Deribit connection with automatic reconnection.
@@ -20,7 +21,7 @@ defmodule WebsockexNew.Examples.SupervisedClient do
         client_id: System.get_env("DERIBIT_CLIENT_ID"),
         client_secret: System.get_env("DERIBIT_CLIENT_SECRET")
       )
-      
+
       # Use normally - will reconnect automatically on failures
       DeribitAdapter.subscribe(adapter, ["book.BTC-PERPETUAL.raw"])
   """
@@ -83,25 +84,25 @@ defmodule WebsockexNew.Examples.SupervisedClient do
     case Client.get_heartbeat_health(client) do
       %{failure_count: count} when count > 5 ->
         # Too many failures, restart the client
-        IO.puts("[HEALTH MONITOR] High failure count (#{count}), restarting client...")
+        Logger.debug("[HEALTH MONITOR] High failure count (#{count}), restarting client...")
         ClientSupervisor.stop_client(client.server_pid)
 
       %{last_heartbeat_at: nil} ->
         # No heartbeats received
-        IO.puts("[HEALTH MONITOR] No heartbeats received, checking connection...")
+        Logger.debug("[HEALTH MONITOR] No heartbeats received, checking connection...")
 
       %{last_heartbeat_at: last} ->
         # Check if heartbeat is stale
         age = System.system_time(:millisecond) - last
         # 2 minutes
         if age > 120_000 do
-          IO.puts("[HEALTH MONITOR] Stale heartbeat (#{age}ms old), restarting client...")
+          Logger.debug("[HEALTH MONITOR] Stale heartbeat (#{age}ms old), restarting client...")
           ClientSupervisor.stop_client(client.server_pid)
         end
 
       _ ->
         # Client not responding
-        IO.puts("[HEALTH MONITOR] Client not responding")
+        Logger.debug("[HEALTH MONITOR] Client not responding")
     end
 
     # Continue monitoring

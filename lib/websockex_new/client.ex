@@ -95,9 +95,9 @@ defmodule WebsockexNew.Client do
 
   @doc """
   Returns a child specification for starting a Client under a supervisor.
-  
+
   ## Examples
-  
+
       # In your application's supervision tree
       children = [
         {WebsockexNew.Client, url: "wss://example.com", id: :my_client},
@@ -114,7 +114,7 @@ defmodule WebsockexNew.Client do
   def child_spec(opts) do
     url = Keyword.fetch!(opts, :url)
     id = Keyword.get(opts, :id, __MODULE__)
-    
+
     %{
       id: id,
       start: {__MODULE__, :start_link, [url, opts]},
@@ -291,19 +291,19 @@ defmodule WebsockexNew.Client do
 
   @impl true
   def handle_continue(:connect, %{config: config} = state) do
-    IO.puts("🔌 [GUN CONNECT] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🌐 URL: #{config.url}")
-    IO.puts("   ⏱️  Timeout: #{config.timeout}ms")
-    IO.puts("   🔄 Establishing connection...")
+    Logger.debug("🔌 [GUN CONNECT] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🌐 URL: #{config.url}")
+    Logger.debug("   ⏱️  Timeout: #{config.timeout}ms")
+    Logger.debug("   🔄 Establishing connection...")
 
     case WebsockexNew.Reconnection.establish_connection(config) do
       {:ok, gun_pid, stream_ref, monitor_ref} ->
-        IO.puts("   ✅ Gun connection established")
-        IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
-        IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
-        IO.puts("   👁️  Monitor Ref: #{inspect(monitor_ref)}")
-        IO.puts("   🔄 State: :disconnected → :connecting")
-        IO.puts("   ⏰ Timeout scheduled: #{config.timeout}ms")
+        Logger.debug("   ✅ Gun connection established")
+        Logger.debug("   🔧 Gun PID: #{inspect(gun_pid)}")
+        Logger.debug("   📡 Stream Ref: #{inspect(stream_ref)}")
+        Logger.debug("   👁️  Monitor Ref: #{inspect(monitor_ref)}")
+        Logger.debug("   🔄 State: :disconnected → :connecting")
+        Logger.debug("   ⏰ Timeout scheduled: #{config.timeout}ms")
 
         # Gun will send all messages to this GenServer process (self())
         # because we opened the connection from this process
@@ -313,8 +313,8 @@ defmodule WebsockexNew.Client do
         {:noreply, %{state | gun_pid: gun_pid, stream_ref: stream_ref, state: :connecting, monitor_ref: monitor_ref}}
 
       {:error, reason} ->
-        IO.puts("   ❌ Gun connection failed: #{inspect(reason)}")
-        IO.puts("   🔄 State: → :disconnected")
+        Logger.debug("   ❌ Gun connection failed: #{inspect(reason)}")
+        Logger.debug("   🔄 State: → :disconnected")
         {:noreply, %{state | state: :disconnected}, {:continue, {:connection_failed, reason}}}
     end
   end
@@ -327,28 +327,28 @@ defmodule WebsockexNew.Client do
   def handle_continue(:reconnect, %{config: config} = state) do
     current_attempt = Map.get(state, :retry_count, 0)
 
-    IO.puts("🔄 [GUN RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🔢 Attempt: #{current_attempt + 1}")
-    IO.puts("   🌐 URL: #{config.url}")
-    IO.puts("   🔄 Re-establishing connection...")
+    Logger.debug("🔄 [GUN RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🔢 Attempt: #{current_attempt + 1}")
+    Logger.debug("   🌐 URL: #{config.url}")
+    Logger.debug("   🔄 Re-establishing connection...")
 
     # Reconnect from within the GenServer to maintain Gun ownership
     # This ensures the new Gun connection sends messages to this GenServer
     case WebsockexNew.Reconnection.establish_connection(config) do
       {:ok, gun_pid, stream_ref, monitor_ref} ->
-        IO.puts("   ✅ Gun reconnection successful")
-        IO.puts("   🔧 New Gun PID: #{inspect(gun_pid)}")
-        IO.puts("   📡 New Stream Ref: #{inspect(stream_ref)}")
-        IO.puts("   👁️  New Monitor Ref: #{inspect(monitor_ref)}")
-        IO.puts("   🔄 State: :disconnected → :connecting")
-        IO.puts("   ⏰ Timeout scheduled: #{config.timeout}ms")
+        Logger.debug("   ✅ Gun reconnection successful")
+        Logger.debug("   🔧 New Gun PID: #{inspect(gun_pid)}")
+        Logger.debug("   📡 New Stream Ref: #{inspect(stream_ref)}")
+        Logger.debug("   👁️  New Monitor Ref: #{inspect(monitor_ref)}")
+        Logger.debug("   🔄 State: :disconnected → :connecting")
+        Logger.debug("   ⏰ Timeout scheduled: #{config.timeout}ms")
 
         # New Gun connection will send messages to this GenServer
         Process.send_after(self(), {:connection_timeout, config.timeout}, config.timeout)
         {:noreply, %{state | gun_pid: gun_pid, stream_ref: stream_ref, state: :connecting, monitor_ref: monitor_ref}}
 
       {:error, reason} ->
-        IO.puts("   ❌ Gun reconnection failed: #{inspect(reason)}")
+        Logger.debug("   ❌ Gun reconnection failed: #{inspect(reason)}")
 
         # Schedule retry with exponential backoff
         retry_delay =
@@ -358,7 +358,7 @@ defmodule WebsockexNew.Client do
             config.max_backoff
           )
 
-        IO.puts("   ⏳ Scheduling retry in #{retry_delay}ms (attempt #{current_attempt + 1})")
+        Logger.debug("   ⏳ Scheduling retry in #{retry_delay}ms (attempt #{current_attempt + 1})")
         Process.send_after(self(), :retry_reconnect, retry_delay)
         {:noreply, %{state | state: :disconnected, retry_count: current_attempt + 1}}
     end
@@ -407,19 +407,19 @@ defmodule WebsockexNew.Client do
         {:gun_upgrade, gun_pid, stream_ref, ["websocket"], headers},
         %{gun_pid: gun_pid, stream_ref: stream_ref} = state
       ) do
-    IO.puts("🔗 [GUN UPGRADE] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   ✅ WebSocket connection upgraded successfully")
-    IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
-    IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
-    IO.puts("   📋 Headers: #{inspect(headers, pretty: true)}")
+    Logger.debug("🔗 [GUN UPGRADE] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   ✅ WebSocket connection upgraded successfully")
+    Logger.debug("   🔧 Gun PID: #{inspect(gun_pid)}")
+    Logger.debug("   📡 Stream Ref: #{inspect(stream_ref)}")
+    Logger.debug("   📋 Headers: #{inspect(headers, pretty: true)}")
 
     # Start heartbeat timer if configured
     new_state = maybe_start_heartbeat_timer(%{state | state: :connected})
 
-    IO.puts("   🔄 State: :connecting → :connected")
+    Logger.debug("   🔄 State: :connecting → :connected")
 
     if Map.get(state, :heartbeat_config) != :disabled do
-      IO.puts("   💓 Heartbeat timer started")
+      Logger.debug("   💓 Heartbeat timer started")
     end
 
     if Map.has_key?(state, :awaiting_connection) do
@@ -431,32 +431,32 @@ defmodule WebsockexNew.Client do
   end
 
   def handle_info({:gun_error, gun_pid, stream_ref, reason}, %{gun_pid: gun_pid, stream_ref: stream_ref} = state) do
-    IO.puts("❌ [GUN ERROR] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
-    IO.puts("   📡 Stream Ref: #{inspect(stream_ref)}")
-    IO.puts("   💥 Reason: #{inspect(reason)}")
-    IO.puts("   🔄 Triggering connection error handling...")
+    Logger.debug("❌ [GUN ERROR] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🔧 Gun PID: #{inspect(gun_pid)}")
+    Logger.debug("   📡 Stream Ref: #{inspect(stream_ref)}")
+    Logger.debug("   💥 Reason: #{inspect(reason)}")
+    Logger.debug("   🔄 Triggering connection error handling...")
 
     handle_connection_error(state, {:gun_error, gun_pid, stream_ref, reason})
   end
 
   def handle_info({:gun_down, gun_pid, protocol, reason, killed_streams}, %{gun_pid: gun_pid} = state) do
-    IO.puts("📉 [GUN DOWN] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🔧 Gun PID: #{inspect(gun_pid)}")
-    IO.puts("   🌐 Protocol: #{inspect(protocol)}")
-    IO.puts("   💥 Reason: #{inspect(reason)}")
-    IO.puts("   🚫 Killed Streams: #{inspect(killed_streams)}")
-    IO.puts("   🔄 Connection lost, triggering error handling...")
+    Logger.debug("📉 [GUN DOWN] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🔧 Gun PID: #{inspect(gun_pid)}")
+    Logger.debug("   🌐 Protocol: #{inspect(protocol)}")
+    Logger.debug("   💥 Reason: #{inspect(reason)}")
+    Logger.debug("   🚫 Killed Streams: #{inspect(killed_streams)}")
+    Logger.debug("   🔄 Connection lost, triggering error handling...")
 
     handle_connection_error(state, {:gun_down, gun_pid, protocol, reason, killed_streams})
   end
 
   def handle_info({:DOWN, ref, :process, gun_pid, reason}, %{gun_pid: gun_pid, monitor_ref: ref} = state) do
-    IO.puts("💀 [PROCESS DOWN] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🔧 Gun PID: #{inspect(gun_pid)} (monitored process)")
-    IO.puts("   📍 Monitor Ref: #{inspect(ref)}")
-    IO.puts("   💥 Exit Reason: #{inspect(reason)}")
-    IO.puts("   🔄 Process terminated, triggering connection error handling...")
+    Logger.debug("💀 [PROCESS DOWN] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🔧 Gun PID: #{inspect(gun_pid)} (monitored process)")
+    Logger.debug("   📍 Monitor Ref: #{inspect(ref)}")
+    Logger.debug("   💥 Exit Reason: #{inspect(reason)}")
+    Logger.debug("   🔄 Process terminated, triggering connection error handling...")
 
     handle_connection_error(state, {:connection_down, reason})
   end
@@ -465,28 +465,28 @@ defmodule WebsockexNew.Client do
     # Log WebSocket frame details
     case frame do
       {:text, _} ->
-        IO.puts("📨 [GUN WS TEXT] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("📨 [GUN WS TEXT] #{DateTime.to_string(DateTime.utc_now())}")
 
       {:binary, data} ->
-        IO.puts("📦 [GUN WS BINARY] #{DateTime.to_string(DateTime.utc_now())}")
-        IO.puts("   📏 Size: #{byte_size(data)} bytes")
+        Logger.debug("📦 [GUN WS BINARY] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("   📏 Size: #{byte_size(data)} bytes")
 
       {:ping, payload} ->
-        IO.puts("🏓 [GUN WS PING] #{DateTime.to_string(DateTime.utc_now())}")
-        IO.puts("   📦 Payload: #{inspect(payload)}")
+        Logger.debug("🏓 [GUN WS PING] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("   📦 Payload: #{inspect(payload)}")
 
       {:pong, payload} ->
-        IO.puts("🏓 [GUN WS PONG] #{DateTime.to_string(DateTime.utc_now())}")
-        IO.puts("   📦 Payload: #{inspect(payload)}")
+        Logger.debug("🏓 [GUN WS PONG] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("   📦 Payload: #{inspect(payload)}")
 
       {:close, code, reason} ->
-        IO.puts("🔒 [GUN WS CLOSE] #{DateTime.to_string(DateTime.utc_now())}")
-        IO.puts("   🔢 Code: #{code}")
-        IO.puts("   📝 Reason: #{inspect(reason)}")
+        Logger.debug("🔒 [GUN WS CLOSE] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("   🔢 Code: #{code}")
+        Logger.debug("   📝 Reason: #{inspect(reason)}")
 
       other ->
-        IO.puts("❓ [GUN WS OTHER] #{DateTime.to_string(DateTime.utc_now())}")
-        IO.puts("   🔍 Frame: #{inspect(other)}")
+        Logger.debug("❓ [GUN WS OTHER] #{DateTime.to_string(DateTime.utc_now())}")
+        Logger.debug("   🔍 Frame: #{inspect(other)}")
     end
 
     # Route WebSocket frames through MessageHandler
@@ -509,10 +509,10 @@ defmodule WebsockexNew.Client do
   end
 
   def handle_info({:connection_timeout, timeout}, %{state: :connecting} = state) do
-    IO.puts("⏰ [CONNECTION TIMEOUT] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   ⏱️  Timeout: #{timeout}ms")
-    IO.puts("   🔄 State: :connecting (timeout)")
-    IO.puts("   🔄 Triggering connection error handling...")
+    Logger.debug("⏰ [CONNECTION TIMEOUT] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   ⏱️  Timeout: #{timeout}ms")
+    Logger.debug("   🔄 State: :connecting (timeout)")
+    Logger.debug("   🔄 Triggering connection error handling...")
 
     handle_connection_error(state, :timeout)
   end
@@ -527,16 +527,16 @@ defmodule WebsockexNew.Client do
   def handle_info(:retry_reconnect, %{config: config} = state) do
     current_retries = Map.get(state, :retry_count, 0)
 
-    IO.puts("🔄 [RETRY RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
-    IO.puts("   🔢 Current Retries: #{current_retries}")
-    IO.puts("   🔢 Max Retries: #{config.retry_count}")
+    Logger.debug("🔄 [RETRY RECONNECT] #{DateTime.to_string(DateTime.utc_now())}")
+    Logger.debug("   🔢 Current Retries: #{current_retries}")
+    Logger.debug("   🔢 Max Retries: #{config.retry_count}")
 
     if WebsockexNew.Reconnection.max_retries_exceeded?(current_retries, config.retry_count) do
-      IO.puts("   🚫 Max reconnection attempts exceeded")
-      IO.puts("   🛑 Stopping GenServer with reason: :max_reconnection_attempts")
+      Logger.debug("   🚫 Max reconnection attempts exceeded")
+      Logger.debug("   🛑 Stopping GenServer with reason: :max_reconnection_attempts")
       {:stop, :max_reconnection_attempts, state}
     else
-      IO.puts("   ✅ Retries within limit, attempting reconnection...")
+      Logger.debug("   ✅ Retries within limit, attempting reconnection...")
       {:noreply, state, {:continue, :reconnect}}
     end
   end

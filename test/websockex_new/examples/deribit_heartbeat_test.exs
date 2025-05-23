@@ -6,11 +6,12 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
   - Connection stability with heartbeats
   - Cancel-on-disconnect behavior
   """
-
   use ExUnit.Case, async: false
 
   alias WebsockexNew.Client
   alias WebsockexNew.Examples.DeribitAdapter
+
+  require Logger
 
   @moduletag :integration
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
@@ -97,7 +98,7 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
         # Clean up
         Client.close(authenticated.client)
       else
-        IO.puts("Skipping cancel-on-disconnect test - no credentials provided")
+        Logger.debug("Skipping cancel-on-disconnect test - no credentials provided")
       end
     end
   end

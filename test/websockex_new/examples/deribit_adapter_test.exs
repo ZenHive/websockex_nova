@@ -4,6 +4,8 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
   alias WebsockexNew.Client
   alias WebsockexNew.Examples.DeribitAdapter
 
+  require Logger
+
   @moduletag :integration
 
   describe "DeribitAdapter.connect/1" do
@@ -43,7 +45,8 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
       client_secret = System.get_env("DERIBIT_CLIENT_SECRET")
 
       if client_id && client_secret do
-        {:ok, adapter} = DeribitAdapter.connect(client_id: client_id, client_secret: client_secret)
+        {:ok, adapter} =
+          DeribitAdapter.connect(client_id: client_id, client_secret: client_secret)
 
         # Wait for connection to be established
         :timer.sleep(1000)
@@ -54,7 +57,7 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
         # Clean up
         Client.close(authenticated_adapter.client)
       else
-        IO.puts("Skipping authentication test - no credentials provided")
+        Logger.debug("Skipping authentication test - no credentials provided")
       end
     end
   end
@@ -147,7 +150,8 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
     test "creates handler with custom callbacks" do
       test_pid = self()
 
-      handler = DeribitAdapter.create_message_handler(on_message: fn msg -> send(test_pid, {:custom_message, msg}) end)
+      handler =
+        DeribitAdapter.create_message_handler(on_message: fn msg -> send(test_pid, {:custom_message, msg}) end)
 
       test_frame = {:text, Jason.encode!(%{"test" => "message"})}
       # The handler expects messages in the format {:message, frame}
@@ -183,7 +187,8 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
       :timer.sleep(5000)
 
       # Unsubscribe
-      {:ok, unsubscribed} = DeribitAdapter.unsubscribe(subscribed, ["deribit_price_index.btc_usd"])
+      {:ok, unsubscribed} =
+        DeribitAdapter.unsubscribe(subscribed, ["deribit_price_index.btc_usd"])
 
       # Verify unsubscription
       refute MapSet.member?(unsubscribed.subscriptions, "deribit_price_index.btc_usd")
@@ -191,8 +196,9 @@ defmodule WebsockexNew.Examples.DeribitAdapterTest do
       # Clean up
       Client.close(unsubscribed.client)
     else
-      IO.puts("Skipping full integration test - no credentials provided")
-      IO.puts("Set DERIBIT_CLIENT_ID and DERIBIT_CLIENT_SECRET environment variables to run this test")
+      Logger.debug("Skipping full integration test - no credentials provided")
+
+      Logger.debug("Set DERIBIT_CLIENT_ID and DERIBIT_CLIENT_SECRET environment variables to run this test")
     end
   end
 end

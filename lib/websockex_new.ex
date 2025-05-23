@@ -92,7 +92,7 @@ defmodule WebsockexNew do
 
     @impl true
     def handle_message(frame_type, data, state) do
-      IO.puts("Received \#{frame_type} message: \#{inspect(data)}")
+      Logger.debug("Received \#{frame_type} message: \#{inspect(data)}")
       new_state = update_in(state.messages, &[{frame_type, data} | &1])
       {:ok, new_state}
     end

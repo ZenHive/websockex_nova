@@ -37,63 +37,63 @@ defmodule WebsockexNewTest do
   @deribit_test_url "wss://test.deribit.com/ws/api/v2"
   
   def connect(opts \\ []) do
-    IO.puts("🔌 Connecting to Deribit test server...")
+    Logger.debug("🔌 Connecting to Deribit test server...")
     
     case Client.connect(@deribit_test_url, opts) do
       {:ok, client} ->
-        IO.puts("✅ Connected successfully!")
-        IO.puts("   Client PID: #{inspect(client.server_pid)}")
-        IO.puts("   Gun PID: #{inspect(client.gun_pid)}")
-        IO.puts("   Stream: #{inspect(client.stream_ref)}")
+        Logger.debug("✅ Connected successfully!")
+        Logger.debug("   Client PID: #{inspect(client.server_pid)}")
+        Logger.debug("   Gun PID: #{inspect(client.gun_pid)}")
+        Logger.debug("   Stream: #{inspect(client.stream_ref)}")
         client
         
       {:error, reason} ->
-        IO.puts("❌ Connection failed: #{inspect(reason)}")
+        Logger.debug("❌ Connection failed: #{inspect(reason)}")
         nil
     end
   end
   
   def connect_debug(opts \\ []) do
-    IO.puts("🔌 Connecting to Deribit with DEBUG mode enabled...")
-    IO.puts("📝 All messages will be printed to console")
+    Logger.debug("🔌 Connecting to Deribit with DEBUG mode enabled...")
+    Logger.debug("📝 All messages will be printed to console")
     
     # Create a debug handler that prints all messages
     debug_handler = WebsockexNew.MessageHandler.create_handler(
       on_message: fn 
         {:message, {:text, json}} ->
-          IO.puts("\n📨 [TEXT MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📨 [TEXT MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           case Jason.decode(json) do
             {:ok, decoded} ->
               IO.inspect(decoded, label: "   JSON", pretty: true)
             {:error, _} ->
-              IO.puts("   Raw text: #{json}")
+              Logger.debug("   Raw text: #{json}")
           end
           :ok
         {:message, {:binary, data}} ->
-          IO.puts("\n📦 [BINARY MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📦 [BINARY MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(data, label: "   Binary data", pretty: true)
           :ok
         {:message, other} ->
-          IO.puts("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Content", pretty: true)
           :ok
         other ->
-          IO.puts("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Data", pretty: true)
           :ok
       end,
       on_upgrade: fn info ->
-        IO.puts("\n🔗 [UPGRADE] WebSocket connection upgraded")
+        Logger.debug("\n🔗 [UPGRADE] WebSocket connection upgraded")
         IO.inspect(info, label: "   Info", pretty: true)
         :ok
       end,
       on_error: fn error ->
-        IO.puts("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
+        Logger.debug("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
         IO.inspect(error, label: "   Error", pretty: true)
         :ok
       end,
       on_down: fn reason ->
-        IO.puts("\n📉 [DOWN] Connection down")
+        Logger.debug("\n📉 [DOWN] Connection down")
         IO.inspect(reason, label: "   Reason", pretty: true)
         :ok
       end
@@ -103,7 +103,7 @@ defmodule WebsockexNewTest do
   end
   
   def test_automatic_heartbeat(interval \\ 10) do
-    IO.puts("""
+    Logger.debug("""
     💓 Testing AUTOMATIC Deribit Heartbeat Functionality
     ===================================================
     Using DeribitAdapter with built-in automatic heartbeat responses
@@ -114,7 +114,7 @@ defmodule WebsockexNewTest do
     heartbeat_handler = create_heartbeat_debug_handler()
     
     # Connect using DeribitAdapter with automatic heartbeat configuration
-    IO.puts("🔌 Connecting with DeribitAdapter (automatic heartbeat enabled)...")
+    Logger.debug("🔌 Connecting with DeribitAdapter (automatic heartbeat enabled)...")
     
     case DeribitAdapter.connect([
       url: @deribit_test_url,
@@ -122,20 +122,20 @@ defmodule WebsockexNewTest do
       heartbeat_interval: interval
     ]) do
       {:ok, adapter} ->
-        IO.puts("✅ Connected with automatic heartbeat support!")
-        IO.puts("   Client will automatically respond to test_request messages")
+        Logger.debug("✅ Connected with automatic heartbeat support!")
+        Logger.debug("   Client will automatically respond to test_request messages")
         
         # Enable server-side heartbeat  
-        IO.puts("\n📤 Enabling server-side heartbeat...")
+        Logger.debug("\n📤 Enabling server-side heartbeat...")
         {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: interval})
         Client.send_message(adapter.client, Jason.encode!(heartbeat_request))
         
-        IO.puts("\n⏳ Watching automatic heartbeat responses...")
-        IO.puts("   🔍 Look for:")
-        IO.puts("   📨 [HEARTBEAT IN] test_request messages from server")
-        IO.puts("   📤 [HEARTBEAT OUT] automatic public/test responses")
-        IO.puts("   💚 [HEARTBEAT OK] successful heartbeat handling")
-        IO.puts("\n   Press Enter to stop...")
+        Logger.debug("\n⏳ Watching automatic heartbeat responses...")
+        Logger.debug("   🔍 Look for:")
+        Logger.debug("   📨 [HEARTBEAT IN] test_request messages from server")
+        Logger.debug("   📤 [HEARTBEAT OUT] automatic public/test responses")
+        Logger.debug("   💚 [HEARTBEAT OK] successful heartbeat handling")
+        Logger.debug("\n   Press Enter to stop...")
         
         # Start monitoring heartbeat health
         spawn(fn -> monitor_heartbeat_health(adapter.client) end)
@@ -144,26 +144,26 @@ defmodule WebsockexNewTest do
         IO.gets("")
         
         # Disable heartbeat
-        IO.puts("\n📤 Disabling heartbeat...")
+        Logger.debug("\n📤 Disabling heartbeat...")
         {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
         Client.send_message(adapter.client, Jason.encode!(disable_request))
         
         :timer.sleep(1000)
         
         # Close
-        IO.puts("\n🔌 Closing connection...")
+        Logger.debug("\n🔌 Closing connection...")
         Client.close(adapter.client)
-        IO.puts("✅ Automatic heartbeat test completed!")
+        Logger.debug("✅ Automatic heartbeat test completed!")
         
       {:error, reason} ->
-        IO.puts("❌ Connection failed: #{inspect(reason)}")
+        Logger.debug("❌ Connection failed: #{inspect(reason)}")
     end
     
     :ok
   end
   
   def test_heartbeat(interval \\ 10) do
-    IO.puts("""
+    Logger.debug("""
     💓 Testing Manual Heartbeat Functionality (Legacy)
     =================================================
     Setting up heartbeat with #{interval} second interval
@@ -174,46 +174,46 @@ defmodule WebsockexNewTest do
     
     if client do
       # Enable heartbeat on Deribit side
-      IO.puts("\n📤 Enabling server-side heartbeat...")
+      Logger.debug("\n📤 Enabling server-side heartbeat...")
       {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: interval})
       Client.send_message(client, Jason.encode!(heartbeat_request))
       
-      IO.puts("\n⏳ Waiting for heartbeat messages...")
-      IO.puts("   You should see:")
-      IO.puts("   1. Regular heartbeat messages with type: 'heartbeat'")
-      IO.puts("   2. test_request messages that trigger automatic responses")
-      IO.puts("   3. The client automatically sending public/test responses")
-      IO.puts("\n   Press Enter to disable heartbeat and close connection...")
+      Logger.debug("\n⏳ Waiting for heartbeat messages...")
+      Logger.debug("   You should see:")
+      Logger.debug("   1. Regular heartbeat messages with type: 'heartbeat'")
+      Logger.debug("   2. test_request messages that trigger automatic responses")
+      Logger.debug("   3. The client automatically sending public/test responses")
+      Logger.debug("\n   Press Enter to disable heartbeat and close connection...")
       
       # Wait for user input
       IO.gets("")
       
       # Disable heartbeat
-      IO.puts("\n📤 Disabling heartbeat...")
+      Logger.debug("\n📤 Disabling heartbeat...")
       {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
       Client.send_message(client, Jason.encode!(disable_request))
       
       :timer.sleep(1000)
       
       # Close
-      IO.puts("\n🔌 Closing connection...")
+      Logger.debug("\n🔌 Closing connection...")
       Client.close(client)
-      IO.puts("✅ Heartbeat test completed!")
+      Logger.debug("✅ Heartbeat test completed!")
     else
-      IO.puts("❌ Test aborted - connection failed")
+      Logger.debug("❌ Test aborted - connection failed")
     end
     
     :ok
   end
   
   def test_heartbeat_with_config do
-    IO.puts("""
+    Logger.debug("""
     💓 Testing Client-side Heartbeat Configuration
     ==============================================
     """)
     
     # Connect with heartbeat configuration
-    IO.puts("🔌 Connecting with heartbeat config...")
+    Logger.debug("🔌 Connecting with heartbeat config...")
     
     {:ok, config} = Config.new(@deribit_test_url)
     {:ok, client} = Client.connect(config,
@@ -222,21 +222,21 @@ defmodule WebsockexNewTest do
         type: :deribit,
         interval: 10_000,
         test_request_handler: fn ->
-          IO.puts("🔄 [HEARTBEAT] Sending automatic test response")
+          Logger.debug("🔄 [HEARTBEAT] Sending automatic test response")
           {:ok, request} = DeribitAdapter.test_request()
           Jason.encode!(request)
         end
       }
     )
     
-    IO.puts("✅ Connected with heartbeat configuration!")
+    Logger.debug("✅ Connected with heartbeat configuration!")
     
     # Enable server-side heartbeat
-    IO.puts("\n📤 Enabling server-side heartbeat...")
+    Logger.debug("\n📤 Enabling server-side heartbeat...")
     {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: 10})
     Client.send_message(client, Jason.encode!(heartbeat_request))
     
-    IO.puts("\n⏳ Observing heartbeat behavior for 30 seconds...")
+    Logger.debug("\n⏳ Observing heartbeat behavior for 30 seconds...")
     :timer.sleep(30_000)
     
     # Disable and close
@@ -244,11 +244,11 @@ defmodule WebsockexNewTest do
     Client.send_message(client, Jason.encode!(disable_request))
     Client.close(client)
     
-    IO.puts("✅ Heartbeat config test completed!")
+    Logger.debug("✅ Heartbeat config test completed!")
   end
   
   def test_gun_debug do
-    IO.puts("""
+    Logger.debug("""
     🔫 Testing Complete Gun Debug Flow
     =================================
     This shows the complete Gun connection lifecycle with full debugging:
@@ -259,8 +259,8 @@ defmodule WebsockexNewTest do
     - Connection monitoring
     """)
     
-    IO.puts("🔌 Starting Gun debug connection...")
-    IO.puts("📝 Watch for detailed Gun protocol messages")
+    Logger.debug("🔌 Starting Gun debug connection...")
+    Logger.debug("📝 Watch for detailed Gun protocol messages")
     
     # Create minimal handler to not interfere with Gun debug logs
     minimal_handler = fn _ -> :ok end
@@ -271,31 +271,31 @@ defmodule WebsockexNewTest do
       heartbeat_interval: 15  # 15 second heartbeat for faster demo
     ]) do
       {:ok, adapter} ->
-        IO.puts("\n✅ Connection established - monitoring Gun events...")
+        Logger.debug("\n✅ Connection established - monitoring Gun events...")
         
         # Send a test message to see WebSocket frame logging
-        IO.puts("\n📤 Sending test message to see Gun WebSocket frame logging...")
+        Logger.debug("\n📤 Sending test message to see Gun WebSocket frame logging...")
         {:ok, test_request} = DeribitAdapter.test_request()
         Client.send_message(adapter.client, Jason.encode!(test_request))
         
         # Enable heartbeat to see test_request/response cycle
-        IO.puts("\n📤 Enabling heartbeat to see Gun frame exchange...")
+        Logger.debug("\n📤 Enabling heartbeat to see Gun frame exchange...")
         {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: 15})
         Client.send_message(adapter.client, Jason.encode!(heartbeat_request))
         
         # Subscribe to see more message activity
-        IO.puts("\n📡 Subscribing to channel to see more Gun activity...")
+        Logger.debug("\n📡 Subscribing to channel to see more Gun activity...")
         {:ok, sub_request} = DeribitAdapter.subscribe_request(%{channels: ["deribit_price_index.btc_usd"]})
         Client.send_message(adapter.client, Jason.encode!(sub_request))
         
-        IO.puts("\n⏳ Observing Gun debug output for 45 seconds...")
-        IO.puts("   🔍 Look for:")
-        IO.puts("   🔫 [GUN OPEN] - Initial connection")
-        IO.puts("   🔗 [GUN UPGRADE] - WebSocket upgrade")
-        IO.puts("   📨 [GUN WS TEXT] - Text frame messages")
-        IO.puts("   💓 [HEARTBEAT DETECTED] - Heartbeat processing")
-        IO.puts("   📤 [HEARTBEAT RESPONSE] - Automatic responses")
-        IO.puts("\n   Press Enter to stop early or wait 45 seconds...")
+        Logger.debug("\n⏳ Observing Gun debug output for 45 seconds...")
+        Logger.debug("   🔍 Look for:")
+        Logger.debug("   🔫 [GUN OPEN] - Initial connection")
+        Logger.debug("   🔗 [GUN UPGRADE] - WebSocket upgrade")
+        Logger.debug("   📨 [GUN WS TEXT] - Text frame messages")
+        Logger.debug("   💓 [HEARTBEAT DETECTED] - Heartbeat processing")
+        Logger.debug("   📤 [HEARTBEAT RESPONSE] - Automatic responses")
+        Logger.debug("\n   Press Enter to stop early or wait 45 seconds...")
         
         # Create a task to wait for user input or timeout
         task = Task.async(fn ->
@@ -306,42 +306,42 @@ defmodule WebsockexNewTest do
         # Wait either for user input or 45 seconds
         case Task.yield(task, 45_000) do
           {:ok, :user_stopped} ->
-            IO.puts("\n👤 Stopped by user")
+            Logger.debug("\n👤 Stopped by user")
           nil ->
             Task.shutdown(task)
-            IO.puts("\n⏰ 45 second observation period completed")
+            Logger.debug("\n⏰ 45 second observation period completed")
         end
         
         # Disable heartbeat
-        IO.puts("\n📤 Disabling heartbeat...")
+        Logger.debug("\n📤 Disabling heartbeat...")
         {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
         Client.send_message(adapter.client, Jason.encode!(disable_request))
         
         :timer.sleep(1000)
         
         # Close connection to see Gun cleanup
-        IO.puts("\n🔌 Closing connection to see Gun cleanup logs...")
+        Logger.debug("\n🔌 Closing connection to see Gun cleanup logs...")
         Client.close(adapter.client)
         
         :timer.sleep(500)
         
-        IO.puts("✅ Gun debug test completed!")
-        IO.puts("📊 Summary of what you observed:")
-        IO.puts("   - Complete Gun connection establishment")
-        IO.puts("   - WebSocket protocol upgrade")
-        IO.puts("   - Real-time message frame processing")
-        IO.puts("   - Automatic heartbeat request/response cycle")
-        IO.puts("   - Clean connection termination")
+        Logger.debug("✅ Gun debug test completed!")
+        Logger.debug("📊 Summary of what you observed:")
+        Logger.debug("   - Complete Gun connection establishment")
+        Logger.debug("   - WebSocket protocol upgrade")
+        Logger.debug("   - Real-time message frame processing")
+        Logger.debug("   - Automatic heartbeat request/response cycle")
+        Logger.debug("   - Clean connection termination")
         
       {:error, reason} ->
-        IO.puts("❌ Gun debug test failed: #{inspect(reason)}")
+        Logger.debug("❌ Gun debug test failed: #{inspect(reason)}")
     end
     
     :ok
   end
   
   def test_gun_reconnection do
-    IO.puts("""
+    Logger.debug("""
     🔄 Testing Gun Reconnection Debug Flow
     =====================================
     This will show Gun reconnection with full debugging
@@ -352,48 +352,48 @@ defmodule WebsockexNewTest do
       heartbeat_interval: 10
     ]) do
       {:ok, adapter} ->
-        IO.puts("✅ Initial connection established")
-        IO.puts("📍 Gun PID: #{inspect(adapter.client.gun_pid)}")
-        IO.puts("📍 Client GenServer PID: #{inspect(adapter.client.server_pid)}")
+        Logger.debug("✅ Initial connection established")
+        Logger.debug("📍 Gun PID: #{inspect(adapter.client.gun_pid)}")
+        Logger.debug("📍 Client GenServer PID: #{inspect(adapter.client.server_pid)}")
         
-        IO.puts("\n💥 Killing Gun process to trigger reconnection...")
-        IO.puts("   Watch for:")
-        IO.puts("   💀 [PROCESS DOWN] - Gun process termination")
-        IO.puts("   🔄 [GUN RECONNECT] - Reconnection attempt")
-        IO.puts("   🔫 [GUN OPEN] - New connection establishment")
-        IO.puts("   🔗 [GUN UPGRADE] - New WebSocket upgrade")
+        Logger.debug("\n💥 Killing Gun process to trigger reconnection...")
+        Logger.debug("   Watch for:")
+        Logger.debug("   💀 [PROCESS DOWN] - Gun process termination")
+        Logger.debug("   🔄 [GUN RECONNECT] - Reconnection attempt")
+        Logger.debug("   🔫 [GUN OPEN] - New connection establishment")
+        Logger.debug("   🔗 [GUN UPGRADE] - New WebSocket upgrade")
         
         # Kill the Gun process
         Process.exit(adapter.client.gun_pid, :kill)
         
-        IO.puts("\n⏳ Waiting 15 seconds to observe reconnection...")
+        Logger.debug("\n⏳ Waiting 15 seconds to observe reconnection...")
         :timer.sleep(15_000)
         
         # Check if we have a new Gun PID
         new_state = Client.get_state(adapter.client)
-        IO.puts("\n📊 Reconnection Result:")
-        IO.puts("   🔄 Connection State: #{new_state}")
+        Logger.debug("\n📊 Reconnection Result:")
+        Logger.debug("   🔄 Connection State: #{new_state}")
         
         if new_state == :connected do
-          IO.puts("   ✅ Reconnection successful!")
+          Logger.debug("   ✅ Reconnection successful!")
         else
-          IO.puts("   ⏳ Reconnection in progress or failed")
+          Logger.debug("   ⏳ Reconnection in progress or failed")
         end
         
         # Clean close
         :timer.sleep(2000)
         Client.close(adapter.client)
-        IO.puts("✅ Gun reconnection test completed!")
+        Logger.debug("✅ Gun reconnection test completed!")
         
       {:error, reason} ->
-        IO.puts("❌ Reconnection test failed: #{inspect(reason)}")
+        Logger.debug("❌ Reconnection test failed: #{inspect(reason)}")
     end
     
     :ok
   end
   
   def quick_test do
-    IO.puts("""
+    Logger.debug("""
     🚀 Running WebsockexNew Quick Test
     ==================================
     """)
@@ -403,7 +403,7 @@ defmodule WebsockexNewTest do
     
     if client do
       # Test basic message
-      IO.puts("\n📤 Sending test message...")
+      Logger.debug("\n📤 Sending test message...")
       send_json(client, %{
         "jsonrpc" => "2.0",
         "method" => "public/test",
@@ -412,26 +412,26 @@ defmodule WebsockexNewTest do
       })
       
       # Subscribe to a channel
-      IO.puts("\n📡 Subscribing to BTC price index...")
+      Logger.debug("\n📡 Subscribing to BTC price index...")
       subscribe(client, ["deribit_price_index.btc_usd"])
       
       # Wait a bit to see some messages
-      IO.puts("\n⏳ Waiting 5 seconds to observe messages...")
+      Logger.debug("\n⏳ Waiting 5 seconds to observe messages...")
       :timer.sleep(5000)
       
       # Close
-      IO.puts("\n🔌 Closing connection...")
+      Logger.debug("\n🔌 Closing connection...")
       Client.close(client)
-      IO.puts("✅ Test completed!")
+      Logger.debug("✅ Test completed!")
     else
-      IO.puts("❌ Test aborted - connection failed")
+      Logger.debug("❌ Test aborted - connection failed")
     end
     
     :ok
   end
   
   def subscribe(client, channels) when is_list(channels) do
-    IO.puts("📡 Subscribing to channels: #{inspect(channels)}")
+    Logger.debug("📡 Subscribing to channels: #{inspect(channels)}")
     
     # Use DeribitAdapter for proper subscription format
     {:ok, request} = DeribitAdapter.subscribe_request(%{channels: channels})
@@ -439,56 +439,56 @@ defmodule WebsockexNewTest do
     
     case Client.send_message(client, json) do
       :ok ->
-        IO.puts("✅ Subscription request sent")
+        Logger.debug("✅ Subscription request sent")
         :ok
         
       {:error, reason} ->
-        IO.puts("❌ Subscription failed: #{inspect(reason)}")
+        Logger.debug("❌ Subscription failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
   
   def send_json(client, message) when is_map(message) do
     json = Jason.encode!(message)
-    IO.puts("📤 Sending JSON: #{json}")
+    Logger.debug("📤 Sending JSON: #{json}")
     
     case Client.send_message(client, json) do
       :ok ->
-        IO.puts("✅ Message sent")
+        Logger.debug("✅ Message sent")
         :ok
         
       {:error, reason} ->
-        IO.puts("❌ Send failed: #{inspect(reason)}")
+        Logger.debug("❌ Send failed: #{inspect(reason)}")
         {:error, reason}
     end
   end
   
   def test_error_scenarios do
-    IO.puts("🧪 Testing error scenarios...")
+    Logger.debug("🧪 Testing error scenarios...")
     
     # Test invalid URL
-    IO.puts("\n1. Testing invalid URL...")
+    Logger.debug("\n1. Testing invalid URL...")
     {:error, reason} = Client.connect("not-a-url")
-    IO.puts("   ✅ Got expected error: #{inspect(reason)}")
+    Logger.debug("   ✅ Got expected error: #{inspect(reason)}")
     
     # Test connection timeout
-    IO.puts("\n2. Testing connection timeout...")
+    Logger.debug("\n2. Testing connection timeout...")
     {:error, reason} = Client.connect(@deribit_test_url, timeout: 1)
-    IO.puts("   ✅ Got expected error: #{inspect(reason)}")
+    Logger.debug("   ✅ Got expected error: #{inspect(reason)}")
     
     # Test send on disconnected client
-    IO.puts("\n3. Testing send on closed connection...")
+    Logger.debug("\n3. Testing send on closed connection...")
     {:ok, client} = Client.connect(@deribit_test_url)
     Client.close(client)
     :timer.sleep(100)
     result = Client.send_message(client, "test")
-    IO.puts("   ✅ Got expected result: #{inspect(result)}")
+    Logger.debug("   ✅ Got expected result: #{inspect(result)}")
     
-    IO.puts("\n✅ All error scenarios passed!")
+    Logger.debug("\n✅ All error scenarios passed!")
   end
   
   def monitor_connection(client) do
-    IO.puts("👁️  Monitoring connection state...")
+    Logger.debug("👁️  Monitoring connection state...")
     spawn(fn -> 
       monitor_loop(client)
     end)
@@ -496,32 +496,32 @@ defmodule WebsockexNewTest do
   
   defp monitor_loop(client) do
     state = Client.get_state(client)
-    IO.puts("[#{DateTime.utc_now() |> DateTime.to_string()}] Connection state: #{state}")
+    Logger.debug("[#{DateTime.utc_now() |> DateTime.to_string()}] Connection state: #{state}")
     :timer.sleep(5000)
     monitor_loop(client)
   end
   
   def test_internal_reconnection do
-    IO.puts("🔄 Testing internal reconnection...")
-    IO.puts("Note: Client GenServer now handles reconnection internally")
-    IO.puts("Kill the Gun process and watch the Client reconnect automatically")
+    Logger.debug("🔄 Testing internal reconnection...")
+    Logger.debug("Note: Client GenServer now handles reconnection internally")
+    Logger.debug("Kill the Gun process and watch the Client reconnect automatically")
     
     client = connect_debug()
     if client do
-      IO.puts("📍 Client GenServer PID: #{inspect(client.server_pid)}")
-      IO.puts("📍 Gun PID: #{inspect(client.gun_pid)}")
-      IO.puts("\nTry: Process.exit(client.gun_pid, :kill)")
-      IO.puts("Then check: Client.get_state(client)")
-      IO.puts("\nMonitoring connection state...")
+      Logger.debug("📍 Client GenServer PID: #{inspect(client.server_pid)}")
+      Logger.debug("📍 Gun PID: #{inspect(client.gun_pid)}")
+      Logger.debug("\nTry: Process.exit(client.gun_pid, :kill)")
+      Logger.debug("Then check: Client.get_state(client)")
+      Logger.debug("\nMonitoring connection state...")
       monitor_connection(client)
       client
     end
   end
   
   def close(client) when is_map(client) do
-    IO.puts("🔌 Closing connection...")
+    Logger.debug("🔌 Closing connection...")
     Client.close(client)
-    IO.puts("✅ Connection closed")
+    Logger.debug("✅ Connection closed")
     :ok
   end
   
@@ -529,29 +529,29 @@ defmodule WebsockexNewTest do
     WebsockexNew.MessageHandler.create_handler(
       on_message: fn 
         {:message, {:text, json}} ->
-          IO.puts("\n📨 [TEXT MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📨 [TEXT MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           case Jason.decode(json) do
             {:ok, decoded} ->
               IO.inspect(decoded, label: "   JSON", pretty: true)
             {:error, _} ->
-              IO.puts("   Raw text: #{json}")
+              Logger.debug("   Raw text: #{json}")
           end
           :ok
         {:message, {:binary, data}} ->
-          IO.puts("\n📦 [BINARY MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📦 [BINARY MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(data, label: "   Binary data", pretty: true)
           :ok
         {:message, other} ->
-          IO.puts("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Content", pretty: true)
           :ok
         other ->
-          IO.puts("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Data", pretty: true)
           :ok
       end,
       on_error: fn error ->
-        IO.puts("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
+        Logger.debug("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
         IO.inspect(error, label: "   Error", pretty: true)
         :ok
       end
@@ -566,42 +566,42 @@ defmodule WebsockexNewTest do
           
           case Jason.decode(json) do
             {:ok, %{"method" => "heartbeat", "params" => %{"type" => "test_request"}} = decoded} ->
-              IO.puts("\n💓 [HEARTBEAT IN] #{timestamp}")
-              IO.puts("   🚨 test_request received - Client will auto-respond!")
+              Logger.debug("\n💓 [HEARTBEAT IN] #{timestamp}")
+              Logger.debug("   🚨 test_request received - Client will auto-respond!")
               IO.inspect(decoded, label: "   Heartbeat data", pretty: true)
               
             {:ok, %{"method" => "public/test"} = decoded} ->
-              IO.puts("\n📤 [HEARTBEAT OUT] #{timestamp}")
-              IO.puts("   ✅ Automatic heartbeat response sent")
+              Logger.debug("\n📤 [HEARTBEAT OUT] #{timestamp}")
+              Logger.debug("   ✅ Automatic heartbeat response sent")
               IO.inspect(decoded, label: "   Response data", pretty: true)
               
             {:ok, %{"method" => "heartbeat"} = decoded} ->
-              IO.puts("\n💚 [HEARTBEAT OK] #{timestamp}")
-              IO.puts("   💗 Heartbeat acknowledged")
+              Logger.debug("\n💚 [HEARTBEAT OK] #{timestamp}")
+              Logger.debug("   💗 Heartbeat acknowledged")
               IO.inspect(decoded, label: "   Heartbeat data", pretty: true)
               
             {:ok, decoded} ->
-              IO.puts("\n📨 [MESSAGE] #{timestamp}")
+              Logger.debug("\n📨 [MESSAGE] #{timestamp}")
               IO.inspect(decoded, label: "   JSON", pretty: true)
               
             {:error, _} ->
-              IO.puts("\n📨 [TEXT] #{timestamp}")
-              IO.puts("   Raw text: #{json}")
+              Logger.debug("\n📨 [TEXT] #{timestamp}")
+              Logger.debug("   Raw text: #{json}")
           end
           :ok
           
         {:message, other} ->
-          IO.puts("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n📨 [MESSAGE] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Content", pretty: true)
           :ok
           
         other ->
-          IO.puts("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
+          Logger.debug("\n🔔 [OTHER] #{DateTime.utc_now() |> DateTime.to_string()}")
           IO.inspect(other, label: "   Data", pretty: true)
           :ok
       end,
       on_error: fn error ->
-        IO.puts("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
+        Logger.debug("\n❌ [ERROR] #{DateTime.utc_now() |> DateTime.to_string()}")
         IO.inspect(error, label: "   Error", pretty: true)
         :ok
       end
@@ -614,7 +614,7 @@ defmodule WebsockexNewTest do
     try do
       health = Client.get_heartbeat_health(client)
       if health do
-        IO.puts("\n💚 [HEARTBEAT HEALTH] #{DateTime.utc_now() |> DateTime.to_string()}")
+        Logger.debug("\n💚 [HEARTBEAT HEALTH] #{DateTime.utc_now() |> DateTime.to_string()}")
         IO.inspect(health, label: "   Health metrics", pretty: true)
       end
     rescue
@@ -625,7 +625,7 @@ defmodule WebsockexNewTest do
   end
   
   def help do
-    IO.puts("""
+    Logger.debug("""
     WebsockexNew Interactive Testing with Heartbeat Support
     =======================================================
     

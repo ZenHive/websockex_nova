@@ -8,11 +8,12 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   - Message format handling
   - Automatic heartbeat responses (handled by Client)
   """
-
   use WebsockexNew.JsonRpc
 
   alias WebsockexNew.Client
   alias WebsockexNew.MessageHandler
+
+  require Logger
 
   defstruct [:client, :authenticated, :subscriptions, :client_id, :client_secret]
 
@@ -43,8 +44,11 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   defrpc :get_instruments, "public/get_instruments", doc: "Get tradable instruments"
   defrpc :get_order_book, "public/get_order_book", doc: "Get order book"
   defrpc :ticker, "public/ticker", doc: "Get ticker information"
+
   defrpc :get_book_summary_by_currency, "public/get_book_summary_by_currency", doc: "Get book summary by currency"
+
   defrpc :get_book_summary_by_instrument, "public/get_book_summary_by_instrument", doc: "Get book summary by instrument"
+
   defrpc :get_index_price, "public/get_index_price", doc: "Get index price"
 
   # Trading
@@ -52,11 +56,16 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   defrpc :sell, "private/sell", doc: "Place sell order"
   defrpc :cancel, "private/cancel", doc: "Cancel order"
   defrpc :cancel_all, "private/cancel_all", doc: "Cancel all orders"
+
   defrpc :cancel_all_by_instrument, "private/cancel_all_by_instrument", doc: "Cancel all orders by instrument"
+
   defrpc :edit, "private/edit", doc: "Edit order"
   defrpc :get_open_orders, "private/get_open_orders", doc: "Get open orders"
+
   defrpc :get_open_orders_by_currency, "private/get_open_orders_by_currency", doc: "Get open orders by currency"
+
   defrpc :get_open_orders_by_instrument, "private/get_open_orders_by_instrument", doc: "Get open orders by instrument"
+
   defrpc :get_order_state, "private/get_order_state", doc: "Get order state"
 
   # Account & Wallet
@@ -66,6 +75,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
 
   # Session Management
   defrpc :enable_cancel_on_disconnect, "private/enable_cancel_on_disconnect", doc: "Enable cancel on disconnect"
+
   defrpc :disable_cancel_on_disconnect, "private/disable_cancel_on_disconnect", doc: "Disable cancel on disconnect"
 
   @doc """
@@ -74,7 +84,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   ## Options
 
   * `:client_id` - Client ID for authentication
-  * `:client_secret` - Client secret for authentication  
+  * `:client_secret` - Client secret for authentication
   * `:url` - WebSocket URL (defaults to test.deribit.com)
   * `:handler` - Message handler function
   * `:heartbeat_interval` - Heartbeat interval in seconds (default: 30)
@@ -94,7 +104,8 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
       }
     ]
 
-    connect_opts = if handler, do: Keyword.put(connect_opts, :handler, handler), else: connect_opts
+    connect_opts =
+      if handler, do: Keyword.put(connect_opts, :handler, handler), else: connect_opts
 
     case Client.connect(url, connect_opts) do
       {:ok, client} ->
@@ -203,10 +214,10 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
         on_message.(frame)
       end,
       on_upgrade: fn upgrade_info ->
-        IO.puts("WebSocket connection upgraded: #{inspect(upgrade_info)}")
+        Logger.debug("WebSocket connection upgraded: #{inspect(upgrade_info)}")
       end,
       on_error: fn error ->
-        IO.puts("WebSocket error: #{inspect(error)}")
+        Logger.debug("WebSocket error: #{inspect(error)}")
       end
     )
   end
@@ -256,18 +267,18 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
   end
 
   defp default_message_handler(message) do
-    IO.puts("Deribit message: #{inspect(message)}")
+    Logger.debug("Deribit message: #{inspect(message)}")
   end
 
   defp default_auth_handler(auth_result) do
-    IO.puts("Authentication result: #{inspect(auth_result)}")
+    Logger.debug("Authentication result: #{inspect(auth_result)}")
   end
 
   defp default_auth_error_handler(auth_error) do
-    IO.puts("Authentication error: #{inspect(auth_error)}")
+    Logger.debug("Authentication error: #{inspect(auth_error)}")
   end
 
   defp default_error_handler(error) do
-    IO.puts("API error: #{inspect(error)}")
+    Logger.debug("API error: #{inspect(error)}")
   end
 end

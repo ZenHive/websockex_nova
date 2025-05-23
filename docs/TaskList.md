@@ -52,6 +52,14 @@ WebsockexNew is a production-grade WebSocket client for financial trading system
 
 **Implementation Summary**: Following architectural analysis, heartbeat functionality was integrated directly into the Client GenServer rather than creating a separate HeartbeatManager process. This simpler approach provides better performance and maintains all benefits while reducing complexity.
 
+### WNX0020: Fault-Tolerant Adapter Architecture ✅
+**Status**: COMPLETED - GenServer-based adapters with Client monitoring  
+**Priority**: Critical  
+**Effort**: Medium  
+**Dependencies**: Client as GenServer (WNX0019)
+
+**Implementation Summary**: Created GenServer-based adapter architecture that monitors Client processes and handles automatic reconnection with state restoration. This solves the critical issue of stale PID references when Client GenServers restart after crashes.
+
 **Platform-Specific Handling**: Created helper modules architecture for clean separation:
 - `lib/websockex_new/helpers/deribit.ex` - Deribit-specific heartbeat handling
 - Future: `helpers/binance.ex` for Binance ping/pong frames
@@ -174,6 +182,25 @@ lib/websockex_new/
 - [ ] **WNX0019k**: Conduct 24-hour stability test with continuous heartbeats
 - [ ] **WNX0019l**: Document production deployment guidelines
 
+#### WNX0020 Implementation Details
+**Created Files**:
+- `lib/websockex_new/examples/deribit_genserver_adapter.ex` - GenServer adapter with monitoring
+- `lib/websockex_new/examples/adapter_supervisor.ex` - Supervisor for adapter GenServers
+- `test/websockex_new/examples/deribit_genserver_adapter_test.exs` - Fault tolerance tests
+
+**Key Features**:
+1. **Process Monitoring**: Adapters monitor their Client GenServers
+2. **Automatic Reconnection**: Detects Client death and reconnects
+3. **State Restoration**: Preserves authentication status and subscriptions
+4. **Supervision Tree**: AdapterSupervisor manages multiple adapters
+5. **Fault Tolerance**: Handles Client crashes seamlessly
+
+**Architecture Benefits**:
+- Solves stale PID reference problem completely
+- True OTP-compliant fault tolerance
+- Seamless recovery from Client GenServer crashes
+- Production-ready for financial trading systems
+
 #### ExUnit and Integration Test Requirements
 - Real API test against test.deribit.com verifying continuous heartbeat response
 - Long-running test (minimum 10 minutes) to verify heartbeat stability
@@ -202,7 +229,7 @@ lib/websockex_new/
 - **Benefits**: Enables all async message processing features, not just heartbeats
 - **Maintains**: All existing public API compatibility + adds critical infrastructure
 
-### WNX0020: Request/Response Correlation Manager
+### WNX0021: Request/Response Correlation Manager
 **Priority**: High  
 **Effort**: Small  
 **Dependencies**: None
@@ -233,11 +260,11 @@ lib/websockex_new/
 3. **Add When Needed**: Only add features based on real trading issues
 
 #### Subtasks
-- [ ] **WNX0020a**: Create request_tracker.ex with ETS-based correlation table
-- [ ] **WNX0020b**: Add track_request/3 and match_response/2 functions
-- [ ] **WNX0020c**: Implement timeout detection with Process.send_after
-- [ ] **WNX0020d**: Integrate with Client.send_message for automatic tracking
-- [ ] **WNX0020e**: Test with real Deribit order placement/cancellation
+- [ ] **WNX0021a**: Create request_tracker.ex with ETS-based correlation table
+- [ ] **WNX0021b**: Add track_request/3 and match_response/2 functions
+- [ ] **WNX0021c**: Implement timeout detection with Process.send_after
+- [ ] **WNX0021d**: Integrate with Client.send_message for automatic tracking
+- [ ] **WNX0021e**: Test with real Deribit order placement/cancellation
 
 #### Implementation Notes
 - ~50 lines total implementation
@@ -245,7 +272,7 @@ lib/websockex_new/
 - Leverage existing JSON-RPC ID field
 - No complex abstractions, just simple mapping
 
-### WNX0021: Basic Rate Limiter
+### WNX0022: Basic Rate Limiter
 **Priority**: High  
 **Effort**: Small  
 **Dependencies**: None
@@ -276,11 +303,11 @@ lib/websockex_new/
 3. **Add When Needed**: Burst handling only if actually hitting limits
 
 #### Subtasks
-- [ ] **WNX0021a**: Create rate_limiter.ex with token bucket logic
-- [ ] **WNX0021b**: Add consume_token/2 and refill logic
-- [ ] **WNX0021c**: Integrate with Client.send_message
-- [ ] **WNX0021d**: Add configurable limits to Config struct
-- [ ] **WNX0021e**: Test against Deribit rate limits with burst traffic
+- [ ] **WNX0022a**: Create rate_limiter.ex with token bucket logic
+- [ ] **WNX0022b**: Add consume_token/2 and refill logic
+- [ ] **WNX0022c**: Integrate with Client.send_message
+- [ ] **WNX0022d**: Add configurable limits to Config struct
+- [ ] **WNX0022e**: Test against Deribit rate limits with burst traffic
 
 #### Implementation Notes
 - ~30 lines total implementation
@@ -288,7 +315,7 @@ lib/websockex_new/
 - Queue requests when tokens exhausted
 - Return {:error, :rate_limited} when queue full
 
-### WNX0022: JSON-RPC 2.0 API Builder ✅
+### WNX0023: JSON-RPC 2.0 API Builder ✅
 **Status**: COMPLETED  
 **Priority**: Medium (Nice to have)  
 **Effort**: Medium  
