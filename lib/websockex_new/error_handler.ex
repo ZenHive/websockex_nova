@@ -17,6 +17,7 @@ defmodule WebsockexNew.ErrorHandler do
   Returns the raw error unchanged to preserve all original information.
   """
   @spec categorize_error(term()) :: {:recoverable | :fatal, term()}
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   def categorize_error(error) do
     case error do
       # Recoverable connection/network errors
