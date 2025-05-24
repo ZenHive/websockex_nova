@@ -25,7 +25,15 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
   @test_duration_minutes 60
   @test_duration_ms @test_duration_minutes * 60 * 1000
   @heartbeat_interval_seconds 30
-  @subscription_channels ["ticker.BTC-PERPETUAL.raw"]
+  @subscription_channels [
+    # Perpetuals
+    "ticker.BTC-PERPETUAL.raw",
+    "ticker.ETH-PERPETUAL.raw",
+    # BTC Options - subscribe to the most liquid strikes
+    "ticker.BTC-*.raw",
+    # ETH Options - subscribe to the most liquid strikes  
+    "ticker.ETH-*.raw"
+  ]
 
   setup do
     # Ensure we have credentials
