@@ -285,42 +285,48 @@ Rate limiting prevents API bans that cause missed trading opportunities. Token b
 - Token bucket error: Let it crash, supervisor will restart
 
 ### WNX0025: Eliminate Duplicate Reconnection Logic
-**Description**: Resolve duplicate reconnection mechanisms between Client internal handling and Adapter monitoring by configuring Client to disable internal reconnection when supervised.
+**Description**: Eliminate architectural duplication where both Client (network-level) and Adapter (process-level) handle reconnection independently, creating redundant attempts and unclear ownership. Implement surgical fix using configuration flag to disable Client's internal reconnection when supervised by adapters.
 
 **Simplicity Progression Plan**:
-1. Add reconnect_on_error configuration flag to Client
-2. Update DeribitGenServerAdapter to set reconnect_on_error: false
-3. Test adapter handles all reconnection when flag is false
-4. Document reconnection patterns in architecture guide
+1. **Surgical Fix**: Add `reconnect_on_error: false` option to DeribitGenServerAdapter configuration
+2. **Client Enhancement**: Ensure Client respects `reconnect_on_error: false` by stopping cleanly instead of reconnecting
+3. **Clear Ownership**: Document pattern - supervised clients delegate reconnection, standalone clients handle internally
+4. **Verification**: Test eliminates duplication while preserving all heartbeat functionality
 
 **Simplicity Principle**:
 Current architecture has duplicate reconnection mechanisms creating redundant attempts and unclear responsibility boundaries. Simple configuration flag eliminates duplication with clear ownership.
 
 **Abstraction Evaluation**:
-- **Challenge**: How to eliminate duplicate reconnection without breaking existing functionality?
-- **Minimal Solution**: Configuration flag to disable Client reconnection when supervised
+- **Challenge**: Two reconnection mechanisms handling overlapping scenarios (Client: network failures, Adapter: process crashes)
+- **Minimal Solution**: `reconnect_on_error: false` flag for supervised usage
 - **Justification**:
-  1. Adapters need full control over reconnection for state restoration
-  2. Configuration provides backward compatibility
-  3. Clear ownership prevents race conditions
+  1. **Zero Risk**: No changes to critical heartbeat functionality
+  2. **Clear Intent**: `reconnect_on_error: false` explicitly communicates delegation
+  3. **Surgical**: Changes only the duplication issue, preserves all other architecture
+  4. **Explicit Ownership**: Supervised → adapter handles, standalone → client handles
+</edits>
 
 **Requirements**:
-- Configuration flag to disable Client internal reconnection
-- Adapter explicitly manages all reconnection when Client supervised
-- Backward compatibility with existing standalone Client usage
-- Clear documentation of reconnection patterns
+- DeribitGenServerAdapter sets `reconnect_on_error: false` when connecting
+- Client stops cleanly on connection errors when `reconnect_on_error: false`
+- Adapter handles ALL reconnection scenarios (network failures + process crashes)
+- Zero changes to heartbeat functionality (preserve financial system stability)
+- Backward compatibility: standalone Client usage unchanged
+- Clear ownership: supervised → adapter handles, standalone → client handles
 
 **ExUnit Test Requirements**:
-- Test Client stops cleanly on connection errors when supervised
-- Verify adapter handles all reconnection when flag is false
-- Test standalone Client continues internal reconnection by default
-- Verify no duplicate reconnection attempts in supervised mode
+- Test Client stops cleanly (no internal reconnection) when `reconnect_on_error: false`
+- Verify adapter recreates Client on process death with state restoration
+- Test standalone Client continues internal reconnection by default (unchanged behavior)
+- Verify only ONE reconnection mechanism active in supervised mode
+- Test heartbeat functionality continues working across adapter-managed reconnections
 
 **Integration Test Scenarios**:
-- Test supervised Client with network interruption
-- Verify adapter recreates Client on crash
-- Test standalone Client with automatic reconnection
-- Verify state restoration works correctly
+- **Supervised Mode**: Network failure → Client stops → Adapter recreates → State restored
+- **Process Crash**: Client dies → Adapter monitors → New Client created → Auth/subscriptions restored
+- **Standalone Mode**: Network failure → Client reconnects internally (unchanged)
+- **Heartbeat Continuity**: Verify heartbeats work across adapter-managed reconnections
+- **No Duplication**: Confirm only adapter attempts reconnection in supervised mode
 
 **Typespec Requirements**:
 - client_options :: %{reconnect_on_error: boolean()}
@@ -376,16 +382,44 @@ Current architecture has duplicate reconnection mechanisms creating redundant at
 **Priority**: High
 
 **Implementation Notes**:
-- One configuration flag eliminates duplication
-- Backward compatible with existing code
-- Clear ownership: supervised → adapter handles, standalone → client handles
-- Minimal code changes, maximum clarity
+
+**Step 1: Update DeribitGenServerAdapter**
+```elixir
+defp do_connect(state) do
+  opts = [
+    reconnect_on_error: false,  # NEW: Disable internal reconnection
+    heartbeat_config: %{type: :deribit, interval: 30_000}
+  ]
+  
+  case WebsockexNew.Client.connect(state.url, opts) do
+    {:ok, client} ->
+      ref = Process.monitor(client.server_pid)
+      {:ok, %{state | client: client, monitor_ref: ref}}
+  end
+end
+```
+
+**Step 2: Client Behavior (likely already works)**
+```elixir
+defp handle_connection_error(state, reason) do
+  if state.config.reconnect_on_error do
+    # Internal reconnection (current behavior)
+    {:noreply, new_state, {:continue, :reconnect}}
+  else
+    # Stop cleanly, let supervisor handle
+    {:stop, reason, state}
+  end
+end
+```
+
+**Result**: Clear ownership - adapter handles ALL reconnection when supervising
 
 **Complexity Assessment**:
-- Minimal change to existing Client configuration
-- Clear separation of concerns maintained
-- No changes to critical heartbeat functionality
-- Simple boolean flag controls behavior
+- **Surgical Fix**: One line change in adapter (`reconnect_on_error: false`)
+- **Zero Risk**: No changes to critical heartbeat/financial functionality
+- **Clear Intent**: Configuration explicitly communicates delegation
+- **Elimination**: Removes duplicate reconnection completely
+- **Backward Compatible**: Existing standalone usage unchanged
 
 **Maintenance Impact**:
 - Eliminates confusion about reconnection responsibility
@@ -394,9 +428,39 @@ Current architecture has duplicate reconnection mechanisms creating redundant at
 - Foundation for consistent adapter implementations
 
 **Error Handling Implementation**:
-- Configuration error: Return {:error, :invalid_reconnection_config}
-- Client supervised shutdown: Clean exit, let adapter handle
-- Adapter recreation failure: Log error, attempt retry with backoff
+
+**Architectural Benefits**:
+- **Eliminates Race Conditions**: Only one process attempts reconnection
+- **Clear Debugging**: Connection issues have single point of failure
+- **Simplified Monitoring**: Adapter owns complete lifecycle
+- **Financial System Safety**: Zero risk to heartbeat functionality
+
+**Pattern Documentation**:
+```elixir
+# For supervised clients (adapters)
+Client.connect(url, reconnect_on_error: false)
+
+# For standalone clients (unchanged)  
+Client.connect(url, reconnect_on_error: true)  # default
+```
+
+**Before (Duplicate Reconnection)**:
+```
+Network failure → Client attempts reconnection + Adapter attempts reconnection
+Process crash   → Adapter creates new Client → New client has own reconnection
+```
+
+**After (Clean Ownership)**:
+```
+Network failure → Client stops cleanly → Adapter handles reconnection
+Process crash   → Adapter creates new Client → Adapter controls reconnection
+```
+
+**Next Steps**:
+1. Implement one-line change in DeribitGenServerAdapter
+2. Test supervised vs standalone behavior
+3. Document pattern for future adapter implementations
+4. Consider making this the default when Process.monitor is detected
 
 ## Implementation Notes
 WebsockexNew provides production-grade WebSocket functionality for financial trading systems with emphasis on simplicity, reliability, and real-world testing. All implementations follow strict complexity budgets and proven patterns.
