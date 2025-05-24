@@ -192,7 +192,7 @@ defmodule WebsockexNew.Client do
     end
   end
 
-  @spec send_message(t(), binary()) :: :ok | {:error, term()}
+  @spec send_message(t(), binary()) :: :ok | {:ok, map()} | {:error, term()}
   def send_message(%__MODULE__{server_pid: server_pid}, message) when is_pid(server_pid) do
     GenServer.call(server_pid, {:send_message, message})
   end
