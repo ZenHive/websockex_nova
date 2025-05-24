@@ -397,10 +397,194 @@ Use `WNX####` format for all WebSocket-related tasks:
 - Documentation: WNX0200-WNX0299
 - Testing: WNX0300-WNX0399
 
+### Task Tracking Standards
+Tasks are tracked in `docs/TaskList.md` with the following structure:
+
+#### Status Values
+- `Planned` - Task identified but not started
+- `In Progress` - Currently being worked on
+- `Review` - Implementation complete, under review
+- `Completed` - Fully implemented and reviewed
+- `Blocked` - Cannot proceed due to dependencies
+
+#### Priority Values
+- `Critical` - Must be done immediately
+- `High` - Should be done soon
+- `Medium` - Normal priority
+- `Low` - Nice to have
+
+#### Review Ratings
+- ⭐⭐⭐⭐⭐ (5 stars) - Excellent implementation
+- ⭐⭐⭐⭐ (4 stars) - Good implementation
+- ⭐⭐⭐ (3 stars) - Acceptable implementation
+- ⭐⭐ (2 stars) - Needs improvement
+- ⭐ (1 star) - Major issues
+
 ### Required Task Sections
-Each task must include:
-- Description and Simplicity Progression Plan
-- Abstraction Evaluation with concrete use cases
-- ExUnit and Integration Test Requirements
-- Error Handling patterns specific to WebSocket/Gun errors
-- Implementation Notes and Complexity Assessment
+Each task in TaskList.md must include:
+
+1. **Description**: Clear explanation of what needs to be done
+2. **Simplicity Progression Plan**: Step-by-step approach maintaining simplicity
+3. **Simplicity Principle**: Brief explanation of simplicity approach
+4. **Abstraction Evaluation**: 
+   - Challenge question about necessary abstraction
+   - Minimal solution proposal
+   - Justification with concrete use cases
+5. **Requirements**: Specific functional requirements
+6. **ExUnit Test Requirements**: Unit test scenarios
+7. **Integration Test Scenarios**: Real API test scenarios
+8. **TypeSpec Requirements**: Type specification needs
+9. **TypeSpec Documentation**: Documentation requirements for types
+10. **TypeSpec Verification**: Verification steps for type correctness
+11. **Error Handling**: WebSocket/Gun specific error patterns with sections:
+    - Core Principles
+    - Error Implementation
+    - Error Examples
+    - GenServer/WebSocket Specifics
+12. **Code Quality KPIs**: Measurable metrics including:
+    - Lines of code
+    - Functions per module
+    - Lines per function
+    - Call depth
+    - Cyclomatic complexity
+    - Test coverage
+13. **Dependencies**: Required libraries and modules
+14. **Architecture Notes**: High-level design considerations
+15. **Status**: Current task status
+16. **Priority**: Task priority level
+17. **Implementation Notes**: Technical considerations
+18. **Complexity Assessment**: Evaluation of solution complexity
+19. **Maintenance Impact**: Long-term maintenance implications
+20. **Error Handling Implementation**: Specific error scenarios and responses
+
+### Task Documentation Format
+```markdown
+### WNX####: [Task Title] (✅ COMPLETED)
+**Description**: [Detailed task description]
+
+**Simplicity Progression Plan**:
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+4. [Step 4]
+
+**Simplicity Principle**:
+[Brief description of the simplicity principle applied]
+
+**Abstraction Evaluation**:
+- **Challenge**: [Question about necessary abstraction]
+- **Minimal Solution**: [Simplest viable solution]
+- **Justification**:
+  1. [Use case 1]
+  2. [Use case 2]
+  3. [Use case 3]
+
+**Requirements**:
+- [Requirement 1]
+- [Requirement 2]
+- [Requirement 3]
+- [Requirement 4]
+
+**ExUnit Test Requirements**:
+- [Test requirement 1]
+- [Test requirement 2]
+- [Test requirement 3]
+- [Test requirement 4]
+
+**Integration Test Scenarios**:
+- [Test scenario 1]
+- [Test scenario 2]
+- [Test scenario 3]
+- [Test scenario 4]
+
+**Typespec Requirements**:
+- [TypeSpec requirement 1]
+- [TypeSpec requirement 2]
+- [TypeSpec requirement 3]
+
+**TypeSpec Documentation**:
+- [Documentation requirement 1]
+- [Documentation requirement 2]
+- [Documentation requirement 3]
+
+**TypeSpec Verification**:
+- [Verification step 1]
+- [Verification step 2]
+- [Verification step 3]
+
+**Error Handling**
+**Core Principles**
+- Pass raw errors
+- Use {:ok, result} | {:error, reason}
+- Let it crash
+**Error Implementation**
+- No wrapping
+- Minimal rescue
+- function/1 & /! versions
+**Error Examples**
+- Raw error passthrough
+- Simple rescue case
+- Supervisor handling
+**GenServer Specifics**
+- Handle_call/3 error pattern
+- Terminate/2 proper usage
+- Process linking considerations
+
+**Code Quality KPIs**
+- Lines of code: [number] ([description])
+- Functions per module: [number]
+- Lines per function: [number]
+- Call depth: [number]
+- Cyclomatic complexity: [Low/Medium/High] ([description])
+- Test coverage: [percentage] with real API testing
+
+**Dependencies**
+- [dependency]: [purpose]
+- [dependency]: [purpose]
+- [dependency]: [purpose]
+
+**Architecture Notes**
+- [Architecture note 1]
+- [Architecture note 2]
+- [Architecture note 3]
+- [Architecture note 4]
+
+**Status**: [Status]
+**Priority**: [Priority]
+
+**Implementation Notes**:
+- [Implementation note 1]
+- [Implementation note 2]
+- [Implementation note 3]
+- [Implementation note 4]
+
+**Complexity Assessment**:
+- Previous: [Previous state]
+- Current: [Current state]
+- Added Complexity: [Description of added complexity]
+- Justification: [Why the complexity is necessary]
+
+**Maintenance Impact**:
+- [Maintenance impact 1]
+- [Maintenance impact 2]
+- [Maintenance impact 3]
+- [Maintenance impact 4]
+
+**Error Handling Implementation**:
+- [Error scenario 1]: [Response/handling]
+- [Error scenario 2]: [Response/handling]
+- [Error scenario 3]: [Response/handling]
+```
+
+### WebSocket-Specific Requirements
+- All WebSocket connection tasks must include real API testing requirements
+- Platform integration tasks should reference existing Deribit adapter patterns
+- Frame handling tasks must include malformed data testing scenarios
+- Reconnection tasks must test with real network interruption scenarios
+
+### Validation Rules
+- All task IDs must be unique and use WNX prefix
+- All current tasks must have detailed entries
+- Completed tasks must have implementation notes and review ratings
+- WebSocket tasks must include connection testing requirements
+- Error handling sections must reference Gun/WebSocket error patterns
