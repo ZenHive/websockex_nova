@@ -254,7 +254,8 @@ defmodule WebsockexNew.Examples.DeribitGenServerAdapter do
       heartbeat_config: %{
         type: :deribit,
         interval: heartbeat_interval
-      }
+      },
+      reconnect_on_error: false
     ]
 
     connect_opts =

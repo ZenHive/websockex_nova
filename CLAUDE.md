@@ -317,8 +317,35 @@ Complete Deribit cryptocurrency exchange integration:
 - Heartbeat/test_request handling
 - JSON-RPC 2.0 message formatting
 - Cancel-on-disconnect protection
+- Supervised reconnection pattern (adapter handles all reconnection)
 
 Located in `lib/websockex_new/examples/deribit_adapter.ex`
+
+#### Reconnection Architecture Pattern
+When using adapters like `DeribitGenServerAdapter`, the reconnection responsibility is clearly divided:
+
+**Supervised Pattern (Recommended for production):**
+```elixir
+# Adapter disables client's internal reconnection
+connect_opts = [
+  reconnect_on_error: false,  # Client stops cleanly on errors
+  heartbeat_config: %{...}    # Other options preserved
+]
+
+# Adapter handles ALL reconnection scenarios:
+# - Network failures (connection drops)
+# - Process crashes (client dies)
+# - Authentication restoration
+# - Subscription restoration
+```
+
+**Standalone Pattern (For simple use cases):**
+```elixir
+# Client handles its own reconnection
+{:ok, client} = Client.connect(url)  # reconnect_on_error: true (default)
+```
+
+This architecture eliminates duplicate reconnection attempts and provides clear ownership of the reconnection logic.
 
 ## Key Dependencies
 

@@ -405,6 +405,10 @@ defmodule WebsockexNew.Client do
     {:reply, conn_state, state}
   end
 
+  def handle_call(:get_state_internal, _from, state) do
+    {:reply, {:ok, state}, state}
+  end
+
   def handle_call(:get_heartbeat_health, _from, state) do
     health = %{
       active_heartbeats: MapSet.to_list(Map.get(state, :active_heartbeats, MapSet.new())),
