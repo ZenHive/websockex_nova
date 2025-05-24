@@ -472,6 +472,80 @@ WebsockexNew.Client.get_state(client)
   - Rate Limiting: Prevent API violations with token bucket algorithm
 - **Architecture Evolution**: Expanding beyond 8 modules for production-grade financial systems
 
+### WNX0025: Eliminate Duplicate Reconnection Logic
+**Priority**: High  
+**Effort**: Small  
+**Dependencies**: None
+**Status**: Planning
+
+#### Problem Statement
+Current architecture has **duplicate reconnection mechanisms**:
+1. **Client Internal**: Handles network failures with exponential backoff
+2. **Adapter Monitoring**: Handles Client process crashes and recreates it
+
+When Client is supervised by an adapter, both mechanisms can trigger, causing:
+- Redundant reconnection attempts
+- Unclear responsibility boundaries
+- Potential race conditions
+- Unnecessary complexity
+
+#### Solution: Disable Client Reconnection When Supervised
+
+**Simple Configuration Change**: Adapters explicitly disable Client's internal reconnection:
+
+```elixir
+# In DeribitGenServerAdapter
+{:ok, client} = Client.connect(url, [
+  reconnect_on_error: false,  # Adapter handles ALL reconnection
+  heartbeat_config: %{type: :deribit, interval: 30_000}
+])
+```
+
+**Benefits**:
+- ✅ Eliminates duplication with one config flag
+- ✅ Clear ownership: supervised → adapter handles, standalone → client handles
+- ✅ No changes to critical heartbeat functionality
+- ✅ Minimal code changes, maximum clarity
+- ✅ Backward compatible with existing code
+
+#### Subtasks
+- [ ] **WNX0025a**: Update DeribitGenServerAdapter to set `reconnect_on_error: false`
+- [ ] **WNX0025b**: Add tests verifying adapter handles all reconnection when flag is false
+- [ ] **WNX0025c**: Test that Client stops cleanly on connection errors when supervised
+- [ ] **WNX0025d**: Document reconnection patterns in architecture guide
+- [ ] **WNX0025e**: Create diagram showing supervised vs standalone reconnection flows
+- [ ] **WNX0025f**: Add adapter implementation guide with reconnection best practices
+- [ ] **WNX0025g**: Document Gun process ownership model and message flow
+- [ ] **WNX0025h**: Create troubleshooting guide for common reconnection scenarios
+- [ ] **WNX0025i**: Update CLAUDE.md with architectural decision rationale
+
+#### Documentation Deliverables
+
+**1. Architecture Guide** (`docs/architecture/reconnection.md`):
+- Explain dual-layer design rationale
+- Gun process ownership constraints
+- When to use each reconnection mechanism
+- Clear diagrams of message and failure flows
+
+**2. Adapter Implementation Guide** (`docs/guides/building_adapters.md`):
+- Template for building exchange adapters
+- Reconnection pattern (always set `reconnect_on_error: false`)
+- State restoration after crashes
+- Example implementations
+
+**3. Troubleshooting Guide** (`docs/guides/troubleshooting_reconnection.md`):
+- Common reconnection issues and solutions
+- How to debug connection failures
+- Performance considerations
+- Monitoring recommendations
+
+#### Success Criteria
+✅ No duplicate reconnection attempts in supervised mode
+✅ Clean separation of concerns maintained
+✅ All existing functionality preserved
+✅ Clear documentation for users
+✅ Simple, one-flag solution
+
 ## Notes
 
 **Key philosophy**: Build the minimum system that solves real problems. Start simple, add complexity only when necessary based on real data.
