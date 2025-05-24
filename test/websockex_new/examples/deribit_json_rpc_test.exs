@@ -69,20 +69,20 @@ defmodule WebsockexNew.Examples.DeribitJsonRpcTest do
 
       # Test public method: get_instruments
       {:ok, request} = DeribitAdapter.get_instruments(%{currency: "BTC", kind: "future"})
-      :ok = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
+      {:ok, _response} = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
 
       # Give time for response
       Process.sleep(1000)
 
       # Test public method: ticker
       {:ok, request} = DeribitAdapter.ticker(%{instrument_name: "BTC-PERPETUAL"})
-      :ok = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
+      {:ok, _response} = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
 
       Process.sleep(1000)
 
       # Test heartbeat setup
       {:ok, request} = DeribitAdapter.set_heartbeat(%{interval: 30})
-      :ok = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
+      {:ok, _response} = WebsockexNew.Client.send_message(adapter.client, Jason.encode!(request))
 
       Process.sleep(1000)
 

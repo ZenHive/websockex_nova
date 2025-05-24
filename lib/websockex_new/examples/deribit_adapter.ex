@@ -139,7 +139,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
       })
 
     case Client.send_message(client, Jason.encode!(request)) do
-      :ok ->
+      {:ok, %{"result" => %{"access_token" => _}}} ->
         # Set up heartbeat after authentication
         {:ok, heartbeat_request} = set_heartbeat(%{interval: 30})
         Client.send_message(client, Jason.encode!(heartbeat_request))
@@ -159,7 +159,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
     {:ok, request} = subscribe_request(%{channels: channels})
 
     case Client.send_message(client, Jason.encode!(request)) do
-      :ok ->
+      {:ok, %{"result" => _}} ->
         new_subs = Enum.reduce(channels, subs, &MapSet.put(&2, &1))
         {:ok, %{adapter | subscriptions: new_subs}}
 
@@ -176,7 +176,7 @@ defmodule WebsockexNew.Examples.DeribitAdapter do
     {:ok, request} = unsubscribe_request(%{channels: channels})
 
     case Client.send_message(client, Jason.encode!(request)) do
-      :ok ->
+      {:ok, %{"result" => _}} ->
         new_subs = Enum.reduce(channels, subs, &MapSet.delete(&2, &1))
         {:ok, %{adapter | subscriptions: new_subs}}
 

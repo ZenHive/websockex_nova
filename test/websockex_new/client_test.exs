@@ -128,8 +128,8 @@ defmodule WebsockexNew.ClientTest do
           "id" => 1
         })
 
-      # The Client GenServer should handle the response
-      assert :ok = Client.send_message(client, test_request)
+      # The Client GenServer should handle the response with correlation
+      assert {:ok, %{"id" => 1, "result" => %{"version" => _}}} = Client.send_message(client, test_request)
 
       # Give time for response
       Process.sleep(100)

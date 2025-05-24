@@ -392,9 +392,26 @@ defmodule WebsockexNew.Client do
     {:reply, {:error, :connection_failed}, state}
   end
 
-  def handle_call({:send_message, message}, _from, %{gun_pid: gun_pid, stream_ref: stream_ref, state: :connected} = state) do
-    result = :gun.ws_send(gun_pid, stream_ref, {:text, message})
-    {:reply, result, state}
+  def handle_call({:send_message, message}, from, %{gun_pid: gun_pid, stream_ref: stream_ref, state: :connected} = state) do
+    # Check if message has an ID for correlation
+    case Jason.decode(message) do
+      {:ok, %{"id" => id} = _decoded} when not is_nil(id) ->
+        # Track this request for correlation
+        timeout = Map.get(state.config, :request_timeout, 30_000)
+        timeout_ref = Process.send_after(self(), {:correlation_timeout, id}, timeout)
+
+        pending = Map.put(state.pending_requests, id, {from, timeout_ref})
+
+        # Send message but don't reply yet - will reply when response arrives
+        :gun.ws_send(gun_pid, stream_ref, {:text, message})
+
+        {:noreply, %{state | pending_requests: pending}}
+
+      _ ->
+        # No ID or not JSON - send without correlation
+        result = :gun.ws_send(gun_pid, stream_ref, {:text, message})
+        {:reply, result, state}
+    end
   end
 
   def handle_call({:send_message, _message}, _from, %{state: conn_state} = state) do
@@ -605,6 +622,20 @@ defmodule WebsockexNew.Client do
     {:noreply, state}
   end
 
+  def handle_info({:correlation_timeout, request_id}, state) do
+    # Handle correlation timeout
+    case Map.pop(state.pending_requests, request_id) do
+      {nil, _} ->
+        # Already handled
+        {:noreply, state}
+
+      {{from, _timeout_ref}, new_pending} ->
+        # Reply with timeout error
+        GenServer.reply(from, {:error, :timeout})
+        {:noreply, %{state | pending_requests: new_pending}}
+    end
+  end
+
   def handle_info(_msg, state) do
     {:noreply, state}
   end
@@ -721,8 +752,9 @@ defmodule WebsockexNew.Client do
         state.handler.({:unmatched_response, response})
         state
 
-      {from, new_pending} ->
-        # Reply to waiting caller
+      {{from, timeout_ref}, new_pending} ->
+        # Cancel timeout and reply to waiting caller
+        Process.cancel_timer(timeout_ref)
         GenServer.reply(from, {:ok, response})
         %{state | pending_requests: new_pending}
     end

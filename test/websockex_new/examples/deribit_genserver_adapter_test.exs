@@ -146,12 +146,12 @@ defmodule WebsockexNew.Examples.DeribitGenServerAdapterTest do
     test "send_request handles various RPC methods" do
       {:ok, adapter} = DeribitGenServerAdapter.start_link(heartbeat_interval: 1)
 
-      # Test public method
-      assert :ok =
+      # Test public method - we expect an error because "get_instruments" is not a valid method name
+      assert {:ok, %{"error" => %{"code" => -32_601, "message" => "Method not found"}}} =
                DeribitGenServerAdapter.send_request(adapter, "get_instruments", %{currency: "BTC"})
 
       # Test method that requires authentication (should work, but server will reject)
-      assert :ok =
+      assert {:ok, %{"error" => _}} =
                DeribitGenServerAdapter.send_request(adapter, "get_open_orders", %{currency: "BTC"})
     end
   end

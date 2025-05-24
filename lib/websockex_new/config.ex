@@ -13,6 +13,7 @@ defmodule WebsockexNew.Config do
   - `:max_backoff` - Maximum delay between reconnection attempts in ms (default: 30000)
   - `:reconnect_on_error` - Whether to auto-reconnect on connection errors (default: true)
   - `:restore_subscriptions` - Whether to restore subscriptions after reconnect (default: true)
+  - `:request_timeout` - Timeout for correlated requests in ms (default: 30000)
 
   ## Examples
 
@@ -42,7 +43,8 @@ defmodule WebsockexNew.Config do
     heartbeat_interval: 30_000,
     max_backoff: 30_000,
     reconnect_on_error: true,
-    restore_subscriptions: true
+    restore_subscriptions: true,
+    request_timeout: 30_000
   ]
 
   @type t :: %__MODULE__{
@@ -54,7 +56,8 @@ defmodule WebsockexNew.Config do
           heartbeat_interval: pos_integer(),
           max_backoff: pos_integer(),
           reconnect_on_error: boolean(),
-          restore_subscriptions: boolean()
+          restore_subscriptions: boolean(),
+          request_timeout: pos_integer()
         }
 
   @doc """
@@ -103,6 +106,9 @@ defmodule WebsockexNew.Config do
 
       config.max_backoff < config.retry_delay ->
         {:error, "Max backoff must be >= retry delay"}
+
+      config.request_timeout <= 0 ->
+        {:error, "Request timeout must be positive"}
 
       true ->
         {:ok, config}

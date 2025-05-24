@@ -23,7 +23,7 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
 
       # Enable heartbeat with 10 second interval
       {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: 10})
-      :ok = Client.send_message(adapter.client, Jason.encode!(heartbeat_request))
+      assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(adapter.client, Jason.encode!(heartbeat_request))
 
       # Connection should remain stable for 25 seconds (2.5 heartbeat cycles)
       :timer.sleep(25_000)
@@ -34,11 +34,13 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
 
       # Send a test message to verify connection works
       {:ok, test_request} = DeribitAdapter.test_request()
-      assert :ok = Client.send_message(adapter.client, Jason.encode!(test_request))
+
+      assert {:ok, %{"id" => _, "result" => %{"version" => _}}} =
+               Client.send_message(adapter.client, Jason.encode!(test_request))
 
       # Disable heartbeat
       {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
-      :ok = Client.send_message(adapter.client, Jason.encode!(disable_request))
+      assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(adapter.client, Jason.encode!(disable_request))
 
       # Clean up
       Client.close(adapter.client)
@@ -51,13 +53,13 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
       Enum.each(1..3, fn _i ->
         # Enable heartbeat
         {:ok, enable_request} = DeribitAdapter.set_heartbeat(%{interval: 10})
-        :ok = Client.send_message(adapter.client, Jason.encode!(enable_request))
+        assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(adapter.client, Jason.encode!(enable_request))
 
         :timer.sleep(5_000)
 
         # Disable heartbeat
         {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
-        :ok = Client.send_message(adapter.client, Jason.encode!(disable_request))
+        assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(adapter.client, Jason.encode!(disable_request))
 
         # Verify connection still works
         assert Client.get_state(adapter.client) == :connected
@@ -87,13 +89,17 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
 
         # Enable cancel-on-disconnect
         {:ok, enable_request} = DeribitAdapter.enable_cancel_on_disconnect()
-        :ok = Client.send_message(authenticated.client, Jason.encode!(enable_request))
+
+        assert {:ok, %{"id" => _, "result" => "ok"}} =
+                 Client.send_message(authenticated.client, Jason.encode!(enable_request))
 
         :timer.sleep(1_000)
 
         # Disable cancel-on-disconnect
         {:ok, disable_request} = DeribitAdapter.disable_cancel_on_disconnect()
-        :ok = Client.send_message(authenticated.client, Jason.encode!(disable_request))
+
+        assert {:ok, %{"id" => _, "result" => "ok"}} =
+                 Client.send_message(authenticated.client, Jason.encode!(disable_request))
 
         # Clean up
         Client.close(authenticated.client)
@@ -122,7 +128,7 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
 
       # Enable server-side heartbeat
       {:ok, heartbeat_request} = DeribitAdapter.set_heartbeat(%{interval: 10})
-      :ok = Client.send_message(client, Jason.encode!(heartbeat_request))
+      assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(client, Jason.encode!(heartbeat_request))
 
       # Wait for multiple heartbeat cycles
       :timer.sleep(30_000)
@@ -132,7 +138,7 @@ defmodule WebsockexNew.Examples.DeribitHeartbeatTest do
 
       # Disable heartbeat
       {:ok, disable_request} = DeribitAdapter.disable_heartbeat()
-      :ok = Client.send_message(client, Jason.encode!(disable_request))
+      assert {:ok, %{"id" => _, "result" => "ok"}} = Client.send_message(client, Jason.encode!(disable_request))
 
       # Clean up
       Client.close(client)

@@ -82,7 +82,8 @@ defmodule WebsockexNew.ErrorIntegrationTest do
           }
         })
 
-      assert :ok = Client.send_message(client, invalid_auth_message)
+      assert {:ok, %{"id" => 1, "error" => %{"code" => 13_004, "message" => "invalid_credentials"}}} =
+               Client.send_message(client, invalid_auth_message)
 
       # We can't easily test the error response in this simple test,
       # but we've verified the message sending mechanism works
