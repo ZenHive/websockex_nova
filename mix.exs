@@ -94,9 +94,9 @@ defmodule WebsockexNew.MixProject do
       # For generating self-signed certificates in tests
       {:x509, "~> 0.8", only: :test},
       {:certifi, "~> 2.5"},
-      {:telemetry, "~> 1.3"}
+      {:telemetry, "~> 1.3"},
       # {:meck, "~> 0.9", only: :test},
-      # {:rename, "~> 0.1.0", only: :dev}
+      {:rename, "~> 0.1.0", only: :dev}
 
       # {:mint_web_socket, "~> 1.0"}
       # {:dep_from_hexpm, "~> 0.3.0"},
