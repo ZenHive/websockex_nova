@@ -169,47 +169,53 @@ Without request correlation, you can't reliably know if orders succeeded or fail
 - ETS operation failure: Let it crash, supervisor will restart
 
 ### WNX0022: Basic Rate Limiter
-**Description**: Prevent API rate limit violations with simple token bucket algorithm implementation, configurable rate limits per connection, and automatic request queueing when limit reached.
+**Description**: Prevent API rate limit violations with configurable token bucket algorithm that adapts to different exchange patterns (credit-based, weight-based, simple rate limits) while maintaining single simple implementation.
 
 **Simplicity Progression Plan**:
 1. Implement token bucket algorithm with ETS state
-2. Add configurable rate limits per connection
+2. Add configurable cost function for request weighting
 3. Implement request queueing when bucket empty
 4. Integrate with Client for automatic rate limiting
 
 **Simplicity Principle**:
-Rate limiting prevents API bans that cause missed trading opportunities. Token bucket algorithm is simple, proven approach used across financial APIs without complex queue management.
+Rate limiting prevents API bans that cause missed trading opportunities. Single token bucket algorithm handles all exchange patterns (Deribit credits, Binance weights, Coinbase rates) through configuration without multiple implementations.
 
 **Abstraction Evaluation**:
-- **Challenge**: How to prevent rate limit violations without complex scheduling?
-- **Minimal Solution**: Token bucket with ETS state, simple queue
+- **Challenge**: How to support different rate limit models without complex abstractions?
+- **Minimal Solution**: Token bucket with configurable cost function
 - **Justification**:
-  1. Financial APIs have strict rate limits with severe penalties
-  2. Token bucket algorithm is industry standard
-  3. Simple queue prevents request dropping while maintaining order
+  1. All exchange rate limits map to token consumption patterns
+  2. Single algorithm reduces complexity vs multiple implementations
+  3. Configuration handles exchange differences without code changes
 
 **Requirements**:
-- Configurable rate limits per connection
-- Token bucket algorithm implementation
+- Token bucket algorithm with configurable capacity and refill rate
+- Request cost function for weight/credit systems
 - Automatic request queueing when limit reached
 - Integration with existing Client send operations
 
+**Exchange-Specific Configurations**:
+- **Deribit**: Credit system (1500 burst, 1000/sec sustained, variable costs)
+- **Binance**: Weight system (5 msg/sec spot, 10 msg/sec futures)
+- **Coinbase**: Simple rate (15 req/sec private endpoints)
+- **Kraken**: Token pool with decay (500 tokens, refill 500/10sec)
+
 **ExUnit Test Requirements**:
 - Test token bucket refill at configured intervals
-- Verify request queueing when bucket empty
-- Test rate limit enforcement under load
-- Verify queue processing when tokens available
+- Verify request cost function properly deducts tokens
+- Test queue processing when tokens become available
+- Verify different exchange configurations work correctly
 
 **Integration Test Scenarios**:
-- Real Deribit API testing with rate limit verification
-- Test rate limiting during high-frequency order operations
-- Verify graceful handling when approaching rate limits
-- Test rate limiter behavior during reconnection
+- Real Deribit API with credit-based limiting
+- Test high-frequency operations stay within limits
+- Verify queue drains properly after rate limit hit
+- Test configuration switching for different exchanges
 
 **Typespec Requirements**:
-- rate_config :: %{requests_per_second: pos_integer(), burst_limit: pos_integer()}
+- rate_config :: %{tokens: pos_integer(), refill_rate: pos_integer(), refill_interval: pos_integer(), request_cost: function()}
 - Token bucket state specification
-- Queue management function types
+- Queue entry types with request and timestamp
 
 **TypeSpec Documentation**:
 - Document rate limiting configuration options
@@ -261,27 +267,38 @@ Rate limiting prevents API bans that cause missed trading opportunities. Token b
 **Priority**: High
 
 **Implementation Notes**:
-- ~75 lines implementation using token bucket algorithm
-- ETS state for O(1) token bucket operations
-- Simple FIFO queue for overflow requests
-- Configurable per-connection rate limits
+- ~100 lines using flexible token bucket algorithm
+- ETS state for O(1) token operations and queue management
+- Configurable cost function adapts to any exchange model
+- Single algorithm handles credits, weights, and simple rates
+
+**Configuration Example**:
+```elixir
+# Deribit credit-based system
+%{
+  tokens: 1500,           # burst capacity
+  refill_rate: 1000,      # sustained rate
+  refill_interval: 1000,  # per second
+  request_cost: &RateLimiter.deribit_cost/1
+}
+```
 
 **Complexity Assessment**:
-- Minimal addition to Client send flow
-- Standard token bucket algorithm, no custom logic
-- Simple queue management without prioritization
-- Clear separation from WebSocket transport
+- Single algorithm for all exchange patterns
+- Cost function provides flexibility without complexity
+- FIFO queue ensures fair request ordering
+- Clear integration point with Client send
 
 **Maintenance Impact**:
-- Prevents API bans that disrupt trading operations
-- Foundation for sophisticated request prioritization
-- Simple monitoring with token bucket metrics
-- No impact on existing WebSocket functionality
+- New exchanges added via configuration only
+- Unified monitoring across all rate limit types
+- Simple debugging with token metrics
+- Foundation for future priority queuing
 
 **Error Handling Implementation**:
-- Rate limit exceeded: Queue request if space available, else return error
-- Queue full: Return {:error, :queue_full} immediately
-- Token bucket error: Let it crash, supervisor will restart
+- Rate limit exceeded: Queue if space, else {:error, :rate_limited}
+- Queue full: Return {:error, :queue_full} with retry hint
+- Invalid configuration: Fail fast on startup
 
 ### WNX0025: Eliminate Duplicate Reconnection Logic (✅ COMPLETED)
 **Description**: Eliminate architectural duplication where both Client (network-level) and Adapter (process-level) handle reconnection independently, creating redundant attempts and unclear ownership. Implement surgical fix using configuration flag to disable Client's internal reconnection when supervised by adapters.
