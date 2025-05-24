@@ -202,8 +202,14 @@ defmodule WebsockexNew.Examples.DeribitStabilityTest do
       cpu_samples = Enum.take([cpu | state.cpu_samples], 120)
       state_metrics_samples = Enum.take([state_metrics | state.state_metrics_samples], 120)
 
-      {:noreply,
-       %{state | memory_samples: memory_samples, cpu_samples: cpu_samples, state_metrics_samples: state_metrics_samples}}
+      new_state = %{
+        state
+        | memory_samples: memory_samples,
+          cpu_samples: cpu_samples,
+          state_metrics_samples: state_metrics_samples
+      }
+
+      {:noreply, new_state}
     end
 
     # Helper functions

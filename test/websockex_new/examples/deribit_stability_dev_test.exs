@@ -31,7 +31,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     "ticker.ETH-PERPETUAL.raw",
     # BTC Options - subscribe to the most liquid strikes
     "ticker.BTC-*.raw",
-    # ETH Options - subscribe to the most liquid strikes  
+    # ETH Options - subscribe to the most liquid strikes
     "ticker.ETH-*.raw"
   ]
 
@@ -93,7 +93,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
               # Log all messages to debug heartbeat format
               Logger.debug("📩 Received message: #{inspect(decoded, limit: :infinity)}")
 
-              # Check if this is a heartbeat response  
+              # Check if this is a heartbeat response
               case decoded do
                 %{"result" => result, "id" => _id} when is_map(result) ->
                   # This might be a response to our heartbeat
@@ -146,7 +146,7 @@ defmodule WebsockexNew.Examples.DeribitStabilityDevTest do
     :ok = DeribitGenServerAdapter.authenticate(adapter)
     Process.sleep(1_000)
 
-    # Subscribe to channels  
+    # Subscribe to channels
     :ok = DeribitGenServerAdapter.subscribe(adapter, @subscription_channels)
 
     # Run stability test
